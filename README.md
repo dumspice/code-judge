@@ -1,1 +1,85 @@
 # code-judge
+
+## Kiến trúc base (Hybrid)
+- `apps/core-api` (NestJS): tạo `Submission`, enqueue job BullMQ, emit realtime trạng thái qua Socket.io.
+- `apps/worker` (Node.js): worker BullMQ xử lý job (base: stub “chấm”).
+- `apps/web` (Next.js): form submit + lắng nghe realtime theo `userId`.
+
+## Cấu hình chạy local (khuyến nghị dùng Docker Desktop)
+1. Bật Docker Desktop và chạy:
+   - `cd c:\Users\ADMIN\Documents\GitHub\code-judge`
+   - `docker compose up -d`
+   - Service gồm: `postgres` (có `pgvector`), `redis`, `minio`
+2. Generate Prisma client và migration:
+   - `npm run prisma:generate -w @code-judge/core-api`
+   - `npm run prisma:migrate -w @code-judge/core-api`
+3. Chạy các app:
+   - Core API: `npm run dev -w @code-judge/core-api` (port `3000`)
+   - Worker: `npm run dev -w @code-judge/worker`
+   - Web: `npm run dev -w @code-judge/web` (port `3001`)
+
+## Core API: định dạng JSON thống nhất
+Mọi endpoint HTTP trả về (hoặc lỗi) cùng một **envelope**:
+
+```json
+{
+  "code": 200,
+  "success": true,
+  "message": "OK",
+  "result": { }
+}
+```
+
+- **`code`**: trùng HTTP status (200, 400, 401, …).
+- **`success`**: `true` khi thành công (thường `code` từ 200–299).
+- **`message`**: mô tả ngắn; lỗi validate có thể gộp nhiều dòng.
+- **`result`**: payload nghiệp vụ khi thành công; lỗi có thể là `null` hoặc có thêm chi tiết (ví dụ `{ "errors": ["..."] }`).
+
+**Luồng xử lý**: controller trả object “thô” → interceptor bọc envelope → exception filter trả lỗi cùng dạng. Chi tiết code: `apps/core-api/src/main.ts`, `common/interceptors/transform-response.interceptor.ts`, `common/filters/all-exceptions.filter.ts`.
+
+## Core API: JWT & phân quyền (NestJS)
+- **Mặc định** mọi route cần header `Authorization: Bearer <accessToken>`, trừ chỗ gắn `@Public()` (ví dụ `POST /auth/login`, hiện tại cả `POST /submissions` vẫn public để demo).
+- **`@Roles(Role.ADMIN, …)`**: chỉ user có một trong các role (Prisma) mới được truy cập; kết hợp với `RolesGuard` đã đăng ký toàn app.
+- **`@CurrentUser()`**: lấy `userId`, `email`, `role` sau khi JWT hợp lệ (`common/interfaces/request-user.interface.ts`).
+
+**Endpoint auth** (dữ liệu thực tế nằm trong `result` sau envelope):
+
+| Method | Path | Ghi chú |
+|--------|------|---------|
+| `POST` | `/auth/login` | Body `{ "email": "..." }` — tìm user theo email, cấp JWT (chưa kiểm tra mật khẩu; sẽ bổ sung bcrypt). |
+| `GET` | `/auth/me` | Cần Bearer token; trả user đầy đủ từ DB. |
+
+**Biến môi trường** (xem `apps/core-api/.env.example`): `JWT_SECRET` (bắt buộc), `JWT_EXPIRES_IN` (tuỳ chọn, **giây**, mặc định 604800).
+
+**Mã nguồn chính**: `apps/core-api/src/auth/`, decorators trong `apps/core-api/src/common/decorators/`.
+
+## API (tập trung Submission)
+- `POST /submissions` (public tạm thời)
+  - Body:
+    - `userId: string`
+    - `problemId: string`
+    - `mode: "ALGO" | "PROJECT"`
+    - `sourceCode?: string` (stub)
+  - Response (trong `result` của envelope):
+    - `{ submissionId, status }`
+
+## Socket.io realtime (room theo userId)
+- Room: `user:<userId>`
+- Client truyền `userId` trong query khi connect.
+- Event contract (server emit):
+  - `submission:created` `{ submissionId, status }`
+  - `submission:progress` `{ submissionId, status, progressPct, logChunk }`
+  - `submission:finished` `{ submissionId, status, score, runtimeMs, memoryMb }`
+  - `submission:failed` `{ submissionId, status, error }`
+
+## Web demo
+- Mở: `http://localhost:3001`
+- Nhập `userId/problemId/mode`, bấm `Submit` và xem realtime logs.
+
+## Tài liệu cấu hình & utils
+- Xem: [docs/CAU-HINH-VA-UTILS.md](docs/CAU-HINH-VA-UTILS.md) (ESLint/Prettier, `common/`, `lib/`, cách import).
+- Phần **JWT / envelope JSON** ở trên bổ sung cho Core API; có thể đọc kèm comment trong `apps/core-api/src/auth/` và `apps/core-api/src/common/`.
+
+## Lint & format (root)
+- `npm run lint` — kiểm tra ESLint.
+- `npm run format` — chạy Prettier ghi file.
