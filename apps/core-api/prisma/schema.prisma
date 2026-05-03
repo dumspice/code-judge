@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+enum ProblemMode {
+  ALGO
+  PROJECT
+}
+
+enum SubmissionStatus {
+  Pending
+  Running
+  Accepted
+  Wrong
+  Error
+}
+
+model User {
+  id           String   @id
+  name         String
+  email        String   @unique
+  role         Role     @default(STUDENT)
+  createdAt    DateTime @default(now())
+  submissions  Submission[]
+}
+
+model Problem {
+  id          String      @id
+  title       String
+  description String?
+  difficulty  Int         @default(0)
+  mode        ProblemMode @default(ALGO)
+  createdAt   DateTime    @default(now())
+  submissions Submission[]
+}
+
+model Submission {
+  id          String             @id @default(cuid())
+  userId      String
+  problemId   String
+  mode        ProblemMode
+  status      SubmissionStatus  @default(Pending)
+  score       Int?
+  logs        String?
+  runtimeMs   Int?
+  memoryMb    Int?
+  error       String?
+  sourceCode  String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  problem Problem @relation(fields: [problemId], references: [id])
+
+  @@index([userId])
+  @@index([problemId])
+}
+

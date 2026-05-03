@@ -1,0 +1,23 @@
+node_modules/
+
+# Node/Build outputs
+dist/
+apps/**/dist/
+apps/**/.next/
+.turbo/
+
+# Env files (keep examples)
+.env
+.env.*
+!.env.example
+apps/**/.env
+apps/**/.env.*
+!apps/**/.env.example
+
+# Logs / coverage
+logs/
+coverage/
+
+# Misc
+.DS_Store
+.eslintcache
