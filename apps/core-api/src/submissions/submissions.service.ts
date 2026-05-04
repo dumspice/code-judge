@@ -23,6 +23,8 @@ export class SubmissionsService {
         name: dto.userId,
         email: `${dto.userId}@example.com`,
         role: 'STUDENT',
+        isActive: true,
+        instructorVerification: 'NONE',
       },
     });
 
@@ -41,7 +43,9 @@ export class SubmissionsService {
         timeLimitMs: 1000,
         memoryLimitMb: 256,
         isPublished: true,
+        visibility: 'PUBLIC',
         supportedLanguages: [],
+        maxTestCases: 100,
       },
     });
 
@@ -50,6 +54,8 @@ export class SubmissionsService {
         userId: dto.userId,
         problemId: dto.problemId,
         mode: dto.mode as any,
+        context: 'PRACTICE',
+        judgePriority: 0,
         sourceCode: dto.sourceCode ?? null,
       },
     });
