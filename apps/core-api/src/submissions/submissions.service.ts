@@ -26,15 +26,22 @@ export class SubmissionsService {
       },
     });
 
+    const problemSlug = devProblemSlug(dto.problemId);
     await this.prisma.problem.upsert({
       where: { id: dto.problemId },
-      update: { mode: dto.mode },
+      update: { mode: dto.mode as any },
       create: {
         id: dto.problemId,
+        slug: problemSlug,
         title: dto.problemId,
         description: null,
-        difficulty: 0,
+        statementMd: null,
+        difficulty: 'EASY',
         mode: dto.mode as any,
+        timeLimitMs: 1000,
+        memoryLimitMb: 256,
+        isPublished: true,
+        supportedLanguages: [],
       },
     });
 
@@ -65,5 +72,11 @@ export class SubmissionsService {
 
     return submission;
   }
+}
+
+/** Slug duy nhất cho dev upsert (ký tự an toàn URL; fallback khi chuỗi rỗng). */
+function devProblemSlug(problemId: string): string {
+  const raw = problemId.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return raw.length > 0 ? raw : `p-${problemId.replace(/[^a-zA-Z0-9-_]/g, '') || 'unknown'}`;
 }
 

@@ -1,6 +1,7 @@
 // `reflect-metadata` bắt buộc với NestJS decorator / DI.
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -36,10 +37,32 @@ async function bootstrap() {
   // Thành công → bọc thêm envelope; không đụng `StreamableFile` / response đã gửi.
   app.useGlobalInterceptors(new TransformResponseInterceptor());
 
+  const swaggerOff =
+    process.env.NODE_ENV === 'production' || process.env.SWAGGER_ENABLED === '0';
+  if (!swaggerOff) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Code Judge API')
+      .setDescription('HTTP API cho Code Judge (response thực tế bọc envelope qua interceptor).')
+      .setVersion('0.1.0')
+      .addBearerAuth(
+        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'JWT từ POST /auth/login' },
+        'JWT',
+      )
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api-docs', app, document, {
+      jsonDocumentUrl: 'api-docs/json',
+      yamlDocumentUrl: 'api-docs/yaml',
+    });
+  }
+
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port);
 
   console.log(`[core-api] listening on :${port}`);
+  if (!swaggerOff) {
+    console.log(`[core-api] Swagger UI: http://localhost:${port}/api-docs`);
+  }
 }
 
 bootstrap();
