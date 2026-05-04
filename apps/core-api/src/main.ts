@@ -18,8 +18,8 @@ async function bootstrap() {
 
   // Cho phép frontend (Next.js) gọi API và Socket.io từ origin khác trong dev.
   app.enableCors({
-    origin: true,
-    credentials: false,
+    origin: process.env.FRONTEND_URL ?? 'http://localhost:3001',
+    credentials: true,
   });
 
   // Chuẩn hoá validate/transform DTO: strip field thừa, báo lỗi field không khai báo.

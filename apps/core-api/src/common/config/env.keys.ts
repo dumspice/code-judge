@@ -15,6 +15,16 @@ export const EnvKeys = {
   JWT_SECRET: 'JWT_SECRET',
   /** Thời hạn access token tính bằng giây (ví dụ `3600`). Mặc định trong code: 604800 (7 ngày). */
   JWT_EXPIRES_IN: 'JWT_EXPIRES_IN',
+  /** Secret riêng cho refresh token (tách khỏi access token secret). */
+  JWT_REFRESH_SECRET: 'JWT_REFRESH_SECRET',
+  /** Thời hạn refresh token tính bằng giây. Mặc định trong code: 604800 (7 ngày). */
+  JWT_REFRESH_EXPIRES_IN: 'JWT_REFRESH_EXPIRES_IN',
+  /** Google OAuth Client ID. */
+  GOOGLE_CLIENT_ID: 'GOOGLE_CLIENT_ID',
+  /** Google OAuth Client Secret. */
+  GOOGLE_CLIENT_SECRET: 'GOOGLE_CLIENT_SECRET',
+  /** Google OAuth Callback URL. */
+  GOOGLE_CALLBACK_URL: 'GOOGLE_CALLBACK_URL',
 } as const;
 
 export type EnvKey = (typeof EnvKeys)[keyof typeof EnvKeys];

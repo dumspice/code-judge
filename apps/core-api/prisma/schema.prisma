@@ -309,6 +309,8 @@ model User {
   reportExports           ReportExport[]           @relation("ExportRequester")
   /// Báo cáo đạo mã do user (GV) kích hoạt. Relation name `SimilarityReporter`.
   codeSimilarityFindings  CodeSimilarityFinding[]  @relation("SimilarityReporter")
+  /// Refresh token hiện hành (rotation — mỗi lần refresh tạo token mới, thu hồi cũ).
+  refreshTokens           RefreshToken[]
 
   @@index([role])
   @@index([email])
@@ -336,6 +338,26 @@ model OAuthAccount {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+/// **Refresh token** (rotation): mỗi lần POST /auth/refresh → thu hồi token cũ, cấp cặp mới.
+model RefreshToken {
+  /// Khóa bản ghi.
+  id           String   @id @default(cuid())
+  /// User sở hữu token.
+  userId       String
+  /// Hash bcrypt của refresh token (không lưu plain text).
+  tokenHash    String
+  /// Thời điểm hết hạn.
+  expiresAt    DateTime
+  /// `true` khi đã sử dụng hoặc bị thu hồi — chặn replay.
+  revoked      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  /// User cha. onDelete Cascade — xóa user xóa mọi refresh token.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 

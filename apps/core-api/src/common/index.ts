@@ -14,3 +14,4 @@ export * from './interfaces/api-response.interface';
 export * from './interfaces/request-user.interface';
 export * from './utils/sleep';
 export * from './utils/required-env';
+export * from './utils/password';
