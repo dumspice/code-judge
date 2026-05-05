@@ -183,12 +183,17 @@ export const authApi = {
   },
 
   async logout() {
-    await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
+    await apiFetch('/auth/logout', { method: 'POST' }).catch(() => { });
     clearTokens();
   },
 
   /** Google OAuth: redirect browser to backend /auth/google. */
   googleLogin() {
     window.location.href = `${BASE_URL}/auth/google`;
+  },
+
+
+  async refreshSession(): Promise<boolean> {
+    return tryRefresh();
   },
 };

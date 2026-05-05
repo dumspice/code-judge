@@ -93,11 +93,8 @@ export class AuthController {
 
     const frontendUrl =
       this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
-    const params = new URLSearchParams({
-      accessToken: tokens.accessToken,
-    });
 
-    res.redirect(`${frontendUrl}/auth/callback?${params.toString()}`);
+    res.redirect(`${frontendUrl}/auth/callback`);
   }
 
   // ---------------------------------------------------------------------------
