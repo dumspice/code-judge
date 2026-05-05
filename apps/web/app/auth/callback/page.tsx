@@ -2,12 +2,12 @@
 
 import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { setAccessToken, setRefreshToken } from '@/services/api';
+import { setAccessToken } from '@/services/api';
 
 /**
  * OAuth callback page: /auth/callback
  *
- * Backend redirects here after Google login with ?accessToken=...&refreshToken=...
+ * Backend redirects here after Google login with ?accessToken=...
  * This page extracts the tokens, stores them, and redirects to dashboard.
  */
 export default function AuthCallbackPage() {
@@ -16,11 +16,9 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const accessToken = searchParams.get('accessToken');
-    const refreshToken = searchParams.get('refreshToken');
 
-    if (accessToken && refreshToken) {
+    if (accessToken) {
       setAccessToken(accessToken);
-      setRefreshToken(refreshToken);
       router.replace('/');
     } else {
       // No tokens → something went wrong, go to login

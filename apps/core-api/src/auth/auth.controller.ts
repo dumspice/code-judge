@@ -9,7 +9,7 @@
  *  GET  /auth/google/callback — public, Google gọi lại, redirect frontend với token.
  *  GET  /auth/me           — protected, thông tin user hiện tại.
  */
-import { Body, Controller, Get, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, Res, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
@@ -37,15 +37,19 @@ export class AuthController {
   @Public()
   @ApiOperation({ summary: 'Đăng ký tài khoản mới' })
   @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.auth.register(dto.name, dto.email, dto.password);
+  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
+    const tokens = await this.auth.register(dto.name, dto.email, dto.password);
+    this.setRefreshTokenCookie(res, tokens.refreshToken);
+    return { accessToken: tokens.accessToken, tokenType: tokens.tokenType };
   }
 
   @Public()
   @ApiOperation({ summary: 'Đăng nhập email/password, nhận token pair' })
   @Post('login')
-  login(@Body() dto: LoginDto) {
-    return this.auth.login(dto.email, dto.password);
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+    const tokens = await this.auth.login(dto.email, dto.password);
+    this.setRefreshTokenCookie(res, tokens.refreshToken);
+    return { accessToken: tokens.accessToken, tokenType: tokens.tokenType };
   }
 
   // ---------------------------------------------------------------------------
@@ -55,8 +59,14 @@ export class AuthController {
   @Public()
   @ApiOperation({ summary: 'Đổi refresh token lấy cặp access + refresh mới' })
   @Post('refresh')
-  refresh(@Body() dto: RefreshDto) {
-    return this.auth.refresh(dto.refreshToken);
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token không tìm thấy trong cookie');
+    }
+    const tokens = await this.auth.refresh(refreshToken);
+    this.setRefreshTokenCookie(res, tokens.refreshToken);
+    return { accessToken: tokens.accessToken, tokenType: tokens.tokenType };
   }
 
   // ---------------------------------------------------------------------------
@@ -79,13 +89,12 @@ export class AuthController {
     const profile = req.user as GoogleProfile;
     const tokens = await this.auth.googleLogin(profile);
 
-    // Redirect frontend với tokens qua query params.
-    // Cách production hơn: set httpOnly cookie, nhưng query string đơn giản cho dev.
+    this.setRefreshTokenCookie(res, tokens.refreshToken);
+
     const frontendUrl =
       this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
     const params = new URLSearchParams({
       accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
     });
 
     res.redirect(`${frontendUrl}/auth/callback?${params.toString()}`);
@@ -100,5 +109,32 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: RequestUser) {
     return this.auth.getProfile(user.userId);
+  }
+
+  @Public()
+  @Post('logout')
+  @ApiOperation({ summary: 'Đăng xuất, xoá cookie' })
+  logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
+    return { success: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal Helpers
+  // ---------------------------------------------------------------------------
+
+  private setRefreshTokenCookie(res: Response, refreshToken: string) {
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
   }
 }

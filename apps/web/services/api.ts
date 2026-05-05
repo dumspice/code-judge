@@ -26,26 +26,9 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
-export function setRefreshToken(token: string | null) {
-  if (typeof window === 'undefined') return;
-  if (token) {
-    localStorage.setItem('refreshToken', token);
-  } else {
-    localStorage.removeItem('refreshToken');
-  }
-}
-
-export function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('refreshToken');
-}
-
 /** Clear all auth state (logout). */
 export function clearTokens() {
   accessToken = null;
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('refreshToken');
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -55,9 +38,6 @@ export function clearTokens() {
 let refreshPromise: Promise<boolean> | null = null;
 
 async function tryRefresh(): Promise<boolean> {
-  const rt = getRefreshToken();
-  if (!rt) return false;
-
   // Deduplicate concurrent refresh attempts
   if (refreshPromise) return refreshPromise;
 
@@ -66,7 +46,7 @@ async function tryRefresh(): Promise<boolean> {
       const res = await fetch(`${BASE_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: rt }),
+        credentials: 'include',
       });
 
       if (!res.ok) {
@@ -78,7 +58,6 @@ async function tryRefresh(): Promise<boolean> {
       // The response is wrapped in envelope: { result: { accessToken, refreshToken } }
       const result = data.result ?? data;
       setAccessToken(result.accessToken);
-      setRefreshToken(result.refreshToken);
       return true;
     } catch {
       clearTokens();
@@ -135,6 +114,7 @@ export async function apiFetch<T = unknown>(
     return fetch(`${BASE_URL}${path}`, {
       ...options,
       headers,
+      credentials: 'include',
       body: options.body ? JSON.stringify(options.body) : undefined,
     });
   };
@@ -142,7 +122,7 @@ export async function apiFetch<T = unknown>(
   let res = await doFetch();
 
   // Auto refresh on 401
-  if (res.status === 401 && getRefreshToken()) {
+  if (res.status === 401) {
     const refreshed = await tryRefresh();
     if (refreshed) {
       res = await doFetch();
@@ -168,7 +148,6 @@ export async function apiFetch<T = unknown>(
 
 export interface AuthTokens {
   accessToken: string;
-  refreshToken: string;
   tokenType: string;
 }
 
@@ -187,7 +166,6 @@ export const authApi = {
       body: { name, email, password },
     });
     setAccessToken(tokens.accessToken);
-    setRefreshToken(tokens.refreshToken);
     return tokens;
   },
 
@@ -197,7 +175,6 @@ export const authApi = {
       body: { email, password },
     });
     setAccessToken(tokens.accessToken);
-    setRefreshToken(tokens.refreshToken);
     return tokens;
   },
 
@@ -205,7 +182,8 @@ export const authApi = {
     return apiFetch<UserProfile>('/auth/me');
   },
 
-  logout() {
+  async logout() {
+    await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
     clearTokens();
   },
 
