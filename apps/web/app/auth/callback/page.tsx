@@ -1,30 +1,34 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { setAccessToken } from '@/services/api';
+import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { authApi } from '@/services/api';
 
 /**
  * OAuth callback page: /auth/callback
  *
- * Backend redirects here after Google login with ?accessToken=...
- * This page extracts the tokens, stores them, and redirects to dashboard.
+ * Backend redirects here after Google login, with the refreshToken set in a secure HttpOnly cookie.
+ * This page calls refreshSession() to obtain the accessToken and then redirects to the dashboard.
  */
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const hasAttempted = useRef(false);
 
   useEffect(() => {
-    const accessToken = searchParams.get('accessToken');
+    if (hasAttempted.current) return;
+    hasAttempted.current = true;
 
-    if (accessToken) {
-      setAccessToken(accessToken);
-      router.replace('/');
-    } else {
-      // No tokens → something went wrong, go to login
-      router.replace('/login');
-    }
-  }, [searchParams, router]);
+    const completeLogin = async () => {
+      const success = await authApi.refreshSession();
+      if (success) {
+        router.replace('/');
+      } else {
+        router.replace('/login');
+      }
+    };
+
+    completeLogin();
+  }, [router]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950">
