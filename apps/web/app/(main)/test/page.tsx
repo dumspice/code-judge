@@ -45,6 +45,20 @@ type PresignDownloadResponse = {
   downloadUrl: string;
 };
 
+type ApiEnvelope<T> = {
+  success: boolean;
+  code: number;
+  message: string;
+  result: T;
+};
+
+function unwrapApiResult<T>(payload: unknown): T {
+  if (payload && typeof payload === 'object' && 'result' in payload) {
+    return (payload as ApiEnvelope<T>).result;
+  }
+  return payload as T;
+}
+
 function Section({
   id,
   title,
@@ -203,7 +217,8 @@ export default function TestPage() {
         const txt = await presignRes.text().catch(() => '');
         throw new Error(`Presign upload failed (${presignRes.status}): ${txt}`);
       }
-      const presign = (await presignRes.json()) as PresignUploadResponse;
+      const presignPayload = (await presignRes.json()) as unknown;
+      const presign = unwrapApiResult<PresignUploadResponse>(presignPayload);
       setLog((s) => s + `   bucket=${presign.bucket}\n   objectKey=${presign.objectKey}\n\n`);
 
       setLog((s) => s + `2) PUT file trực tiếp lên MinIO bằng presigned URL\n`);
@@ -227,7 +242,8 @@ export default function TestPage() {
         const txt = await downloadRes.text().catch(() => '');
         throw new Error(`Presign download failed (${downloadRes.status}): ${txt}`);
       }
-      const download = (await downloadRes.json()) as PresignDownloadResponse;
+      const downloadPayload = (await downloadRes.json()) as unknown;
+      const download = unwrapApiResult<PresignDownloadResponse>(downloadPayload);
       setLog((s) => s + `   downloadUrl OK\n`);
 
       setResult({ presign, download });
@@ -277,7 +293,8 @@ export default function TestPage() {
           const txt = await presignRes.text().catch(() => '');
           throw new Error(`Presign upload failed (${presignRes.status}): ${txt}`);
         }
-        const presign = (await presignRes.json()) as PresignUploadResponse;
+        const presignPayload = (await presignRes.json()) as unknown;
+        const presign = unwrapApiResult<PresignUploadResponse>(presignPayload);
 
         const putRes = await fetch(presign.uploadUrl, {
           method: 'PUT',
@@ -294,7 +311,7 @@ export default function TestPage() {
           { method: 'GET' },
         );
         const download = downloadRes.ok
-          ? ((await downloadRes.json()) as PresignDownloadResponse)
+          ? unwrapApiResult<PresignDownloadResponse>(((await downloadRes.json()) as unknown))
           : undefined;
 
         setFolderResults((prev) => [
