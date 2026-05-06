@@ -25,6 +25,22 @@ export const EnvKeys = {
   GOOGLE_CLIENT_SECRET: 'GOOGLE_CLIENT_SECRET',
   /** Google OAuth Callback URL. */
   GOOGLE_CALLBACK_URL: 'GOOGLE_CALLBACK_URL',
+  /** MinIO/S3 endpoint host (không gồm protocol). */
+  MINIO_ENDPOINT: 'MINIO_ENDPOINT',
+  /** MinIO API port (mặc định 9000). */
+  MINIO_PORT: 'MINIO_PORT',
+  /** Bật SSL/TLS khi kết nối MinIO (`true`/`false`). */
+  MINIO_USE_SSL: 'MINIO_USE_SSL',
+  /** Access key cho MinIO/S3. */
+  MINIO_ACCESS_KEY: 'MINIO_ACCESS_KEY',
+  /** Secret key cho MinIO/S3. */
+  MINIO_SECRET_KEY: 'MINIO_SECRET_KEY',
+  /** Bucket mặc định dùng lưu object. */
+  MINIO_BUCKET: 'MINIO_BUCKET',
+  /** Region S3-compatible (thường `us-east-1`). */
+  MINIO_REGION: 'MINIO_REGION',
+  /** Base URL public để dựng URL hiển thị (tuỳ chọn). */
+  MINIO_PUBLIC_BASE_URL: 'MINIO_PUBLIC_BASE_URL',
 } as const;
 
 export type EnvKey = (typeof EnvKeys)[keyof typeof EnvKeys];

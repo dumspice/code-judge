@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SubmissionGateway } from '../realtime/submission.gateway';
 import { JUDGE_QUEUE } from '../queues/tokens';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
+import { buildSubmissionSourceObjectKey } from '../storage/storage-key.builder';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class SubmissionsService {
@@ -11,6 +13,7 @@ export class SubmissionsService {
     @Inject(JUDGE_QUEUE) private readonly judgeQueue: Queue,
     private readonly prisma: PrismaService,
     private readonly realtime: SubmissionGateway,
+    private readonly storage: StorageService,
   ) {}
 
   async createAndEnqueue(dto: CreateSubmissionDto) {
@@ -49,6 +52,9 @@ export class SubmissionsService {
       },
     });
 
+    const sourceCode = dto.sourceCode ?? null;
+    const shouldExternalizeCode = sourceCode !== null && sourceCode.length > 8192;
+    const externalizedObjectKey = dto.sourceCodeObjectKey ?? null;
     const submission = await this.prisma.submission.create({
       data: {
         userId: dto.userId,
@@ -56,9 +62,25 @@ export class SubmissionsService {
         mode: dto.mode as any,
         context: 'PRACTICE',
         judgePriority: 0,
-        sourceCode: dto.sourceCode ?? null,
+        sourceCode: shouldExternalizeCode ? null : sourceCode,
+        sourceCodeObjectKey: externalizedObjectKey,
       },
     });
+
+    if (shouldExternalizeCode && sourceCode) {
+      const objectKey = buildSubmissionSourceObjectKey(submission.id, 'source.txt');
+      await this.storage.putObject(objectKey, sourceCode, {
+        'Content-Type': 'text/plain',
+        submissionId: submission.id,
+        problemId: dto.problemId,
+        ownerId: dto.userId,
+      });
+      await this.prisma.submission.update({
+        where: { id: submission.id },
+        data: { sourceCodeObjectKey: objectKey },
+      });
+      submission.sourceCodeObjectKey = objectKey;
+    }
 
     await this.judgeQueue.add(
       'judge',

@@ -5,6 +5,8 @@ import { BullMqModule } from './queues/bullmq.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { SubmissionsModule } from './submissions/submissions.module';
 import { AuthModule } from './auth/auth.module';
+import { StorageModule } from './storage/storage.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -13,6 +15,8 @@ import { AuthModule } from './auth/auth.module';
       envFilePath: ['.env.local', '.env'],
     }),
     AuthModule,
+    UsersModule,
+    StorageModule,
     PrismaModule,
     RealtimeModule,
     BullMqModule,

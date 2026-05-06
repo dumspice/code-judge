@@ -217,18 +217,6 @@ export class AuthService {
   }
 
   // ---------------------------------------------------------------------------
-  // Profile
-  // ---------------------------------------------------------------------------
-
-  async getProfile(userId: string): Promise<User> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      throw new UnauthorizedException('Người dùng không tồn tại');
-    }
-    return user;
-  }
-
-  // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
 

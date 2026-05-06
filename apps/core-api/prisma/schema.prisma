@@ -278,6 +278,8 @@ model User {
   instructorVerification InstructorVerificationStatus @default(NONE)
   /// URL ảnh đại diện (CDN / storage).
   image                  String?
+  /// Object key ảnh đại diện trong MinIO/S3 (ưu tiên dùng nếu có).
+  imageObjectKey         String?
   createdAt              DateTime                     @default(now())
   updatedAt              DateTime                     @updatedAt
   /// Lần đăng nhập gần nhất (ghi nhận ở AuthService).
@@ -618,6 +620,8 @@ model GoldenSolution {
   language    String
   /// Mã nguồn lời giải mẫu.
   sourceCode  String   @db.Text
+  /// Object key source code trong MinIO/S3 (fallback về `sourceCode` nếu null).
+  sourceCodeObjectKey String?
   /// Lời giải “chính” hiện tại (có thể nhiều bản lịch sử, filter `isPrimary`).
   isPrimary   Boolean  @default(true)
   /// User tạo / xác nhận bản golden.
@@ -645,6 +649,8 @@ model AiGenerationJob {
   status           AiJobStatus @default(PENDING)
   /// URL hoặc key file đề upload (.docx).
   inputDocUrl      String?
+  /// Object key file đề upload trong MinIO/S3.
+  inputDocObjectKey String?
   /// Version prompt / pipeline để debug & tái chạy.
   promptVersion    String?
   /// JSON kết quả (danh sách test đề xuất, metadata).
@@ -824,6 +830,8 @@ model Submission {
   caseResults       Json?
   /// Mã nguồn nộp.
   sourceCode        String?           @db.Text
+  /// Object key mã nguồn nộp trong MinIO/S3 khi externalize.
+  sourceCodeObjectKey String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
@@ -867,6 +875,8 @@ model ReportExport {
   status        ExportJobStatus @default(PENDING)
   /// URL hoặc key file sau khi DONE.
   fileUrl       String?
+  /// Object key file export trong MinIO/S3.
+  fileObjectKey String?
   /// Lỗi khi FAILED.
   errorMessage  String?         @db.Text
   createdAt     DateTime        @default(now())
