@@ -7,6 +7,7 @@ import { JUDGE_SUBMISSIONS_QUEUE_NAME } from './lib/constants';
 import { getOptionalEnv, getRequiredEnv } from './lib/env';
 import { createWorkerLogger } from './lib/logger';
 import { sleep } from './lib/sleep';
+import { putArtifactObject } from './lib/storage';
 
 const log = createWorkerLogger('worker');
 
@@ -46,6 +47,17 @@ async function processSubmission(job: any) {
   job.updateProgress({ pct: 50, log: 'Running tests (stub).' });
   await sleep(800);
 
+  const logObjectKey = `submissions/${submissionId}/artifacts/judge.log`;
+  const caseInputObjectKey = `ai-jobs/${submissionId}/generated-testcases/0/input.txt`;
+  const caseExpectedObjectKey = `ai-jobs/${submissionId}/generated-testcases/0/expected.txt`;
+
+  await putArtifactObject(logObjectKey, 'Accepted (stub)\n', {
+    submissionId,
+    contentType: 'text/plain',
+  });
+  await putArtifactObject(caseInputObjectKey, '1 2\n');
+  await putArtifactObject(caseExpectedObjectKey, '3\n');
+
   await prisma.submission.update({
     where: { id: submissionId },
     data: {
@@ -54,6 +66,15 @@ async function processSubmission(job: any) {
       runtimeMs: 123,
       memoryMb: 64,
       logs: `Accepted (stub)\n`,
+      caseResults: {
+        logObjectKey,
+        generatedTestcases: [
+          {
+            inputObjectKey: caseInputObjectKey,
+            expectedObjectKey: caseExpectedObjectKey,
+          },
+        ],
+      } as any,
     },
   });
 

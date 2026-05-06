@@ -56,6 +56,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       image: profile.photos?.[0]?.value ?? null,
     };
 
-    done(null, user);
+    done(null, user as unknown as Express.User);
   }
 }

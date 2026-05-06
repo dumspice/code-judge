@@ -21,5 +21,13 @@ export class CreateSubmissionDto {
   @IsOptional()
   @IsString()
   sourceCode?: string;
+
+  @ApiPropertyOptional({
+    example: 'submissions/clx.../source/main.py',
+    description: 'Object key source code đã upload lên MinIO/S3',
+  })
+  @IsOptional()
+  @IsString()
+  sourceCodeObjectKey?: string;
 }
 

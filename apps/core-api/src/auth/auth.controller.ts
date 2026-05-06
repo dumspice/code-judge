@@ -10,16 +10,13 @@
  *  GET  /auth/me           — protected, thông tin user hiện tại.
  */
 import { Body, Controller, Get, Post, Req, Res, UseGuards, UnauthorizedException } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { Public } from '../common/decorators/public.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { AuthService, type GoogleProfile } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { RefreshDto } from './dto/refresh.dto';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 
 @ApiTags('auth')
@@ -86,7 +83,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Google callback — issue tokens, redirect frontend' })
   @Get('google/callback')
   async googleCallback(@Req() req: Request, @Res() res: Response) {
-    const profile = req.user as GoogleProfile;
+    const profile = req.user as unknown as GoogleProfile;
     const tokens = await this.auth.googleLogin(profile);
 
     this.setRefreshTokenCookie(res, tokens.refreshToken);
@@ -95,17 +92,6 @@ export class AuthController {
       this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
 
     res.redirect(`${frontendUrl}/auth/callback`);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Protected
-  // ---------------------------------------------------------------------------
-
-  @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Thông tin user hiện tại (JWT)' })
-  @Get('me')
-  me(@CurrentUser() user: RequestUser) {
-    return this.auth.getProfile(user.userId);
   }
 
   @Public()
