@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/services/api';
+import { useAuthStore } from '@/store/auth-store';
 
 /**
  * OAuth callback page: /auth/callback
@@ -21,7 +22,8 @@ export default function AuthCallbackPage() {
     const completeLogin = async () => {
       const success = await authApi.refreshSession();
       if (success) {
-        router.replace('/');
+        await useAuthStore.getState().refreshUser();
+        router.replace('/dashboard');
       } else {
         router.replace('/login');
       }
