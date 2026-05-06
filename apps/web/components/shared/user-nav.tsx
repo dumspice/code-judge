@@ -22,7 +22,10 @@ export function UserNav() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full bg-muted border border-border p-0 overflow-hidden">
+        <Button
+          variant="ghost"
+          className="relative h-10 w-10 rounded-full bg-muted border border-border p-0 overflow-hidden cursor-pointer"
+        >
           <div className="flex h-full w-full items-center justify-center rounded-full bg-primary/10 text-primary font-semibold uppercase">
             {user.image ? (
               <img src={user.image} alt={user.name} className="h-full w-full object-cover" />
@@ -61,7 +64,10 @@ export function UserNav() {
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-red-600 focus:text-red-600 cursor-pointer" onClick={() => logout()}>
+        <DropdownMenuItem
+          className="text-red-600 focus:text-red-600 cursor-pointer"
+          onClick={() => logout()}
+        >
           <LogOut className="mr-2 h-4 w-4" />
           <span>Log out</span>
         </DropdownMenuItem>

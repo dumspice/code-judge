@@ -4,12 +4,14 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authApi, ApiRequestError } from '@/services/api';
+import { useAuthStore } from '@/store/auth-store';
 
 const BG_IMAGE =
   'https://w0.peakpx.com/wallpaper/925/598/HD-wallpaper-technology-programming-code-python-programming-language.jpg';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const refreshUser = useAuthStore((state) => state.refreshUser);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +32,8 @@ export default function RegisterPage() {
 
     try {
       await authApi.register(name, email, password);
-      router.push('/');
+      await refreshUser();
+      router.push('/dashboard');
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setError(err.body.message);
