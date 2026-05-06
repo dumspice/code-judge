@@ -5,6 +5,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import cookieParser = require('cookie-parser');
+import morgan = require('morgan');
+import { createWriteStream, mkdirSync } from 'node:fs';
+import path from 'node:path';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
 
@@ -16,6 +19,11 @@ import { TransformResponseInterceptor } from './common/interceptors/transform-re
  */
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const logsDir = path.resolve(process.cwd(), 'logs');
+  mkdirSync(logsDir, { recursive: true });
+  const day = new Date().toISOString().slice(0, 10);
+  const accessLogPath = path.join(logsDir, `${day}.log`);
+  const accessLogStream = createWriteStream(accessLogPath, { flags: 'a' });
 
   // Cho phép frontend (Next.js) gọi API và Socket.io từ origin khác trong dev.
   app.enableCors({
@@ -24,6 +32,8 @@ async function bootstrap() {
   });
 
   app.use(cookieParser());
+  app.use(morgan('combined'));
+  app.use(morgan('combined', { stream: accessLogStream }));
 
   // Chuẩn hoá validate/transform DTO: strip field thừa, báo lỗi field không khai báo.
   app.useGlobalPipes(
@@ -63,6 +73,7 @@ async function bootstrap() {
   await app.listen(port);
 
   console.log(`[core-api] listening on :${port}`);
+  console.log(`[core-api] access logs: ${accessLogPath}`);
   if (!swaggerOff) {
     console.log(`[core-api] Swagger UI: http://localhost:${port}/api-docs`);
   }
