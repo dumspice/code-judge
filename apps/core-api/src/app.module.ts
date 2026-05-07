@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
 import { ClassroomModule } from './classrooms/classroom.module';
+import { AiTestcaseModule } from './ai-testcase/ai-testcase.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ClassroomModule } from './classrooms/classroom.module';
     AuthModule,
     UsersModule,
     ClassroomModule,
+    AiTestcaseModule,
     StorageModule,
     PrismaModule,
     RealtimeModule,
