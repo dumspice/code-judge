@@ -7,8 +7,8 @@ import { useSidebarStore } from '@/store/sidebar-store';
 import { Button } from '../ui/button';
 import { useState } from 'react';
 
-import { CreateClassroomModal } from '@/components/classroom/create-classroom-modal';
-import { JoinClassroomModal } from '../classroom/join-classroom-modal';
+import { JoinClassroomModal } from './classroom/join-classroom-modal';
+import { CreateClassroomModal } from './classroom/create-classroom-modal';
 
 export default function DashboardHeader() {
   const { user, loading } = useAuthStore();

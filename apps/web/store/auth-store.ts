@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { authApi, type UserProfile } from '@/services/api';
+import { authApi, type UserProfile } from '@/services/auth.apis';
 
 interface AuthState {
   user: UserProfile | null;

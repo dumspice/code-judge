@@ -16,7 +16,7 @@ export default function AuthCallbackPage() {
       try {
         // Backend already set HttpOnly refresh cookie
         // We now exchange it for a fresh access token
-        const { authApi } = await import('@/services/api');
+        const { authApi } = await import('@/services/auth.apis');
 
         const success = await authApi.refreshSession();
 

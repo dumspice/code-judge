@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import { X, Users } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { joinClassroom } from '@/services/classroom.apis';
+
+import { useRouter } from 'next/navigation';
 
 interface JoinClassroomModalProps {
     open: boolean;
@@ -19,6 +22,8 @@ export function JoinClassroomModal({
 
     const [isSubmitting, setIsSubmitting] =
         useState(false);
+
+    const router = useRouter();
 
     useEffect(() => {
         if (open) {
@@ -42,22 +47,17 @@ export function JoinClassroomModal({
                 classCode: classCode.trim(),
             };
 
-            console.log(payload);
+            const res = await joinClassroom(payload);
 
-            /**
-             * TODO:
-             * Replace with real API
-             */
-
-            await new Promise((resolve) =>
-                setTimeout(resolve, 1000),
-            );
+            // update sidebar
+            window.dispatchEvent(new Event('classroom:created'));
 
             setClassCode('');
-
             onClose();
+
+            router.push(`/dashboard/${res.classRoomId}`);
         } catch (error) {
-            console.error(error);
+            console.error('Join classroom failed:', error);
         } finally {
             setIsSubmitting(false);
         }

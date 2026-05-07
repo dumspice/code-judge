@@ -31,9 +31,7 @@ export function clearTokens() {
   accessToken = null;
 }
 
-// ---------------------------------------------------------------------------
 // Refresh logic
-// ---------------------------------------------------------------------------
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -70,9 +68,7 @@ async function tryRefresh(): Promise<boolean> {
   return refreshPromise;
 }
 
-// ---------------------------------------------------------------------------
 // Core fetch wrapper
-// ---------------------------------------------------------------------------
 
 export interface ApiError {
   code: number;
@@ -142,9 +138,7 @@ export async function apiFetch<T = unknown>(
   return (data?.result ?? data) as T;
 }
 
-// ---------------------------------------------------------------------------
 // Auth-specific API calls
-// ---------------------------------------------------------------------------
 
 export interface AuthTokens {
   accessToken: string;
