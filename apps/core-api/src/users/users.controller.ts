@@ -27,6 +27,11 @@ export class UsersController {
     return this.users.findAll(query);
   }
 
+  @Get('search')
+  searchUsers(@Query('q') q: string) {
+    return this.users.searchByEmail(q);
+  }
+
   @ApiOperation({ summary: 'Lấy thông tin user hiện tại' })
   @Get('me')
   me(@CurrentUser() user: RequestUser) {

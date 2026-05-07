@@ -109,6 +109,49 @@ export class ClassroomService {
     });
   }
 
+  async getPeople(classRoomId: string, userId: string) {
+    const enrollment = await this.prisma.classEnrollment.findFirst({
+      where: {
+        classRoomId,
+        userId,
+        status: 'ACTIVE',
+      },
+    });
+
+    if (!enrollment) {
+      throw new ForbiddenException('You are not in this class');
+    }
+
+    const classroom = await this.prisma.classRoom.findUnique({
+      where: { id: classRoomId },
+      include: {
+        owner: true,
+        enrollments: {
+          where: {
+            status: 'ACTIVE',
+          },
+          include: {
+            user: true,
+          },
+        },
+      },
+    });
+
+    if (!classroom) {
+      throw new NotFoundException('Class not found');
+    }
+
+    const teachers = classroom.enrollments.filter((e) => e.role === 'OWNER').map((e) => e.user);
+
+    const students = classroom.enrollments.filter((e) => e.role === 'MEMBER').map((e) => e.user);
+
+    return {
+      ownerId: classroom.ownerId,
+      teachers,
+      students,
+    };
+  }
+
   // UPDATE CLASSROOM (OWNER ONLY)
   async update(classRoomId: string, dto: UpdateClassroomDto, userId: string) {
     const classroom = await this.prisma.classRoom.findUnique({
