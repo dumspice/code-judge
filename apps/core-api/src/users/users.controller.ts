@@ -33,6 +33,12 @@ export class UsersController {
     return this.users.findById(user.userId);
   }
 
+  @ApiOperation({ summary: 'Cập nhật thông tin user hiện tại' })
+  @Patch('me')
+  updateMe(@CurrentUser() user: RequestUser, @Body() dto: UpdateUserDto) {
+    return this.users.update(user.userId, dto);
+  }
+
   @ApiOperation({ summary: 'Lấy presigned URL upload avatar của user hiện tại' })
   @Post('me/avatar/upload-url')
   createAvatarUploadUrl(@CurrentUser() user: RequestUser, @Body() dto: AvatarUploadDto) {

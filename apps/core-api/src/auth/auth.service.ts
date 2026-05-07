@@ -104,7 +104,9 @@ export class AuthService {
     // Update last login (fire & forget)
     this.prisma.user
       .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
-      .catch(() => { /* best effort */ });
+      .catch(() => {
+        /* best effort */
+      });
 
     return this.issueTokenPair(user);
   }
@@ -154,7 +156,9 @@ export class AuthService {
       // Existing linked user — update lastLoginAt (fire & forget)
       this.prisma.user
         .update({ where: { id: existingUser.id }, data: { lastLoginAt: new Date() } })
-        .catch(() => { /* best effort */ });
+        .catch(() => {
+          /* best effort */
+        });
       return this.issueTokenPair(existingUser);
     }
 
@@ -193,7 +197,9 @@ export class AuthService {
     // Update lastLoginAt (fire & forget)
     this.prisma.user
       .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
-      .catch(() => { /* best effort */ });
+      .catch(() => {
+        /* best effort */
+      });
 
     return this.issueTokenPair(user);
   }
@@ -207,6 +213,7 @@ export class AuthService {
         email: true,
         role: true,
         image: true,
+        createdAt: true,
       },
     });
     if (!user) {
@@ -225,9 +232,7 @@ export class AuthService {
    * exclusively in an HttpOnly cookie. To revoke all sessions for a user,
    * rotate JWT_REFRESH_SECRET in the environment.
    */
-  private async issueTokenPair(
-    user: Pick<User, 'id' | 'email' | 'role'>,
-  ): Promise<TokenPair> {
+  private async issueTokenPair(user: Pick<User, 'id' | 'email' | 'role'>): Promise<TokenPair> {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,

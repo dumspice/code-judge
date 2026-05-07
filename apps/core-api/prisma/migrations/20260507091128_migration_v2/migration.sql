@@ -47,6 +47,7 @@ CREATE TABLE "User" (
     "emailVerified" BOOLEAN NOT NULL,
     "isActive" BOOLEAN NOT NULL,
     "image" TEXT,
+    "imageObjectKey" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "lastLoginAt" TIMESTAMP(3),

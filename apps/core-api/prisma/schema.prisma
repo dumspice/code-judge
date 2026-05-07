@@ -96,6 +96,7 @@ model User {
   emailVerified Boolean
   isActive      Boolean
   image         String?
+  imageObjectKey String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   lastLoginAt   DateTime?
