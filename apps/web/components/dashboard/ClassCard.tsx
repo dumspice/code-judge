@@ -15,8 +15,12 @@ export default function ClassCard({ title, subTitle, teacher, bannerBg, avatar }
       {/* Banner phần trên */}
       <div className={`${bannerBg} p-4 h-[100px] relative text-white`}>
         <div className="flex justify-between items-start">
-          <h3 className="font-bold text-xl hover:underline truncate pr-6">{title}</h3>
-          <MoreVertical className="w-5 h-5 cursor-pointer" />
+          <Link
+            href={`/dashboard/${title}`}
+            className="font-bold text-xl hover:underline truncate pr-6"
+          >
+            {title}
+          </Link>
         </div>
         <p className="text-sm truncate">{subTitle}</p>
         <p className="text-xs mt-2 hover:underline">{teacher}</p>
@@ -35,10 +39,14 @@ export default function ClassCard({ title, subTitle, teacher, bannerBg, avatar }
       {/* Footer chứa icon actions */}
       <div className="border-t border-gray-100 p-3 flex justify-end gap-4 text-gray-500">
         {/* Navigate vào phần mọi người */}
-        <Contact2 className="w-5 h-5 hover:text-blue-500" />
+        <Link href={`/dashboard/${title}/people`}>
+          <Contact2 className="w-5 h-5 hover:text-blue-500" />
+        </Link>
 
         {/* Navigate vào phần bài tập */}
-        <FolderOpen className="w-5 h-5 hover:text-blue-500" />
+        <Link href={`/dashboard/${title}/classwork`}>
+          <FolderOpen className="w-5 h-5 hover:text-blue-500" />
+        </Link>
       </div>
     </div>
   );

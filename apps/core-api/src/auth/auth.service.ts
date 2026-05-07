@@ -7,11 +7,7 @@
  *  3. Refresh → verify refresh token → rotate (revoke old, issue new pair).
  *  4. Google OAuth → find-or-create user + OAuthAccount → issue token pair.
  */
-import {
-  ConflictException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { User } from '@prisma/client';
@@ -216,14 +212,29 @@ export class AuthService {
     return this.issueTokenPair(user);
   }
 
+  async getUserProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        image: true,
+      },
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    return user;
+  }
+
   // ---------------------------------------------------------------------------
   // Internal helpers
   // ---------------------------------------------------------------------------
 
   /** Issue access + refresh token pair. Stores refresh token hash in DB. */
-  private async issueTokenPair(
-    user: Pick<User, 'id' | 'email' | 'role'>,
-  ): Promise<TokenPair> {
+  private async issueTokenPair(user: Pick<User, 'id' | 'email' | 'role'>): Promise<TokenPair> {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
