@@ -24,7 +24,8 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { Public } from '../common/decorators/public.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { CurrentUser } from '../common';
+import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { AuthService, type GoogleProfile } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -115,8 +116,7 @@ export class AuthController {
 
     this.setRefreshTokenCookie(res, tokens.refreshToken);
 
-    const frontendUrl =
-      this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
 
     // accessToken passed as query param so frontend can pick it up immediately
     res.redirect(`${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}`);
@@ -158,6 +158,12 @@ export class AuthController {
       ...COOKIE_OPTS(this.isProduction),
     });
     return { success: true };
+  }
+
+  @ApiOperation({ summary: 'Lấy thông tin user hiện tại' })
+  @Get('me')
+  me(@CurrentUser() user: RequestUser) {
+    return this.auth.getUserProfile(user.userId);
   }
 
   // ---------------------------------------------------------------------------

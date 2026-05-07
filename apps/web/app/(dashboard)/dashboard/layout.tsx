@@ -8,7 +8,7 @@ import { useSidebarStore } from '@/store/sidebar-store';
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
   const isOpen = useSidebarStore((state) => state.isOpen);
   return (
-    <div className="">
+    <div>
       {/* Header */}
       <DashboardHeader />
       <div className="flex pt-16">

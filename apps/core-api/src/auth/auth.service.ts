@@ -12,11 +12,7 @@
  *       Refresh tokens are now stateless JWTs stored only in HttpOnly cookies.
  *       To revoke all sessions for a user, rotate JWT_REFRESH_SECRET.
  */
-import {
-  ConflictException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Role, type User } from '@prisma/client';
@@ -200,6 +196,23 @@ export class AuthService {
       .catch(() => { /* best effort */ });
 
     return this.issueTokenPair(user);
+  }
+
+  async getUserProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        image: true,
+      },
+    });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    return user;
   }
 
   // ---------------------------------------------------------------------------
