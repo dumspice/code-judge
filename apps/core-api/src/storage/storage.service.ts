@@ -15,6 +15,8 @@ export class StorageService {
   private readonly bucket: string;
   private readonly client: Client;
   private readonly publicBaseUrl: string | null;
+  private readonly fallbackPublicBaseUrl: string;
+  private bucketReadPolicyEnsured = false;
 
   constructor(private readonly config: ConfigService) {
     const endPoint = this.config.get<string>(EnvKeys.MINIO_ENDPOINT) ?? 'localhost';
@@ -25,6 +27,8 @@ export class StorageService {
 
     this.bucket = this.config.get<string>(EnvKeys.MINIO_BUCKET) ?? STORAGE_DEFAULT_BUCKET;
     this.publicBaseUrl = this.config.get<string>(EnvKeys.MINIO_PUBLIC_BASE_URL) ?? null;
+    const protocol = ['1', 'true', 'yes'].includes(useSSLRaw) ? 'https' : 'http';
+    this.fallbackPublicBaseUrl = `${protocol}://${endPoint}:${portRaw}`;
 
     this.client = new Client({
       endPoint,
@@ -42,6 +46,8 @@ export class StorageService {
       await this.client.makeBucket(this.bucket);
       this.logger.log(`Created bucket "${this.bucket}"`);
     }
+
+    await this.ensureBucketReadPolicy();
   }
 
   async createPresignedUploadUrl(input: PresignedUploadInput): Promise<string> {
@@ -71,13 +77,52 @@ export class StorageService {
   }
 
   getObjectUrl(objectKey: string): string {
-    if (!this.publicBaseUrl) {
-      return `s3://${this.bucket}/${objectKey}`;
-    }
-    return `${this.publicBaseUrl.replace(/\/+$/, '')}/${this.bucket}/${objectKey}`;
+    const baseUrl = (this.publicBaseUrl ?? this.fallbackPublicBaseUrl).replace(/\/+$/, '');
+    return `${baseUrl}/${this.bucket}/${objectKey}`;
   }
 
   getBucketName(): string {
     return this.bucket;
+  }
+
+  private async ensureBucketReadPolicy(): Promise<void> {
+    if (this.bucketReadPolicyEnsured) {
+      return;
+    }
+
+    const policy = JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'PublicReadGetObject',
+          Effect: 'Allow',
+          Principal: { AWS: ['*'] },
+          Action: ['s3:GetObject'],
+          Resource: [`arn:aws:s3:::${this.bucket}/*`],
+        },
+      ],
+    });
+
+    try {
+      const currentPolicy = await this.client.getBucketPolicy(this.bucket);
+      if (currentPolicy === policy) {
+        this.bucketReadPolicyEnsured = true;
+        return;
+      }
+    } catch {
+      // Ignore and try setting policy below.
+    }
+
+    try {
+      await this.client.setBucketPolicy(this.bucket, policy);
+      this.logger.log(`Applied public read policy for bucket "${this.bucket}"`);
+      this.bucketReadPolicyEnsured = true;
+    } catch (error) {
+      this.logger.warn(
+        `Unable to set public read policy for bucket "${this.bucket}": ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 }

@@ -105,7 +105,6 @@ export class UsersService {
     return this.prisma.user.update({
       where: { id: userId },
       data: {
-        imageObjectKey: objectKey,
         image: this.storage.getObjectUrl(objectKey),
       },
     });

@@ -15,7 +15,7 @@ import {
   MailCheck,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
-import { usersApi } from '@/services/api';
+import { usersApi } from '@/services/user.apis';
 
 interface UserProfile {
   id: string;
@@ -106,6 +106,7 @@ export default function ProfilePage() {
   const [profileName, setProfileName] = useState(user?.name ?? '');
   const [profileEmail, setProfileEmail] = useState(user?.email ?? '');
   const [isUploading, setIsUploading] = useState(false);
+  const [avatarLoadError, setAvatarLoadError] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -147,6 +148,7 @@ export default function ProfilePage() {
       }
 
       const updatedUser = await usersApi.confirmAvatar(uploadData.objectKey);
+      setAvatarLoadError(false);
       setUser(updatedUser);
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : 'Lỗi tải avatar');
@@ -186,15 +188,31 @@ export default function ProfilePage() {
             {/* Left: Avatar and Basic Info */}
             <div className="flex flex-col items-center md:items-start md:col-span-1">
               <div className="relative mb-4">
-                <img
-                  src={user?.image ?? undefined}
-                  alt={user?.name ?? 'User avatar'}
-                  className="w-32 h-32 rounded-lg border-4 border-card bg-secondary"
-                />
+                <div className="relative h-32 w-32 rounded-full bg-gradient-to-br from-primary/40 via-primary/10 to-transparent p-[3px] shadow-lg shadow-primary/20">
+                  <div className="relative h-full w-full overflow-hidden rounded-full border border-border/60 bg-secondary">
+                    {!avatarLoadError && user?.image ? (
+                      <img
+                        src={user.image}
+                        alt={user?.name ?? 'User avatar'}
+                        className="h-full w-full object-cover"
+                        onError={() => setAvatarLoadError(true)}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-muted text-3xl font-semibold text-foreground/80">
+                        {(user?.name?.charAt(0) ?? 'U').toUpperCase()}
+                      </div>
+                    )}
+                    {isUploading && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/45 text-xs font-medium text-white">
+                        Uploading...
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={handleAvatarClick}
-                  className="absolute cursor-pointer bottom-0 right-0 bg-primary text-primary-foreground p-2 rounded-full hover:bg-gray-700 transition-colors"
+                  className="absolute bottom-1 right-0 cursor-pointer rounded-full border border-border/50 bg-card p-2 text-primary shadow-md transition-all hover:scale-105 hover:bg-accent"
                   disabled={isUploading}
                 >
                   <Camera className="w-5 h-5" />
