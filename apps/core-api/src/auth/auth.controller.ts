@@ -30,7 +30,6 @@ import { AuthService, type GoogleProfile } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
-import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Cookie options shared across set/clear. */
@@ -154,18 +153,13 @@ export class AuthController {
 
   @Public()
   @Post('logout')
-  @ApiOperation({ summary: 'Đăng xuất, xoá cookie refreshToken' })
   logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie('refreshToken', {
-      ...COOKIE_OPTS(this.isProduction),
-    });
-    return { success: true };
-  }
+    const opts = COOKIE_OPTS(this.isProduction);
 
-  @ApiOperation({ summary: 'Lấy thông tin user hiện tại' })
-  @Get('me')
-  me(@CurrentUser() user: RequestUser) {
-    return this.auth.getUserProfile(user.userId);
+    res.clearCookie('refreshToken', opts);
+    res.clearCookie('accessToken', opts);
+
+    return { success: true };
   }
 
   // ---------------------------------------------------------------------------

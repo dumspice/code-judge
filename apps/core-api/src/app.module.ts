@@ -7,6 +7,7 @@ import { SubmissionsModule } from './submissions/submissions.module';
 import { AuthModule } from './auth/auth.module';
 import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
+import { ClassroomModule } from './classrooms/classroom.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { UsersModule } from './users/users.module';
     }),
     AuthModule,
     UsersModule,
+    ClassroomModule,
     StorageModule,
     PrismaModule,
     RealtimeModule,
@@ -23,5 +25,5 @@ import { UsersModule } from './users/users.module';
     SubmissionsModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }
 

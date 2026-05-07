@@ -31,9 +31,7 @@ export function clearTokens() {
   accessToken = null;
 }
 
-// ---------------------------------------------------------------------------
 // Refresh logic
-// ---------------------------------------------------------------------------
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -70,9 +68,7 @@ async function tryRefresh(): Promise<boolean> {
   return refreshPromise;
 }
 
-// ---------------------------------------------------------------------------
 // Core fetch wrapper
-// ---------------------------------------------------------------------------
 
 export interface ApiError {
   code: number;
@@ -98,7 +94,10 @@ interface FetchOptions extends Omit<RequestInit, 'body'> {
  *
  * Returns the unwrapped `result` from the API envelope.
  */
-export async function apiFetch<T = unknown>(path: string, options: FetchOptions = {}): Promise<T> {
+export async function apiFetch<T = unknown>(
+  path: string,
+  options: FetchOptions = {},
+): Promise<T> {
   const doFetch = async (): Promise<Response> => {
     const headers = new Headers(options.headers);
     if (!headers.has('Content-Type') && options.body) {
@@ -139,9 +138,7 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
   return (data?.result ?? data) as T;
 }
 
-// ---------------------------------------------------------------------------
 // Auth-specific API calls
-// ---------------------------------------------------------------------------
 
 export interface AuthTokens {
   accessToken: string;
@@ -184,8 +181,12 @@ export const authApi = {
   },
 
   async logout() {
-    await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
-    clearTokens();
+    try {
+      await apiFetch('/auth/logout', { method: 'POST' });
+    } finally {
+      clearTokens();
+      setAccessToken(null);
+    }
   },
 
   /** Google OAuth: redirect browser to backend /auth/google. */
@@ -193,36 +194,8 @@ export const authApi = {
     window.location.href = `${BASE_URL}/auth/google`;
   },
 
+
   async refreshSession(): Promise<boolean> {
     return tryRefresh();
-  },
-};
-
-export interface AvatarUploadUrlResponse {
-  objectKey: string;
-  uploadUrl: string;
-  bucket: string;
-}
-
-export const usersApi = {
-  async updateMe(dto: { name?: string; email?: string }) {
-    return apiFetch<UserProfile>('/users/me', {
-      method: 'PATCH',
-      body: dto,
-    });
-  },
-
-  async getAvatarUploadUrl(extension?: string) {
-    return apiFetch<AvatarUploadUrlResponse>('/users/me/avatar/upload-url', {
-      method: 'POST',
-      body: { extension },
-    });
-  },
-
-  async confirmAvatar(objectKey: string) {
-    return apiFetch<UserProfile>('/users/me/avatar/confirm', {
-      method: 'POST',
-      body: { objectKey },
-    });
   },
 };
