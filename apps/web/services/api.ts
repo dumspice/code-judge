@@ -4,7 +4,7 @@
  * Features:
  *  - Attaches accessToken from memory on every request.
  *  - Auto-refreshes token on 401 and retries the original request once.
- *  - Token storage: accessToken in memory, refreshToken in localStorage.
+ *  - Token storage: accessToken in-memory only; refreshToken in HttpOnly cookie (managed by browser).
  */
 
 import { getPublicCoreUrl } from '@/lib/public-config';
@@ -157,6 +157,10 @@ export interface UserProfile {
   email: string;
   role: string;
   image: string | null;
+  emailVerified: boolean;
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
 }
 
 export const authApi = {

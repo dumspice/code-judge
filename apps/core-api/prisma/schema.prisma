@@ -1,952 +1,409 @@
-// =============================================================================
-// Code Judge — Prisma schema (PostgreSQL)
-//
-// Cấu trúc file:
-//   1) generator / datasource
-//   2) Enum — nhóm nghiệp vụ + giá trị (/// gắn với phần tử enum kế dưới)
-//   3) Model — bảng; /// trên field = cột; /// trên relation = quan hệ Prisma + onDelete
-//
-// Quy ước onDelete thường gặp:
-//   Cascade   — xóa cha → xóa con (dữ liệu phụ thuộc mạnh).
-//   SetNull   — xóa cha → FK con = null (giữ bản ghi con, mất liên kết).
-//   Restrict  — không cho xóa cha nếu còn con (bảo vệ tham chiếu).
-// =============================================================================
-
-/// Sinh Prisma Client (TypeScript) vào node_modules; import `@prisma/client`.
 generator client {
   provider = "prisma-client-js"
 }
 
-/// Nguồn dữ liệu: PostgreSQL. URL kết nối lấy từ prisma.config.ts → DATABASE_URL.
 datasource db {
   provider = "postgresql"
 }
 
-// -----------------------------------------------------------------------------
-// ENUM: Phân quyền & tài khoản
-// -----------------------------------------------------------------------------
-
-/// Vai trò **toàn cục** gắn JWT / guard NestJS (`RoleGuard`).
-/// Khác `OrgRole`: một user có thể là STUDENT toàn cục nhưng ORG_INSTRUCTOR trong một trường.
 enum Role {
-  /// Quản trị nền tảng (cấu hình hệ thống). Không gộp với Org Admin trong tổ chức.
   ADMIN
-  /// Giảng viên: tạo lớp, đề, contest (tuỳ policy). Có thể độc lập hoặc thuộc org (xem membership).
-  INSTRUCTOR
-  /// Sinh viên / thí sinh luyện tập & thi.
-  STUDENT
+  CLIENT
 }
 
-/// Vai trò **trong một Organization** (bảng `OrganizationMembership`).
-/// Dùng cho Story 1: Org Admin quản GV, GV org xem đề ORG_INTERNAL.
-enum OrgRole {
-  /// Quản trị tổ chức: mời/khoá GV, xem lớp & contest thuộc org.
-  ORG_ADMIN
-  /// Giảng viên thuộc org — được xem đề `ProblemVisibility.ORG_INTERNAL` cùng `organizationId`.
-  ORG_INSTRUCTOR
-  /// Học viên gắn org (tuỳ sản phẩm; có thể dùng cho báo cáo theo trường).
-  ORG_STUDENT
+enum ClassRole {
+  OWNER
+  MEMBER
 }
 
-/// Trạng thái **duyệt giảng viên** khi đăng ký tự do (Story 2: Instructor cần admin duyệt).
-enum InstructorVerificationStatus {
-  /// Không trong luồng duyệt (SV, ADMIN) hoặc đã xử lý xong.
-  NONE
-  /// Đăng ký làm GV, chờ admin duyệt.
-  PENDING
-  /// Được phép hành nghề GV trên hệ thống (theo policy).
-  APPROVED
-  /// Từ chối làm GV.
-  REJECTED
-}
-
-// -----------------------------------------------------------------------------
-// ENUM: Đề bài & chấm
-// -----------------------------------------------------------------------------
-
-/// Phân loại **dạng bài**: ảnh hưởng judge (test case vs project).
 enum ProblemMode {
-  /// Thuật toán — thường có `TestCase`, chấm so khớp output.
   ALGO
-  /// Dự án / fullstack — chấm linh hoạt (rubric, manual, checker tùy chỉnh).
   PROJECT
 }
 
-/// Độ khó hiển thị / lọc (LeetCode-style).
 enum Difficulty {
-  /// Dễ.
   EASY
-  /// Trung bình.
   MEDIUM
-  /// Khó.
   HARD
 }
 
-/// **Ai được phép thấy** đề trên kho công khai / API list (Story 6 — privacy).
-/// Khác `isPublished`: `isPublished` là cờ “xuất bản” nội bộ sản phẩm; visibility là phạm vi pháp lý/xem.
 enum ProblemVisibility {
-  /// Chỉ tác giả + admin có quyền (mặc định an toàn).
   PRIVATE
-  /// Chỉ user có `OrganizationMembership` trùng `Problem.organizationId`.
-  ORG_INTERNAL
-  /// Mọi user đăng nhập (hoặc public API tuỳ policy) — kho luyện.
   PUBLIC
-  /// Chỉ hiện trong contest đã gắn đề; không list trong kho luyện chung.
   CONTEST_ONLY
 }
 
-/// Trạng thái **vòng đời chấm** một submission (worker cập nhật).
 enum SubmissionStatus {
-  /// Đã tạo bản ghi / job, chưa chạy judge.
   Pending
-  /// Worker / sandbox đang xử lý.
   Running
-  /// Qua hết test (hoặc đạt ngưỡng project).
   Accepted
-  /// Sai một hoặc nhiều test (Wrong Answer).
   Wrong
-  /// Lỗi không phân loại chi tiết (runtime, judge lỗi, …).
   Error
-  /// Biên dịch / build thất bại.
   CompilationError
-  /// Vượt giới hạn thời gian (TLE).
   TimeLimitExceeded
-  /// Vượt giới hạn bộ nhớ (MLE).
   MemoryLimitExceeded
 }
 
-/// **Ngữ cảnh** tạo submission: ảnh hưởng báo cáo, ưu tiên queue, rule nộp bài.
 enum SubmissionContext {
-  /// Luyện tập tự do (kho PUBLIC / đề được phép).
   PRACTICE
-  /// Nộp trong kỳ thi — thường kèm `contestId`, `attemptNumber`, `judgePriority` cao.
   CONTEST
-  /// Bài tập qua lớp — có thể kèm `classRoomId`, `classAssignmentId`.
   CLASS_ASSIGNMENT
 }
 
-// -----------------------------------------------------------------------------
-// ENUM: Lớp học
-// -----------------------------------------------------------------------------
-
-/// Trạng thái **sinh viên trong lớp** (join, mời, bị gỡ).
 enum ClassEnrollmentStatus {
-  /// Đã gửi yêu cầu join / chờ duyệt.
   PENDING
-  /// Đang tham gia lớp.
   ACTIVE
-  /// Giảng viên đã gỡ khỏi lớp.
   REMOVED
-  /// Được mời qua email (`ClassInvite`), chưa accept.
   INVITED
 }
 
-// -----------------------------------------------------------------------------
-// ENUM: Kỳ thi
-// -----------------------------------------------------------------------------
-
-/// Vòng đời **contest** (nháp → công bố → đang diễn ra → kết thúc).
 enum ContestStatus {
-  /// Soạn đề, chưa mở cho thí sinh.
   DRAFT
-  /// Đã công bố; có thể chưa tới `startAt`.
   PUBLISHED
-  /// Trong khoảng [startAt, endAt] (tuỳ cron cập nhật).
   RUNNING
-  /// Đã kết thúc; chỉ xem lại / export báo cáo.
   ENDED
 }
 
-/// Cách **hiển thị kết quả test** cho thí sinh trong contest (Story 7).
 enum ContestTestFeedbackPolicy {
-  /// Chỉ thông báo Pass/Fail tổng quát (thi thật).
   SUMMARY_ONLY
-  /// Cho xem chi tiết test sai (input/output) — gần luyện tập.
   VERBOSE
 }
 
-// -----------------------------------------------------------------------------
-// ENUM: AI sinh test
-// -----------------------------------------------------------------------------
-
-/// Trạng thái **pipeline AI** (upload đề → sinh input → golden chạy → instructor confirm).
 enum AiJobStatus {
-  /// Chờ worker / service AI xử lý.
   PENDING
-  /// Đang chạy.
   RUNNING
-  /// Hoàn tất thành công (xem `structuredOutput`).
   SUCCEEDED
-  /// Lỗi (xem `errorMessage`).
   FAILED
 }
 
-// -----------------------------------------------------------------------------
-// ENUM: Xuất báo cáo
-// -----------------------------------------------------------------------------
-
-/// Định dạng file export (Story 12).
 enum ExportFormat {
-  /// Microsoft Excel.
   XLSX
-  /// PDF.
   PDF
 }
 
-/// Trạng thái job tạo file export (async).
 enum ExportJobStatus {
-  /// Đang xếp hàng / xử lý.
   PENDING
-  /// Thành công — có `fileUrl` (hoặc storage key).
   DONE
-  /// Thất bại — xem `errorMessage`.
   FAILED
 }
 
-// =============================================================================
-// MODEL: Đa tenant — Tổ chức
-// =============================================================================
-
-/// **Tổ chức** (trường, công ty): ranh giới dữ liệu `ORG_INTERNAL`, nhóm membership, contest/lớp gắn org.
-model Organization {
-  /// Khóa chính (cuid).
-  id        String   @id @default(cuid())
-  /// Tên hiển thị (UI, báo cáo).
-  name      String
-  /// Slug duy nhất: URL, API, import CSV.
-  slug      String   @unique
-  /// `false` = khoá org (Story 1 — không đăng nhập / không thao tác theo org).
-  isActive  Boolean  @default(true)
-  /// Thời điểm tạo bản ghi.
-  createdAt DateTime @default(now())
-  /// Cập nhật khi sửa metadata org.
-  updatedAt DateTime @updatedAt
-
-  /// Danh sách thành viên (user ↔ org ↔ OrgRole).
-  memberships OrganizationMembership[]
-  /// Đề có `organizationId` + visibility ORG_INTERNAL.
-  problems    Problem[]
-  /// Contest thuộc org (báo cáo, phạm vi).
-  contests    Contest[]
-  /// Lớp thuộc org (null trên lớp = GV độc lập).
-  classRooms  ClassRoom[]
-}
-
-/// **Thành viên tổ chức**: một user chỉ có một dòng / org (unique cặp).
-model OrganizationMembership {
-  /// Khóa dòng membership.
-  id             String   @id @default(cuid())
-  /// FK tới `Organization` — xóa org → cascade xóa mọi membership.
-  organizationId String
-  /// FK tới `User` — xóa user → cascade xóa membership.
-  userId         String
-  /// Vai trò trong org (không thay thế `User.role` JWT toàn cục).
-  role           OrgRole  @default(ORG_STUDENT)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  /// Quan hệ: org cha. onDelete Cascade — xóa org xóa membership.
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  /// Quan hệ: user. onDelete Cascade — xóa user xóa membership.
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([organizationId, userId])
-  @@index([userId])
-}
-
-// =============================================================================
-// MODEL: User & OAuth
-// =============================================================================
-
-/// **Người dùng** hệ thống: đăng nhập email/OAuth, JWT chứa `role` toàn cục.
 model User {
-  /// Khóa chính. Dev có thể gán chuỗi cố định; production nên server sinh (cuid/uuid).
-  id                     String                       @id
-  /// Tên hiển thị.
-  name                   String
-  /// Email đăng nhập — unique toàn hệ thống.
-  email                  String                       @unique
-  /// Hash bcrypt; `null` nếu user chỉ đăng nhập OAuth.
-  passwordHash           String?
-  /// Vai trò JWT (`ADMIN` | `INSTRUCTOR` | `STUDENT`).
-  role                   Role                         @default(STUDENT)
-  /// Đã xác minh email (flow gửi link / OTP).
-  emailVerified          Boolean                      @default(false)
-  /// `false` = tài khoản bị khoá (Story 1 — Org Admin / Admin nền tảng).
-  isActive               Boolean                      @default(true)
-  /// Duyệt GV tự đăng ký (Story 2).
-  instructorVerification InstructorVerificationStatus @default(NONE)
-  /// URL ảnh đại diện (CDN / storage).
-  image                  String?
-  /// Object key ảnh đại diện trong MinIO/S3 (ưu tiên dùng nếu có).
-  imageObjectKey         String?
-  createdAt              DateTime                     @default(now())
-  updatedAt              DateTime                     @updatedAt
-  /// Lần đăng nhập gần nhất (ghi nhận ở AuthService).
-  lastLoginAt            DateTime?
+  id            String    @id @default(uuid())
+  name          String
+  email         String    @unique
+  passwordHash  String?
+  role          Role
+  emailVerified Boolean
+  isActive      Boolean
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
 
-  /// Các tổ chức user tham gia + OrgRole.
-  organizationMemberships OrganizationMembership[]
-  /// Tài khoản OAuth (Google, …) — một user nhiều provider.
-  oauthAccounts           OAuthAccount[]
-  /// Mọi submission do user nộp.
-  submissions             Submission[]
-  /// Đề do user tạo (tác giả). Relation name `ProblemAuthor` (trùng `Problem.creator`).
-  authoredProblems        Problem[]                @relation("ProblemAuthor")
-  /// Lớp do user làm **owner** (GV chủ nhiệm). Relation name `ClassOwner`.
-  ownedClassRooms         ClassRoom[]              @relation("ClassOwner")
-  /// Các lớp user tham gia (qua `ClassEnrollment`).
-  classEnrollments        ClassEnrollment[]
-  /// Các contest user đã đăng ký thi.
-  contestParticipations   ContestParticipant[]
-  /// Contest do user tạo. Relation name `ContestAuthor`.
-  authoredContests        Contest[]                @relation("ContestAuthor")
-  /// Lời giải mẫu user tạo (golden solution).
-  goldenSolutions         GoldenSolution[]
-  /// Job AI do user khởi chạy.
-  aiGenerationJobs        AiGenerationJob[]
-  /// Chứng chỉ / thành tích cấp cho user.
-  certificates            Certificate[]
-  /// Yêu cầu export báo cáo (GV). Relation name `ExportRequester`.
-  reportExports           ReportExport[]           @relation("ExportRequester")
-  /// Báo cáo đạo mã do user (GV) kích hoạt. Relation name `SimilarityReporter`.
-  codeSimilarityFindings  CodeSimilarityFinding[]  @relation("SimilarityReporter")
-  /// Refresh token hiện hành (rotation — mỗi lần refresh tạo token mới, thu hồi cũ).
-  refreshTokens           RefreshToken[]
-
-  @@index([role])
-  @@index([email])
-  @@index([isActive])
+  oauthAccounts         OAuthAccount[]
+  ownedClassRooms       ClassRoom[]             @relation("ClassRoomOwner")
+  classEnrollments      ClassEnrollment[]
+  createdProblems       Problem[]               @relation("ProblemCreator")
+  goldenSolutions       GoldenSolution[]
+  aiGenerationJobs      AiGenerationJob[]
+  createdContests       Contest[]               @relation("ContestCreator")
+  contestParticipations ContestParticipant[]
+  submissions           Submission[]
+  reportExports         ReportExport[]
+  codeSimilarityReports CodeSimilarityFinding[]
 }
 
-/// **Tài khoản OAuth** tách khỏi `User` — chuẩn nhiều provider / nhiều email nội bộ.
 model OAuthAccount {
-  /// Khóa dòng.
-  id             String    @id @default(cuid())
-  /// User sở hữu liên kết OAuth.
+  id             String    @id @default(uuid())
   userId         String
-  /// Tên provider: `google`, `github`, …
   provider       String
-  /// Subject / user id do provider cấp — unique cùng `provider`.
   providerUserId String
-  /// Access token (lưu mã hoá ở tầng app nếu cần).
-  accessToken    String?   @db.Text
-  refreshToken   String?   @db.Text
   expiresAt      DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  /// User cha. onDelete Cascade — xóa user xóa mọi OAuth link.
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerUserId])
   @@index([userId])
 }
 
-/// **Refresh token** (rotation): mỗi lần POST /auth/refresh → thu hồi token cũ, cấp cặp mới.
-model RefreshToken {
-  /// Khóa bản ghi.
-  id           String   @id @default(cuid())
-  /// User sở hữu token.
-  userId       String
-  /// Hash bcrypt của refresh token (không lưu plain text).
-  tokenHash    String
-  /// Thời điểm hết hạn.
-  expiresAt    DateTime
-  /// `true` khi đã sử dụng hoặc bị thu hồi — chặn replay.
-  revoked      Boolean  @default(false)
-  createdAt    DateTime @default(now())
-
-  /// User cha. onDelete Cascade — xóa user xóa mọi refresh token.
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-// =============================================================================
-// MODEL: Lớp học
-// =============================================================================
-
-/// **Lớp học**: GV tạo, SV join bằng `classCode` hoặc invite (Story 3–4).
 model ClassRoom {
-  /// Khóa lớp.
-  id             String   @id @default(cuid())
-  /// Nếu lớp thuộc trường — FK org; `null` = lớp của **GV độc lập**.
-  organizationId String?
-  /// GV chủ nhiệm (tạo lớp). Relation `ClassOwner` trên `User`.
-  ownerId        String
-  /// Tên lớp.
-  name           String
-  /// Mô tả ngắn.
-  description    String?  @db.Text
-  /// Niên khóa / khóa học (text tự do).
-  academicYear   String?
-  /// Mã join — **unique** toàn DB (SV gõ mã xin vào lớp).
-  classCode      String   @unique
-  /// Lớp bị đóng / ẩn.
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id           String   @id @default(uuid())
+  ownerId      String
+  name         String
+  description  String?
+  academicYear String?
+  classCode    String   @unique
+  isActive     Boolean
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  /// Org (tuỳ chọn). onDelete SetNull — xóa org không xóa lớp, chỉ gỡ gắn.
-  organization Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  /// GV chủ nhiệm. onDelete Cascade — xóa user owner xóa lớp (cân nhắc đổi Restrict ở production).
-  owner        User              @relation("ClassOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  /// Danh sách SV + trạng thái enrollment.
-  enrollments  ClassEnrollment[]
-  /// Lời mời email.
-  invites      ClassInvite[]
-  /// Bài tập / hoạt động trong lớp.
-  assignments  ClassAssignment[]
-  /// Contest gắn riêng lớp (tuỳ nghiệp vụ).
-  contests     Contest[]
-  /// Submission có `classRoomId` để báo cáo theo lớp.
-  submissions  Submission[]
-  /// Chứng chỉ gắn lớp.
-  certificates Certificate[]
-
-  @@index([organizationId])
-  @@index([ownerId])
-  @@index([classCode])
+  owner       User              @relation("ClassRoomOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  enrollments ClassEnrollment[]
+  invites     ClassInvite[]
+  assignments ClassAssignment[]
+  submissions Submission[]
 }
 
-/// **Enrollment**: user ↔ lớp + trạng thái (duyệt, active, gỡ, mời).
 model ClassEnrollment {
-  /// Khóa dòng.
-  id          String                @id @default(cuid())
-  /// Lớp. onDelete Cascade — xóa lớp xóa mọi enrollment.
+  id          String                @id @default(uuid())
   classRoomId String
-  /// Sinh viên. onDelete Cascade.
   userId      String
-  /// Trạng thái tham gia (PENDING / ACTIVE / …).
-  status      ClassEnrollmentStatus @default(PENDING)
-  /// Thời điểm tạo dòng (join hoặc được thêm).
-  joinedAt    DateTime              @default(now())
+  role        ClassRole
+  status      ClassEnrollmentStatus
+  joinedAt    DateTime?
 
-  /// Lớp cha.
   classRoom ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
-  /// User (SV).
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([classRoomId, userId])
   @@index([userId])
 }
 
-/// **Mời vào lớp** qua email: token một lần, hết hạn.
 model ClassInvite {
-  /// Khóa dòng.
-  id          String    @id @default(cuid())
-  /// Lớp đích.
+  id          String    @id @default(uuid())
   classRoomId String
-  /// Email được mời.
   email       String
-  /// Token secret trong link mời — unique.
   token       String    @unique
-  /// Thời điểm hết hạn lời mời.
   expiresAt   DateTime
-  /// Thời điểm đã dùng token (null = chưa dùng).
   usedAt      DateTime?
 
-  /// Lớp. onDelete Cascade.
   classRoom ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
-
-  @@index([classRoomId])
-  @@index([email])
 }
 
-/// **Bài tập lớp**: gắn một `Problem` và/hoặc `Contest` (API nên bắt ít nhất một).
 model ClassAssignment {
-  /// Khóa bài giao.
-  id          String    @id @default(cuid())
-  /// Lớp. onDelete Cascade.
+  id          String    @id @default(uuid())
   classRoomId String
-  /// Tiêu đề hiển thị (vd “Tuần 3 — DP”).
   title       String
-  /// Mô tả thầy giao.
-  description String?   @db.Text
-  /// Hạn nộp (tuỳ chọn).
+  description String?
   dueAt       DateTime?
-  /// Gắn đề luyện (tuỳ chọn). onDelete SetNull.
   problemId   String?
-  /// Gắn kỳ thi (tuỳ chọn). onDelete SetNull.
   contestId   String?
-  /// Thời điểm công bố bài trên lớp.
-  publishedAt DateTime  @default(now())
+  publishedAt DateTime
 
-  /// Lớp.
   classRoom   ClassRoom    @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
-  /// Đề (tuỳ chọn).
   problem     Problem?     @relation(fields: [problemId], references: [id], onDelete: SetNull)
-  /// Contest (tuỳ chọn).
   contest     Contest?     @relation(fields: [contestId], references: [id], onDelete: SetNull)
-  /// Submission nào gắn bài giao này (optional FK).
   submissions Submission[]
-
-  @@index([classRoomId])
-  @@index([dueAt])
 }
 
-// =============================================================================
-// MODEL: Tag & Đề bài
-// =============================================================================
+model Problem {
+  id                 String            @id @default(uuid())
+  slug               String            @unique
+  title              String
+  description        String?
+  statementMd        String?
+  difficulty         Difficulty
+  mode               ProblemMode
+  timeLimitMs        Int
+  memoryLimitMb      Int
+  isPublished        Boolean
+  visibility         ProblemVisibility
+  supportedLanguages Json?
+  maxTestCases       Int
+  creatorId          String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
-/// **Nhãn** chủ đề (Array, Graph, …) — lọc kho bài (Story 11).
+  creator          User?             @relation("ProblemCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+  assignments      ClassAssignment[]
+  tags             ProblemTag[]
+  testCases        TestCase[]
+  goldenSolutions  GoldenSolution[]
+  aiGenerationJobs AiGenerationJob[]
+  contests         ContestProblem[]
+  submissions      Submission[]
+}
+
 model Tag {
-  /// Khóa tag.
-  id        String   @id @default(cuid())
-  /// Slug URL/API — unique.
+  id        String   @id @default(uuid())
   slug      String   @unique
-  /// Tên hiển thị.
   name      String
   createdAt DateTime @default(now())
 
-  /// Nhiều-nhiều Problem ↔ Tag.
   problems ProblemTag[]
-
-  @@index([name])
 }
 
-/// **Bảng nối** Problem ↔ Tag; PK tổ hợp `(problemId, tagId)`.
 model ProblemTag {
-  /// FK đề.
   problemId String
-  /// FK tag.
   tagId     String
 
-  /// Đề. onDelete Cascade — xóa đề gỡ tag khỏi đề.
   problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  /// Tag. onDelete Cascade — xóa tag gỡ khỏi mọi đề.
   tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([problemId, tagId])
   @@index([tagId])
 }
 
-/// **Đề bài** (Problem): metadata judge + visibility + scope org.
-model Problem {
-  /// Khóa đề (ứng dụng có thể dùng id có nghĩa hoặc cuid).
-  id                 String            @id
-  /// Slug duy nhất (URL thân thiện, khác `id` nếu cần).
-  slug               String            @unique
-  /// Tiêu đề ngắn.
-  title              String
-  /// Mô tả / tóm tắt.
-  description        String?           @db.Text
-  /// Đề đầy đủ Markdown.
-  statementMd        String?           @db.Text
-  /// Độ khó (EASY/MEDIUM/HARD).
-  difficulty         Difficulty        @default(EASY)
-  /// ALGO hoặc PROJECT.
-  mode               ProblemMode       @default(ALGO)
-  /// Time limit **mỗi test** (ms) — judge áp dụng (có thể override trong `ContestProblem`).
-  timeLimitMs        Int               @default(1000)
-  /// Giới hạn RAM tham chiếu (MB) cho sandbox.
-  memoryLimitMb      Int               @default(256)
-  /// Cờ “đã xuất bản” trên UI nội bộ (tách khỏi `visibility`).
-  isPublished        Boolean           @default(true)
-  /// Ai được xem / luyện (Story 6).
-  visibility         ProblemVisibility @default(PRIVATE)
-  /// Bắt buộc khi `ORG_INTERNAL` — trùng org của viewer.
-  organizationId     String?
-  /// Danh sách ngôn ngữ được phép nộp (`text[]` Postgres); rỗng = API mặc định.
-  supportedLanguages String[]          @default([])
-  /// Trần số test / đề (Story 5 — mặc định 100).
-  maxTestCases       Int               @default(100)
-  /// Tác giả (nullable nếu import hệ thống). onDelete SetNull trên `Problem.creator`.
-  creatorId          String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-
-  /// Tác giả. Relation `ProblemAuthor`. onDelete SetNull — xóa user không xóa đề.
-  creator          User?             @relation("ProblemAuthor", fields: [creatorId], references: [id], onDelete: SetNull)
-  /// Org sở hữu phạm vi internal. onDelete SetNull.
-  organization     Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  /// Mọi submission của đề này.
-  submissions      Submission[]
-  /// Bộ test ALGO.
-  testCases        TestCase[]
-  /// Tag gắn đề.
-  tags             ProblemTag[]
-  /// Đề nằm trong các contest (bảng nối).
-  contestProblems  ContestProblem[]
-  /// Golden solutions.
-  goldenSolutions  GoldenSolution[]
-  /// Job AI liên quan đề.
-  aiGenerationJobs AiGenerationJob[]
-  /// Bài giao lớp trỏ tới đề này.
-  classAssignments ClassAssignment[]
-
-  @@index([creatorId])
-  @@index([organizationId])
-  @@index([mode])
-  @@index([isPublished])
-  @@index([difficulty])
-  @@index([visibility])
-}
-
-/// **Test case** cho ALGO: input/expected, thứ tự, ẩn/hiện, trọng số điểm.
 model TestCase {
-  /// Khóa test.
-  id             String   @id @default(cuid())
-  /// Thuộc đề nào.
+  id             String   @id @default(uuid())
   problemId      String
-  /// Thứ tự chạy (0,1,2,…) — unique cùng `problemId`.
-  orderIndex     Int      @default(0)
-  /// Input (TEXT).
-  input          String   @db.Text
-  /// Output mong đợi (TEXT).
-  expectedOutput String   @db.Text
-  /// `true` = không hiển thị cho thí sinh (chỉ judge dùng).
-  isHidden       Boolean  @default(false)
-  /// Trọng số điểm (chuẩn hoá tổng ở tầng judge).
-  weight         Int      @default(1)
+  orderIndex     Int
+  input          String
+  expectedOutput String
+  isHidden       Boolean
+  weight         Int
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  /// Đề cha. onDelete Cascade — xóa đề xóa toàn bộ test.
   problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@unique([problemId, orderIndex])
   @@index([problemId])
 }
 
-/// **Golden solution**: code mẫu đúng — chạy với input AI sinh để tạo expected output (Story 5).
 model GoldenSolution {
-  /// Khóa bản ghi.
-  id          String   @id @default(cuid())
-  /// Đề liên quan.
+  id          String   @id @default(uuid())
   problemId   String
-  /// Ngôn ngữ runtime (vd `python3`, `cpp17`).
   language    String
-  /// Mã nguồn lời giải mẫu.
-  sourceCode  String   @db.Text
-  /// Object key source code trong MinIO/S3 (fallback về `sourceCode` nếu null).
-  sourceCodeObjectKey String?
-  /// Lời giải “chính” hiện tại (có thể nhiều bản lịch sử, filter `isPrimary`).
-  isPrimary   Boolean  @default(true)
-  /// User tạo / xác nhận bản golden.
+  sourceCode  String
+  isPrimary   Boolean
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  /// Đề. onDelete Cascade.
   problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  /// Người tạo. onDelete Cascade.
   createdBy User    @relation(fields: [createdById], references: [id], onDelete: Cascade)
-
-  @@index([problemId])
 }
 
-/// **Job AI**: trạng thái pipeline phân tích đề / sinh test (Story 5).
 model AiGenerationJob {
-  /// Khóa job.
-  id               String      @id @default(cuid())
-  /// Đề mục tiêu.
+  id               String      @id @default(uuid())
   problemId        String
-  /// User (GV) khởi tạo job.
   createdById      String
-  /// Trạng thái xử lý.
-  status           AiJobStatus @default(PENDING)
-  /// URL hoặc key file đề upload (.docx).
+  status           AiJobStatus
   inputDocUrl      String?
-  /// Object key file đề upload trong MinIO/S3.
-  inputDocObjectKey String?
-  /// Version prompt / pipeline để debug & tái chạy.
   promptVersion    String?
-  /// JSON kết quả (danh sách test đề xuất, metadata).
   structuredOutput Json?
-  /// Thông báo lỗi khi FAILED.
-  errorMessage     String?     @db.Text
+  errorMessage     String?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 
-  /// Đề. onDelete Cascade.
   problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  /// Người tạo job. onDelete Cascade.
   createdBy User    @relation(fields: [createdById], references: [id], onDelete: Cascade)
-
-  @@index([problemId])
-  @@index([status])
 }
 
-// =============================================================================
-// MODEL: Contest
-// =============================================================================
-
-/// **Kỳ thi**: thời gian, mật khẩu phòng, policy feedback, giới hạn nộp (Story 7–8).
 model Contest {
-  /// Khóa contest.
-  id                       String                    @id @default(cuid())
-  /// Tiêu đề hiển thị.
+  id                       String                    @id @default(uuid())
   title                    String
-  /// Mô tả / quy chế.
-  description              String?                   @db.Text
-  /// Slug unique — URL public contest.
+  description              String?
   slug                     String                    @unique
-  /// Org tổ chức (tuỳ chọn). onDelete SetNull.
-  organizationId           String?
-  /// Gắn một lớp cụ thể (tuỳ chọn). onDelete SetNull.
-  classRoomId              String?
-  /// bcrypt mật khẩu vào phòng; `null` = không khóa.
   passwordHash             String?
-  /// Thời điểm mở đề (theo policy có thể cho vào sớm chỉ đọc).
   startAt                  DateTime
-  /// Thời điểm đóng — hết được nộp (tuỳ grace period ở app).
   endAt                    DateTime
-  /// Vòng đời DRAFT → … → ENDED.
-  status                   ContestStatus             @default(DRAFT)
-  /// Thí sinh thấy chi tiết test hay chỉ tổng quát.
-  testFeedbackPolicy       ContestTestFeedbackPolicy @default(SUMMARY_ONLY)
-  /// Max số lần nộp **mỗi cây / mỗi user** trong contest; `null` = không giới hạn.
+  status                   ContestStatus
+  testFeedbackPolicy       ContestTestFeedbackPolicy
   maxSubmissionsPerProblem Int?
-  /// User tạo contest (GV). onDelete **Restrict** — không xóa user nếu còn contest (đổi policy nếu cần).
   createdById              String
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
 
-  /// Org (tuỳ chọn).
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  /// Lớp (tuỳ chọn).
-  classRoom    ClassRoom?    @relation(fields: [classRoomId], references: [id], onDelete: SetNull)
-  /// Tác giả contest. Relation `ContestAuthor`. onDelete Restrict.
-  createdBy    User          @relation("ContestAuthor", fields: [createdById], references: [id], onDelete: Restrict)
-
-  /// Đề trong đề thi + điểm + override limit.
-  problems     ContestProblem[]
-  /// Thí sinh đã đăng ký.
-  participants ContestParticipant[]
-  /// Mọi submission gắn `contestId`.
-  submissions  Submission[]
-  /// Bài giao lớp trỏ contest.
-  assignments  ClassAssignment[]
-  /// Yêu cầu export Excel/PDF.
-  exports      ReportExport[]
-  /// Kết quả so đạo mã theo contest.
-  similarities CodeSimilarityFinding[]
-  /// Chứng chỉ sau contest.
-  certificates Certificate[]
-
-  @@index([organizationId])
-  @@index([classRoomId])
-  @@index([status])
-  @@index([startAt, endAt])
+  createdBy              User                    @relation("ContestCreator", fields: [createdById], references: [id])
+  assignments            ClassAssignment[]
+  problems               ContestProblem[]
+  participants           ContestParticipant[]
+  submissions            Submission[]
+  reportExports          ReportExport[]
+  codeSimilarityFindings CodeSimilarityFinding[]
 }
 
-/// **Đề trong contest**: thứ tự hiển thị, điểm, override time/memory so với `Problem` mặc định.
 model ContestProblem {
-  /// FK contest — PK tổ hợp 1.
   contestId             String
-  /// FK problem — PK tổ hợp 2.
   problemId             String
-  /// Thứ tự trong đề thi.
-  orderIndex            Int    @default(0)
-  /// Điểm tối đa cây này trong contest.
-  points                Int    @default(100)
-  /// Override ms (null = dùng `Problem.timeLimitMs`).
+  orderIndex            Int
+  points                Int
   timeLimitMsOverride   Int?
-  /// Override MB (null = dùng `Problem.memoryLimitMb`).
   memoryLimitMbOverride Int?
 
-  /// Contest. onDelete Cascade — xóa contest xóa dòng nối.
   contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  /// Đề. onDelete **Restrict** — không xóa đề nếu vẫn nằm trong contest (phải gỡ khỏi contest trước).
-  problem Problem @relation(fields: [problemId], references: [id], onDelete: Restrict)
+  problem Problem @relation(fields: [problemId], references: [id])
 
   @@id([contestId, problemId])
-  @@index([problemId])
 }
 
-/// **Thí sinh** đã vào contest (đủ điều kiện nộp bài sau khi check password / thời gian ở API).
 model ContestParticipant {
-  /// Khóa dòng.
-  id        String   @id @default(cuid())
-  /// Contest.
+  id        String   @id @default(uuid())
   contestId String
-  /// User thí sinh.
   userId    String
-  /// Thời điểm đăng ký / vào phòng.
   joinedAt  DateTime @default(now())
 
-  /// Contest. onDelete Cascade.
   contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  /// User. onDelete Cascade.
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([contestId, userId])
   @@index([userId])
 }
 
-// =============================================================================
-// MODEL: Submission
-// =============================================================================
-
-/// **Bài nộp**: một lần chấm cho (user, problem) trong ngữ cảnh practice/contest/lớp.
 model Submission {
-  /// Khóa submission (thường trùng jobId BullMQ).
-  id                String            @id @default(cuid())
-  /// Ai nộp. onDelete Cascade.
+  id                String            @id @default(uuid())
   userId            String
-  /// Đề nào. onDelete Cascade.
   problemId         String
-  /// Snapshot chế độ đề lúc nộp (ALGO/PROJECT).
   mode              ProblemMode
-  /// PRACTICE | CONTEST | CLASS_ASSIGNMENT — ảnh hưởng queue & báo cáo.
-  context           SubmissionContext @default(PRACTICE)
-  /// Contest (nếu `context` = CONTEST). onDelete SetNull — xóa contest giữ lịch sử submission.
+  context           SubmissionContext
   contestId         String?
-  /// Lớp (báo cáo / phạm vi). onDelete SetNull.
   classRoomId       String?
-  /// Bài giao lớp cụ thể. onDelete SetNull.
   classAssignmentId String?
-  /// Lần nộp thứ mấy (trong contest; kết hợp `Contest.maxSubmissionsPerProblem`).
-  attemptNumber     Int               @default(1)
-  /// Số lớn hơn = ưu tiên cao hơn trong BullMQ (contest > practice).
-  judgePriority     Int               @default(0)
-  /// Ngôn ngữ chạy (vd `python3`).
+  attemptNumber     Int
+  judgePriority     Int
   language          String?
-  /// Trạng thái chấm.
-  status            SubmissionStatus  @default(Pending)
-  /// Điểm (sau chấm).
+  status            SubmissionStatus
   score             Int?
-  /// Log chạy / stdout judge.
-  logs              String?           @db.Text
-  /// Log biên dịch (CE).
-  compileLog        String?           @db.Text
-  /// Thời gian chạy báo cáo (ms).
+  logs              String?
+  compileLog        String?
   runtimeMs         Int?
-  /// Bộ nhớ peak (MB).
   memoryMb          Int?
-  /// Lỗi rút gọn cho API/UI.
-  error             String?           @db.Text
-  /// Bắt đầu chấm (telemetry).
+  error             String?
   judgeStartedAt    DateTime?
-  /// Kết thúc chấm.
   judgeFinishedAt   DateTime?
-  /// Số test pass (tóm tắt UI).
   testsPassed       Int?
-  /// Tổng test.
   testsTotal        Int?
-  /// JSON chi tiết từng test (worker quy ước schema).
   caseResults       Json?
-  /// Mã nguồn nộp.
-  sourceCode        String?           @db.Text
-  /// Object key mã nguồn nộp trong MinIO/S3 khi externalize.
-  sourceCodeObjectKey String?
+  sourceCode        String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  /// User nộp.
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// Đề.
   problem         Problem          @relation(fields: [problemId], references: [id], onDelete: Cascade)
-  /// Contest (tuỳ chọn).
   contest         Contest?         @relation(fields: [contestId], references: [id], onDelete: SetNull)
-  /// Lớp (tuỳ chọn).
   classRoom       ClassRoom?       @relation(fields: [classRoomId], references: [id], onDelete: SetNull)
-  /// Bài giao (tuỳ chọn).
   classAssignment ClassAssignment? @relation(fields: [classAssignmentId], references: [id], onDelete: SetNull)
 
-  @@index([userId])
-  @@index([problemId])
+  similaritiesAsA CodeSimilarityFinding[] @relation("SubmissionA")
+  similaritiesAsB CodeSimilarityFinding[] @relation("SubmissionB")
+
+  @@index([userId, problemId])
   @@index([contestId])
-  @@index([classRoomId])
   @@index([status])
-  @@index([createdAt])
-  @@index([userId, status])
-  @@index([context, judgePriority])
-  @@index([contestId, userId, problemId])
 }
 
-// =============================================================================
-// MODEL: Báo cáo, chứng chỉ, chống gian lận
-// =============================================================================
-
-/// **Export** kết quả contest (Excel/PDF) — job async (Story 12).
 model ReportExport {
-  /// Khóa job export.
-  id            String          @id @default(cuid())
-  /// Contest nguồn dữ liệu.
+  id            String          @id @default(uuid())
   contestId     String
-  /// User (GV) yêu cầu export. Relation `ExportRequester`.
   requestedById String
-  /// Định dạng XLSX / PDF.
   format        ExportFormat
-  /// Trạng thái xử lý file.
-  status        ExportJobStatus @default(PENDING)
-  /// URL hoặc key file sau khi DONE.
+  status        ExportJobStatus
   fileUrl       String?
-  /// Object key file export trong MinIO/S3.
-  fileObjectKey String?
-  /// Lỗi khi FAILED.
-  errorMessage  String?         @db.Text
+  errorMessage  String?
   createdAt     DateTime        @default(now())
   completedAt   DateTime?
 
-  /// Contest. onDelete Cascade.
   contest     Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  /// Người yêu cầu.
-  requestedBy User    @relation("ExportRequester", fields: [requestedById], references: [id], onDelete: Cascade)
-
-  @@index([contestId])
-  @@index([status])
+  requestedBy User    @relation(fields: [requestedById], references: [id], onDelete: Cascade)
 }
 
-/// **Chứng chỉ / thành tích** hiển thị hồ sơ SV (Story 2).
-model Certificate {
-  /// Khóa chứng chỉ.
-  id          String   @id @default(cuid())
-  /// User nhận.
-  userId      String
-  /// Tiêu đề (vd “Hoàn thành Contest X”).
-  title       String
-  /// Mô tả / nội dung hiển thị.
-  description String?  @db.Text
-  /// Gắn contest (tuỳ chọn). onDelete SetNull.
-  contestId   String?
-  /// Gắn lớp (tuỳ chọn). onDelete SetNull.
-  classRoomId String?
-  /// JSON metadata (điểm, hạng, ngày, …).
-  metadata    Json?
-  /// Ngày cấp.
-  issuedAt    DateTime @default(now())
-
-  /// User nhận. onDelete Cascade.
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// Contest nguồn (tuỳ chọn).
-  contest   Contest?   @relation(fields: [contestId], references: [id], onDelete: SetNull)
-  /// Lớp nguồn (tuỳ chọn).
-  classRoom ClassRoom? @relation(fields: [classRoomId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([contestId])
-  @@index([classRoomId])
-}
-
-/// **Kết quả so khớp đạo mã** giữa hai submission (Story 13). Lưu id submission, không bắt buộc FK để tránh ràng buộc phức tạp khi xóa submission.
 model CodeSimilarityFinding {
-  /// Khóa bản ghi.
-  id            String   @id @default(cuid())
-  /// Contest ngữ cảnh (tuỳ chọn). onDelete SetNull.
+  id            String   @id @default(uuid())
   contestId     String?
-  /// Id bản ghi `Submission` thứ nhất (so sánh cặp).
   submissionIdA String
-  /// Id bản ghi `Submission` thứ hai.
   submissionIdB String
-  /// Độ giống 0–100 (%).
   similarityPct Float
-  /// Tên thuật toán / version (vd `ast-v1`).
-  algorithm     String   @default("ast-v1")
-  /// Chi tiết (đoạn trùng, map dòng, …).
+  algorithm     String
   details       Json?
-  /// User (GV) chạy báo cáo; `null` = job hệ thống. Relation `SimilarityReporter`. onDelete SetNull.
   reportedById  String?
   createdAt     DateTime @default(now())
 
-  /// Contest (tuỳ chọn).
-  contest    Contest? @relation(fields: [contestId], references: [id], onDelete: SetNull)
-  /// Người báo cáo (tuỳ chọn).
-  reportedBy User?    @relation("SimilarityReporter", fields: [reportedById], references: [id], onDelete: SetNull)
-
-  @@index([contestId])
-  @@index([submissionIdA, submissionIdB])
+  contest     Contest?   @relation(fields: [contestId], references: [id], onDelete: SetNull)
+  reportedBy  User?      @relation(fields: [reportedById], references: [id], onDelete: SetNull)
+  submissionA Submission @relation("SubmissionA", fields: [submissionIdA], references: [id], onDelete: Cascade)
+  submissionB Submission @relation("SubmissionB", fields: [submissionIdB], references: [id], onDelete: Cascade)
 }

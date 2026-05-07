@@ -2,17 +2,20 @@
  * Auth service: register, login (email/password), Google OAuth, token pair (access + refresh).
  *
  * Flow:
- *  1. Register → hash password → create user → issue token pair.
- *  2. Login → verify password → issue token pair.
- *  3. Refresh → verify refresh token → rotate (revoke old, issue new pair).
- *  4. Google OAuth → find-or-create user + OAuthAccount → issue token pair.
+ *  1. Register → hash password → create user (role=CLIENT, emailVerified=false, isActive=true)
+ *               → issue stateless JWT pair.
+ *  2. Login    → check isActive → verify password → update lastLoginAt → issue pair.
+ *  3. Refresh  → verify refresh JWT signature/expiry → load user → check isActive → issue pair.
+ *  4. Google   → find-or-create user + OAuthAccount → issue pair.
+ *
+ * NOTE: RefreshToken model was removed from Prisma schema.
+ *       Refresh tokens are now stateless JWTs stored only in HttpOnly cookies.
+ *       To revoke all sessions for a user, rotate JWT_REFRESH_SECRET.
  */
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import type { User } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
+import { Role, type User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EnvKeys, hashPassword, verifyPassword } from '../common';
 import type { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -31,8 +34,6 @@ export interface TokenPair {
   refreshToken: string;
   tokenType: 'Bearer';
 }
-
-const BCRYPT_ROUNDS = 10;
 
 @Injectable()
 export class AuthService {
@@ -66,10 +67,16 @@ export class AuthService {
     }
 
     const passwordHash = await hashPassword(password);
-    const id = randomBytes(12).toString('hex');
 
     const user = await this.prisma.user.create({
-      data: { id, name, email, passwordHash },
+      data: {
+        name,
+        email,
+        passwordHash,
+        role: Role.CLIENT,
+        emailVerified: false,
+        isActive: true,
+      },
     });
 
     return this.issueTokenPair(user);
@@ -85,22 +92,25 @@ export class AuthService {
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
 
+    if (!user.isActive) {
+      throw new UnauthorizedException('Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên');
+    }
+
     const valid = await verifyPassword(password, user.passwordHash);
     if (!valid) {
       throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
     }
 
-    // Update last login
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
+    // Update last login (fire & forget)
+    this.prisma.user
+      .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+      .catch(() => { /* best effort */ });
 
     return this.issueTokenPair(user);
   }
 
   // ---------------------------------------------------------------------------
-  // Refresh token
+  // Refresh token (stateless JWT — no DB lookup)
   // ---------------------------------------------------------------------------
 
   async refresh(refreshToken: string): Promise<TokenPair> {
@@ -114,37 +124,7 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token không hợp lệ hoặc đã hết hạn');
     }
 
-    // 2. Find all non-revoked tokens for this user
-    const storedTokens = await this.prisma.refreshToken.findMany({
-      where: { userId: payload.sub, revoked: false },
-    });
-
-    // 3. Find matching token by comparing hashes
-    let matchedTokenId: string | null = null;
-    for (const stored of storedTokens) {
-      const isMatch = await bcrypt.compare(refreshToken, stored.tokenHash);
-      if (isMatch) {
-        matchedTokenId = stored.id;
-        break;
-      }
-    }
-
-    if (!matchedTokenId) {
-      // Possible replay attack — revoke ALL tokens for this user
-      await this.prisma.refreshToken.updateMany({
-        where: { userId: payload.sub },
-        data: { revoked: true },
-      });
-      throw new UnauthorizedException('Refresh token đã bị thu hồi');
-    }
-
-    // 4. Revoke the used token (rotation)
-    await this.prisma.refreshToken.update({
-      where: { id: matchedTokenId },
-      data: { revoked: true },
-    });
-
-    // 5. Load user and issue new pair
+    // 2. Load user & check still active
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Tài khoản không tồn tại hoặc đã bị khoá');
@@ -160,26 +140,32 @@ export class AuthService {
   async googleLogin(profile: GoogleProfile): Promise<TokenPair> {
     const { googleId, email, name, image } = profile;
 
-    // Check if OAuth link exists
-    let oauthAccount = await this.prisma.oAuthAccount.findUnique({
+    // Check if OAuth link already exists
+    const oauthAccount = await this.prisma.oAuthAccount.findUnique({
       where: { provider_providerUserId: { provider: 'google', providerUserId: googleId } },
       include: { user: true },
     });
 
     if (oauthAccount) {
-      // Existing user — update last login
-      await this.prisma.user.update({
-        where: { id: oauthAccount.userId },
-        data: { lastLoginAt: new Date() },
-      });
-      return this.issueTokenPair(oauthAccount.user);
+      const existingUser = oauthAccount.user;
+      if (!existingUser.isActive) {
+        throw new UnauthorizedException('Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên');
+      }
+      // Existing linked user — update lastLoginAt (fire & forget)
+      this.prisma.user
+        .update({ where: { id: existingUser.id }, data: { lastLoginAt: new Date() } })
+        .catch(() => { /* best effort */ });
+      return this.issueTokenPair(existingUser);
     }
 
-    // Check if email already used (email/password user linking Google)
+    // Check if email already used (email/password account → link Google)
     let user = await this.prisma.user.findUnique({ where: { email } });
 
     if (user) {
-      // Link Google to existing user
+      if (!user.isActive) {
+        throw new UnauthorizedException('Tài khoản đã bị khoá. Vui lòng liên hệ quản trị viên');
+      }
+      // Link Google OAuth to existing account
       await this.prisma.oAuthAccount.create({
         data: {
           userId: user.id,
@@ -188,15 +174,15 @@ export class AuthService {
         },
       });
     } else {
-      // Create new user + OAuth link
-      const id = randomBytes(12).toString('hex');
+      // Create brand new user + OAuth link in a single transaction
       user = await this.prisma.user.create({
         data: {
-          id,
           name,
           email,
           image,
+          role: Role.CLIENT,
           emailVerified: true, // Google email is verified
+          isActive: true,
           oauthAccounts: {
             create: { provider: 'google', providerUserId: googleId },
           },
@@ -204,10 +190,10 @@ export class AuthService {
       });
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
+    // Update lastLoginAt (fire & forget)
+    this.prisma.user
+      .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+      .catch(() => { /* best effort */ });
 
     return this.issueTokenPair(user);
   }
@@ -233,8 +219,15 @@ export class AuthService {
   // Internal helpers
   // ---------------------------------------------------------------------------
 
-  /** Issue access + refresh token pair. Stores refresh token hash in DB. */
-  private async issueTokenPair(user: Pick<User, 'id' | 'email' | 'role'>): Promise<TokenPair> {
+  /**
+   * Issue stateless access + refresh JWT pair.
+   * RefreshToken is NOT stored in the database — it is a signed JWT kept
+   * exclusively in an HttpOnly cookie. To revoke all sessions for a user,
+   * rotate JWT_REFRESH_SECRET in the environment.
+   */
+  private async issueTokenPair(
+    user: Pick<User, 'id' | 'email' | 'role'>,
+  ): Promise<TokenPair> {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -248,28 +241,6 @@ export class AuthService {
         expiresIn: this.refreshExpiresIn,
       }),
     ]);
-
-    // Store hashed refresh token in DB
-    const tokenHash = await bcrypt.hash(refreshToken, BCRYPT_ROUNDS);
-    await this.prisma.refreshToken.create({
-      data: {
-        userId: user.id,
-        tokenHash,
-        expiresAt: new Date(Date.now() + this.refreshExpiresIn * 1000),
-      },
-    });
-
-    // Cleanup: remove expired/revoked tokens (fire & forget)
-    this.prisma.refreshToken
-      .deleteMany({
-        where: {
-          userId: user.id,
-          OR: [{ revoked: true }, { expiresAt: { lt: new Date() } }],
-        },
-      })
-      .catch(() => {
-        /* best effort cleanup */
-      });
 
     return { accessToken, refreshToken, tokenType: 'Bearer' };
   }

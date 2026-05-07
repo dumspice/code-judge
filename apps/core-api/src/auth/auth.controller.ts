@@ -1,13 +1,14 @@
 /**
- * Auth controller: register, login, refresh, Google OAuth, profile.
+ * Auth controller: register, login, refresh, Google OAuth, me, logout.
  *
  * Routes:
- *  POST /auth/register     — public, tạo tài khoản email/password.
- *  POST /auth/login        — public, đăng nhập email/password.
- *  POST /auth/refresh      — public, đổi refresh token lấy cặp mới.
- *  GET  /auth/google       — public, redirect sang Google consent.
- *  GET  /auth/google/callback — public, Google gọi lại, redirect frontend với token.
- *  GET  /auth/me           — protected, thông tin user hiện tại.
+ *  POST /auth/register        — public, tạo tài khoản email/password.
+ *  POST /auth/login           — public, đăng nhập email/password.
+ *  POST /auth/refresh         — public, đổi refresh token (cookie) lấy cặp mới.
+ *  GET  /auth/google          — public, redirect sang Google consent.
+ *  GET  /auth/google/callback — public, Google gọi lại, set cookie, redirect frontend.
+ *  GET  /auth/me              — protected (JWT), trả thông tin user hiện tại.
+ *  POST /auth/logout          — public, xoá cookie refreshToken.
  */
 import {
   Body,
@@ -29,14 +30,30 @@ import { AuthService, type GoogleProfile } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
+import type { RequestUser } from '../common/interfaces/request-user.interface';
+import { PrismaService } from '../prisma/prisma.service';
+
+/** Cookie options shared across set/clear. */
+const COOKIE_OPTS = (secure: boolean) =>
+  ({
+    httpOnly: true,
+    secure,
+    sameSite: 'lax',
+    path: '/',
+  }) as const;
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly isProduction: boolean;
+
   constructor(
     private readonly auth: AuthService,
     private readonly config: ConfigService,
-  ) {}
+    private readonly prisma: PrismaService,
+  ) {
+    this.isProduction = process.env.NODE_ENV === 'production';
+  }
 
   // ---------------------------------------------------------------------------
   // Email / Password
@@ -52,7 +69,7 @@ export class AuthController {
   }
 
   @Public()
-  @ApiOperation({ summary: 'Đăng nhập email/password, nhận token pair' })
+  @ApiOperation({ summary: 'Đăng nhập email/password' })
   @Post('login')
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.auth.login(dto.email, dto.password);
@@ -65,10 +82,10 @@ export class AuthController {
   // ---------------------------------------------------------------------------
 
   @Public()
-  @ApiOperation({ summary: 'Đổi refresh token lấy cặp access + refresh mới' })
+  @ApiOperation({ summary: 'Đổi refresh token (cookie) lấy cặp access + refresh mới' })
   @Post('refresh')
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const refreshToken = req.cookies?.refreshToken;
+    const refreshToken = req.cookies?.refreshToken as string | undefined;
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token không tìm thấy trong cookie');
     }
@@ -91,7 +108,7 @@ export class AuthController {
 
   @Public()
   @UseGuards(GoogleAuthGuard)
-  @ApiOperation({ summary: 'Google callback — issue tokens, redirect frontend' })
+  @ApiOperation({ summary: 'Google callback — set cookie, redirect frontend' })
   @Get('google/callback')
   async googleCallback(@Req() req: Request, @Res() res: Response) {
     const profile = req.user as unknown as GoogleProfile;
@@ -101,18 +118,44 @@ export class AuthController {
 
     const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
 
-    res.redirect(`${frontendUrl}/auth/callback`);
+    // accessToken passed as query param so frontend can pick it up immediately
+    res.redirect(`${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}`);
   }
+
+  // ---------------------------------------------------------------------------
+  // Me (protected)
+  // ---------------------------------------------------------------------------
+
+  @ApiOperation({ summary: 'Trả thông tin user đang đăng nhập' })
+  @Get('me')
+  async me(@CurrentUser() requestUser: RequestUser) {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: requestUser.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        image: true,
+        emailVerified: true,
+        isActive: true,
+        createdAt: true,
+        lastLoginAt: true,
+      },
+    });
+    return user;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Logout
+  // ---------------------------------------------------------------------------
 
   @Public()
   @Post('logout')
-  @ApiOperation({ summary: 'Đăng xuất, xoá cookie' })
+  @ApiOperation({ summary: 'Đăng xuất, xoá cookie refreshToken' })
   logout(@Res({ passthrough: true }) res: Response) {
     res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
+      ...COOKIE_OPTS(this.isProduction),
     });
     return { success: true };
   }
@@ -129,10 +172,7 @@ export class AuthController {
 
   private setRefreshTokenCookie(res: Response, refreshToken: string) {
     res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
+      ...COOKIE_OPTS(this.isProduction),
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
   }
