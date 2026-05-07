@@ -13,9 +13,8 @@ import {
 import { cn } from '@/lib/utils';
 import { usePathname } from 'next/navigation';
 import { useSidebarStore } from '@/store/sidebar-store';
+import { useClassroomStore } from '@/store/classroom-store';
 import Link from 'next/link';
-import { Classroom, getMyClassrooms } from '@/services/classroom.apis';
-
 
 const menuItems = [
   { icon: Home, label: 'Classroom', path: '/dashboard' },
@@ -29,35 +28,12 @@ export default function Sidebar() {
   const [isTeachingExpanded, setIsTeachingExpanded] = useState(true);
   const [isEnrolledExpanded, setIsEnrolledExpanded] = useState(true);
 
-  const [enrolled, setEnrolled] = useState<Classroom[]>([]);
+  const teaching = useClassroomStore((s) => s.teaching);
+  const enrolled = useClassroomStore((s) => s.enrolled);
 
-  const [teaching, setTeaching] = useState<Classroom[]>([]);
-  const [loading, setLoading] = useState(true);
+  const fetchClassrooms = useClassroomStore((s) => s.fetchClassrooms);
 
-  // FETCH CLASSROOMS
-  const fetchClassrooms = async () => {
-    try {
-      setLoading(true);
-
-      const data = await getMyClassrooms();
-
-      const teachingClasses = data
-        .filter((item) => item.role === 'OWNER')
-        .map((item) => item.classRoom);
-
-      const enrolledClasses = data
-        .filter((item) => item.role === 'MEMBER')
-        .map((item) => item.classRoom);
-
-      setTeaching(teachingClasses);
-      setEnrolled(enrolledClasses);
-    } catch (err) {
-      console.error('Load classrooms failed:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // INITIAL LOAD (SAFE - ONLY ON MOUNT)
   useEffect(() => {
     fetchClassrooms();
   }, []);
@@ -97,21 +73,22 @@ export default function Sidebar() {
     </Link>
   );
 
-  // MAP API → UI
+  // MAP DATA → UI
   const teachingList = teaching.map((c) => ({
-    avatar: c.name.charAt(0).toUpperCase(),
+    avatar: c.name?.charAt(0)?.toUpperCase() ?? 'C',
     label: c.name,
     path: `/dashboard/${c.id}`,
     color: 'bg-teal-100 text-teal-700',
   }));
 
   const enrolledList = enrolled.map((c) => ({
-    avatar: c.name.charAt(0).toUpperCase(),
+    avatar: c.name?.charAt(0)?.toUpperCase() ?? 'C',
     label: c.name,
     path: `/dashboard/${c.id}`,
     color: 'bg-green-100 text-green-700',
   }));
 
+  // UI
   return (
     <aside
       className={cn(
@@ -156,8 +133,10 @@ export default function Sidebar() {
 
           {isTeachingExpanded && (
             <div className="flex flex-col gap-1">
-              {loading ? (
-                <div className="text-sm text-gray-400 px-3">Loading...</div>
+              {teachingList.length === 0 ? (
+                <div className="text-sm text-gray-400 px-3">
+                  No classrooms
+                </div>
               ) : (
                 teachingList.map((item, index) =>
                   renderItem(item, `teach-${index}`),
@@ -173,7 +152,7 @@ export default function Sidebar() {
         <div className="flex flex-col gap-1">
           <button
             onClick={() => setIsEnrolledExpanded(!isEnrolledExpanded)}
-            className="flex items-center justify-between w-full h-12 px-3 rounded-xl hover:bg-slate-100 text-gray-700 transition-colors"
+            className="flex items-center justify-between w-full h-12 px-3 rounded-xl hover:bg-slate-100 text-gray-700"
           >
             <div className="flex items-center">
               <GraduationCap className="w-6 h-6 min-w-[24px]" />
@@ -188,21 +167,21 @@ export default function Sidebar() {
               </span>
             </div>
 
-            {/* Icon Chevron mũi tên đóng/mở */}
-            <div className={cn(
-              'transition-all duration-300',
-              isOpen ? 'opacity-100' : 'opacity-0 invisible',
-              'group-hover:opacity-100 group-hover:visible'
-            )}>
-              {isEnrolledExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </div>
+            {(isOpen || isEnrolledExpanded) && (
+              isEnrolledExpanded ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )
+            )}
           </button>
 
-          {/* Đưa khối danh sách này ra NGOÀI thẻ <button> */}
           {isEnrolledExpanded && (
             <div className="flex flex-col gap-1">
-              {loading ? (
-                <div className="text-sm text-gray-400 px-3">Loading...</div>
+              {enrolledList.length === 0 ? (
+                <div className="text-sm text-gray-400 px-3">
+                  No enrolled classes
+                </div>
               ) : (
                 enrolledList.map((item, index) =>
                   renderItem(item, `enrolled-${index}`),
@@ -212,6 +191,7 @@ export default function Sidebar() {
           )}
         </div>
 
+        {/* SETTINGS */}
         <div className="mt-auto">
           {renderItem(
             {
