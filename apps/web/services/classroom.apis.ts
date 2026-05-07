@@ -30,7 +30,19 @@ export interface JoinClassroomDto {
 
 export interface MyClassroomItem {
     role: 'OWNER' | 'MEMBER';
-    classRoom: Classroom;
+
+    classRoom: {
+        id: string;
+        name: string;
+        academicYear?: string | null;
+        classCode: string;
+
+        owner: {
+            id: string;
+            name: string;
+            image?: string | null;
+        };
+    };
 }
 
 // CREATE CLASSROOM
