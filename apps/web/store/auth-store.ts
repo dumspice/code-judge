@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { authApi, type UserProfile } from '@/services/auth.apis';
+import { authApi, clearTokens, type UserProfile } from '@/services/auth.apis';
 
 interface AuthState {
   user: UserProfile | null;
@@ -24,12 +24,16 @@ export const useAuthStore = create<AuthState>((set) => ({
       set({ user: null, loading: false });
     }
   },
+
   logout: async () => {
     try {
       await authApi.logout();
     } finally {
-      set({ user: null });
-      window.location.href = '/';
+      clearTokens();
+      set({ user: null, loading: false });
+
+      // optional nhưng nên có
+      window.location.replace('/');
     }
   },
 }));

@@ -183,10 +183,9 @@ export const authApi = {
   async logout() {
     try {
       await apiFetch('/auth/logout', { method: 'POST' });
-    } catch (e) {
-      // ignore vì logout là best-effort
     } finally {
       clearTokens();
+      setAccessToken(null);
     }
   },
 
