@@ -1,22 +1,11 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { setAccessToken } from '@/services/api';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth-store';
 
-/**
- * OAuth callback page: /auth/callback
- *
- * Backend redirects here after Google login with two things:
- *  1. HttpOnly cookie `refreshToken` (set by backend before redirect).
- *  2. `?accessToken=<jwt>` query param — stored in memory for immediate use.
- *
- * If no accessToken in query, falls back to calling /auth/refresh (uses cookie).
- */
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const hasAttempted = useRef(false);
 
   useEffect(() => {
@@ -24,36 +13,48 @@ export default function AuthCallbackPage() {
     hasAttempted.current = true;
 
     const completeLogin = async () => {
-      // 1. Try to grab accessToken passed directly by backend redirect
-      const tokenFromQuery = searchParams.get('accessToken');
+      try {
+        // Backend already set HttpOnly refresh cookie
+        // We now exchange it for a fresh access token
+        const { authApi } = await import('@/services/api');
 
-      if (tokenFromQuery) {
-        setAccessToken(tokenFromQuery);
-        await useAuthStore.getState().refreshUser();
-        // Clean query param from URL before navigating
-        router.replace('/dashboard');
-        return;
-      }
+        const success = await authApi.refreshSession();
 
-      // 2. Fallback: no token in query — try cookie-based refresh
-      const { authApi } = await import('@/services/api');
-      const success = await authApi.refreshSession();
-      if (success) {
+        if (!success) {
+          router.replace('/login');
+          return;
+        }
+
+        // Load current user
         await useAuthStore.getState().refreshUser();
+
         router.replace('/dashboard');
-      } else {
+      } catch {
         router.replace('/login');
       }
     };
 
     completeLogin();
-  }, [router, searchParams]);
+  }, [router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950">
-      <div className="text-center">
-        <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-indigo-500/30 border-t-indigo-500" />
-        <p className="text-sm text-slate-400">Completing sign in…</p>
+    <div className="flex min-h-screen items-center justify-center bg-black">
+      <div className="flex flex-col items-center">
+        {/* Spinner */}
+        <div className="relative h-12 w-12">
+          <div className="absolute inset-0 rounded-full border-4 border-white/10" />
+          <div className="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-white" />
+        </div>
+
+        {/* Text */}
+        <p className="mt-6 text-sm font-medium tracking-wide text-white/70">
+          Completing sign in...
+        </p>
+
+        {/* Optional subtle subtext */}
+        <p className="mt-1 text-xs text-white/30">
+          Please wait a moment
+        </p>
       </div>
     </div>
   );

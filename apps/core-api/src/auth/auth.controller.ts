@@ -37,7 +37,7 @@ const COOKIE_OPTS = (secure: boolean) =>
   ({
     httpOnly: true,
     secure,
-    sameSite: 'lax',
+    sameSite: secure ? 'none' : 'lax',
     path: '/',
   }) as const;
 
@@ -111,15 +111,17 @@ export class AuthController {
   @Get('google/callback')
   async googleCallback(@Req() req: Request, @Res() res: Response) {
     const profile = req.user as unknown as GoogleProfile;
+
     const tokens = await this.auth.googleLogin(profile);
 
+    // Set HttpOnly refresh token cookie
     this.setRefreshTokenCookie(res, tokens.refreshToken);
 
     const frontendUrl =
       this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
 
-    // accessToken passed as query param so frontend can pick it up immediately
-    res.redirect(`${frontendUrl}/auth/callback?accessToken=${tokens.accessToken}`);
+    // NO accessToken in URL
+    res.redirect(`${frontendUrl}/auth/callback`);
   }
 
   // ---------------------------------------------------------------------------
