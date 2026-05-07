@@ -181,8 +181,13 @@ export const authApi = {
   },
 
   async logout() {
-    await apiFetch('/auth/logout', { method: 'POST' }).catch(() => { });
-    clearTokens();
+    try {
+      await apiFetch('/auth/logout', { method: 'POST' });
+    } catch (e) {
+      // ignore vì logout là best-effort
+    } finally {
+      clearTokens();
+    }
   },
 
   /** Google OAuth: redirect browser to backend /auth/google. */
