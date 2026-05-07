@@ -6,7 +6,7 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'i.pravatar.cc',
+        hostname: '**',
         port: '',
         pathname: '/**',
       },

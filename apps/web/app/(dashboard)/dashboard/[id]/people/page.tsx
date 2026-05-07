@@ -1,47 +1,67 @@
-import { Metadata } from 'next';
-import PersonItem from '@/components/dashboard/class-detail/person-item';
-import { Button } from '@/components/ui/button';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'People | CodeJudge',
-  description: 'View class teachers and students',
-};
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+
+import InviteModal from '@/components/dashboard/class-detail/invite-modal';
+import PersonItem from '@/components/dashboard/class-detail/person-item';
+
+import { authApi } from '@/services/auth.apis';
+import { getClassroomPeople } from '@/services/classroom.apis';
 
 export default function PeoplePage() {
-  const teachers = [
-    { id: 1, name: 'FSA LDC Class Master', avatarUrl: 'https://i.pravatar.cc/150?u=teacher1' },
-  ];
+  const params = useParams();
+  const classRoomId = params.id as string;
 
-  const students = [
-    { id: 1, name: 'Đỗ Minh Quang', avatarUrl: 'https://i.pravatar.cc/150?u=student1' },
-    { id: 2, name: 'Hà Gia Minh', avatarUrl: 'https://i.pravatar.cc/150?u=student2' },
-    { id: 3, name: 'Nguyễn Viết Nam', avatarUrl: 'https://i.pravatar.cc/150?u=student3' },
-    { id: 4, name: 'Mai Nhật Hoàng', avatarUrl: 'https://i.pravatar.cc/150?u=student4' },
-  ];
+  const [data, setData] = useState<any>(null);
+  const [me, setMe] = useState<any>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      const [people, user] = await Promise.all([getClassroomPeople(classRoomId), authApi.me()]);
+
+      setData(people);
+      setMe(user);
+    };
+
+    load();
+  }, [classRoomId]);
+
+  if (!data) return <div>Loading...</div>;
+
+  const isOwner = me?.id === data.ownerId;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-12 mt-4 px-4 sm:px-0">
-      {/* Teachers Section */}
+    <div className="max-w-3xl mx-auto space-y-10 mt-8 px-4">
+      {/* Teachers */}
       <section>
-        <div className="flex justify-between items-end border-b border-black pb-4 mb-4">
-          <h2 className="text-3xl font-normal text-black">Owner</h2>
+        <div className="border-b pb-2 mb-2">
+          <h2 className="text-3xl text-[#1967d2]">Teachers</h2>
         </div>
-        <div className="space-y-1">
-          {teachers.map((teacher) => (
-            <PersonItem key={teacher.id} name={teacher.name} avatarUrl={teacher.avatarUrl} />
+
+        <div className="divide-y">
+          {data.teachers.map((t: any) => (
+            <PersonItem key={t.id} name={t.name} avatarUrl={t.image} />
           ))}
         </div>
       </section>
 
-      {/* Students Section */}
+      {/* Students */}
       <section>
-        <div className="flex justify-between items-end border-b border-black pb-4 mb-4">
-          <h2 className="text-3xl font-normal text-black">Student</h2>
-          <span className="text-sm font-medium text-gray-700">{students.length} students</span>
+        <div className="flex justify-between border-b pb-2 mb-2">
+          <h2 className="text-3xl text-[#1967d2]">Students</h2>
+
+          <div className="flex gap-4 items-center">
+            <span className="text-sm text-[#1967d2]">{data.students.length} students</span>
+
+            {/* chỉ owner mới thấy */}
+            {isOwner && <InviteModal classRoomId={classRoomId} />}
+          </div>
         </div>
-        <div className="space-y-1">
-          {students.map((student) => (
-            <PersonItem key={student.id} name={student.name} avatarUrl={student.avatarUrl} />
+
+        <div className="divide-y">
+          {data.students.map((s: any) => (
+            <PersonItem key={s.id} name={s.name} avatarUrl={s.image} />
           ))}
         </div>
       </section>

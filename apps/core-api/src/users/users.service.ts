@@ -109,4 +109,22 @@ export class UsersService {
       },
     });
   }
+
+  async searchByEmail(q: string) {
+  return this.prisma.user.findMany({
+    where: {
+      email: {
+        contains: q,
+        mode: 'insensitive',
+      },
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      image: true,
+    },
+    take: 10,
+  });
+}
 }

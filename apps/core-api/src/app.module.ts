@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
 import { ClassroomModule } from './classrooms/classroom.module';
+import { InvitesModule } from './invites/invites.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { ClassroomModule } from './classrooms/classroom.module';
     RealtimeModule,
     BullMqModule,
     SubmissionsModule,
+    MailModule,
+    InvitesModule
   ],
 })
 export class AppModule { }
