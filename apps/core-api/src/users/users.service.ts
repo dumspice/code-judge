@@ -110,13 +110,27 @@ export class UsersService {
     });
   }
 
-  async searchByEmail(q: string) {
+async searchByEmail(q: string) {
+  const query = q.trim();
+
+  if (!query) return [];
+
   return this.prisma.user.findMany({
     where: {
-      email: {
-        contains: q,
-        mode: 'insensitive',
-      },
+      OR: [
+        {
+          name: {
+            contains: query,
+            mode: 'insensitive',
+          },
+        },
+        {
+          email: {
+            startsWith: query,
+            mode: 'insensitive',
+          },
+        },
+      ],
     },
     select: {
       id: true,

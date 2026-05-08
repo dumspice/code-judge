@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch } from '@/services/auth.apis';
 import { Button } from '@/components/ui/button';
+import { useAuthStore } from '@/store/auth-store';
 
 export default function AcceptInvitePage() {
   const searchParams = useSearchParams();
@@ -11,20 +12,31 @@ export default function AcceptInvitePage() {
 
   const token = searchParams.get('token');
 
+  const user = useAuthStore((s) => s.user);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const accept = async () => {
-      if (!token) return;
+    if (!token) return;
 
+    const run = async () => {
       try {
         setLoading(true);
+
+        if (!user) {
+          router.push(
+            `/login?redirect=/invites/accept?token=${token}`
+          );
+          return;
+        }
 
         const res = await apiFetch<{
           message: string;
           classRoomId: string;
-        }>(`/invites/accept?token=${token}`);
+        }>(`/invites/accept?token=${token}`, {
+          method: 'POST',
+        });
 
         router.push(`/dashboard/${res.classRoomId}`);
       } catch (err: any) {
@@ -34,18 +46,24 @@ export default function AcceptInvitePage() {
       }
     };
 
-    accept();
-  }, [token]);
+    run();
+  }, [token, user, router]);
 
   if (loading) {
-    return <div className="h-screen flex items-center justify-center">Accepting invitation...</div>;
+    return (
+      <div className="h-screen flex items-center justify-center">
+        Accepting invitation...
+      </div>
+    );
   }
 
   if (error) {
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-4">
         <p className="text-red-500">{error}</p>
-        <Button onClick={() => router.push('/')}>Go Home</Button>
+        <Button onClick={() => router.push('/')}>
+          Go Home
+        </Button>
       </div>
     );
   }
