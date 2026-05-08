@@ -127,7 +127,6 @@ Có thể dùng Swagger UI để “Try it out” song song với Postman.
 ## 9) Tài liệu liên quan
 
 - [PRISMA-SEED.md](PRISMA-SEED.md) — seed dữ liệu mẫu (khớp biến Postman).
-- [MINIO-SETUP.md](MINIO-SETUP.md) — chạy MinIO local.
-- [MINIO-STORAGE.md](MINIO-STORAGE.md) — taxonomy key và luồng storage.
+- [MINIO.md](MINIO.md) — MinIO: chạy local, env, taxonomy, luồng storage.
 - Collection Postman: [`apps/core-api/postman/Code-Judge-Core-API.postman_collection.json`](../apps/core-api/postman/Code-Judge-Core-API.postman_collection.json).
 - File curl: [`apps/core-api/postman/import.txt`](../apps/core-api/postman/import.txt).

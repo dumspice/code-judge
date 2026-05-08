@@ -100,8 +100,7 @@ Mọi endpoint HTTP trả về (hoặc lỗi) cùng một **envelope**:
 ## Tài liệu cấu hình & utils
 - Xem: [docs/CAU-HINH-VA-UTILS.md](docs/CAU-HINH-VA-UTILS.md) (ESLint/Prettier, `common/`, `lib/`, cách import).
 - Phần **JWT / envelope JSON** ở trên bổ sung cho Core API; có thể đọc kèm comment trong `apps/core-api/src/auth/` và `apps/core-api/src/common/`.
-- Hướng dẫn setup/chạy MinIO local: [docs/MINIO-SETUP.md](docs/MINIO-SETUP.md).
-- MinIO object storage: [docs/MINIO-STORAGE.md](docs/MINIO-STORAGE.md).
+- MinIO (setup, env, taxonomy, luồng API/worker): [docs/MINIO.md](docs/MINIO.md).
 - Test API với Postman: [docs/postman-testapi.md](docs/postman-testapi.md), collection [apps/core-api/postman/Code-Judge-Core-API.postman_collection.json](apps/core-api/postman/Code-Judge-Core-API.postman_collection.json), curl [apps/core-api/postman/import.txt](apps/core-api/postman/import.txt).
 - Seed DB (test): [docs/PRISMA-SEED.md](docs/PRISMA-SEED.md).
 
