@@ -7,6 +7,16 @@ export interface Classroom {
   academicYear?: string | null;
   classCode: string;
   isActive: boolean;
+  owner: {
+    id: string;
+    name: string;
+    image?: string | null;
+    role: string;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+  assignments: string[];
   ownerId: string;
   createdAt: string;
   updatedAt: string;
