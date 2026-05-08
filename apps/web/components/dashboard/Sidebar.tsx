@@ -1,9 +1,10 @@
 'use client';
 
-import { Home, Calendar } from 'lucide-react';
+import { Home, Calendar, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePathname } from 'next/navigation';
 import { useSidebarStore } from '@/store/sidebar-store';
+import { useAuthStore } from '@/store/auth-store';
 import Link from 'next/link';
 
 const menuItems = [
@@ -11,9 +12,14 @@ const menuItems = [
   { icon: Calendar, label: 'Schedule', path: '/dashboard/schedule' },
 ];
 
+const adminMenuItems = [{ icon: Settings, label: 'Admin Panel', path: '/dashboard/admin' }];
+
 export default function Sidebar() {
   const pathname = usePathname();
   const isOpen = useSidebarStore((state) => state.isOpen);
+  const user = useAuthStore((state) => state.user);
+
+  const allMenuItems = user?.role === 'ADMIN' ? [...menuItems, ...adminMenuItems] : menuItems;
 
   return (
     <aside
@@ -23,7 +29,7 @@ export default function Sidebar() {
       )}
     >
       <div className="flex flex-col gap-2 p-3">
-        {menuItems.map((item, index) => (
+        {allMenuItems.map((item, index) => (
           <Link
             href={item.path}
             key={index}

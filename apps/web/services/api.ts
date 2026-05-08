@@ -98,10 +98,7 @@ interface FetchOptions extends Omit<RequestInit, 'body'> {
  *
  * Returns the unwrapped `result` from the API envelope.
  */
-export async function apiFetch<T = unknown>(
-  path: string,
-  options: FetchOptions = {},
-): Promise<T> {
+export async function apiFetch<T = unknown>(path: string, options: FetchOptions = {}): Promise<T> {
   const doFetch = async (): Promise<Response> => {
     const headers = new Headers(options.headers);
     if (!headers.has('Content-Type') && options.body) {
@@ -163,6 +160,153 @@ export interface UserProfile {
   lastLoginAt: string | null;
 }
 
+export interface Problem {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  statementMd: string | null;
+  difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+  mode: 'ALGO' | 'PROJECT';
+  timeLimitMs: number;
+  memoryLimitMb: number;
+  isPublished: boolean;
+  visibility: 'PRIVATE' | 'PUBLIC' | 'CONTEST_ONLY';
+  supportedLanguages: string[] | null;
+  maxTestCases: number;
+  creatorId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  testCases?: Array<{
+    id: string;
+    orderIndex: number;
+    input: string;
+    expectedOutput: string;
+    isHidden: boolean;
+    weight: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+}
+
+export interface Contest {
+  id: string;
+  title: string;
+  description: string | null;
+  slug: string;
+  startAt: string;
+  endAt: string;
+  status: 'DRAFT' | 'PUBLISHED' | 'RUNNING' | 'ENDED';
+  testFeedbackPolicy: 'SUMMARY_ONLY' | 'VERBOSE';
+  maxSubmissionsPerProblem: number | null;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  problems?: Array<{
+    problemId: string;
+    orderIndex: number;
+    points: number;
+    timeLimitMsOverride: number | null;
+    memoryLimitMbOverride: number | null;
+    problem: Problem;
+  }>;
+}
+
+export interface CreateProblemDto {
+  title: string;
+  description?: string;
+  statementMd?: string;
+  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  mode?: 'ALGO' | 'PROJECT';
+  timeLimitMs?: number;
+  memoryLimitMb?: number;
+  isPublished?: boolean;
+  visibility?: 'PRIVATE' | 'PUBLIC' | 'CONTEST_ONLY';
+  supportedLanguages?: string[];
+  maxTestCases?: number;
+  testCases?: Array<{
+    input: string;
+    expectedOutput: string;
+    isHidden?: boolean;
+    weight?: number;
+  }>;
+}
+
+export interface UpdateProblemDto {
+  title?: string;
+  description?: string;
+  statementMd?: string;
+  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  mode?: 'ALGO' | 'PROJECT';
+  timeLimitMs?: number;
+  memoryLimitMb?: number;
+  isPublished?: boolean;
+  visibility?: 'PRIVATE' | 'PUBLIC' | 'CONTEST_ONLY';
+  supportedLanguages?: string[];
+  maxTestCases?: number;
+  testCases?: Array<{
+    input: string;
+    expectedOutput: string;
+    isHidden?: boolean;
+    weight?: number;
+  }>;
+}
+
+export interface CreateSubmissionDto {
+  userId: string;
+  problemId: string;
+  contestId?: string;
+  mode: 'ALGO' | 'PROJECT';
+  language?: string;
+  sourceCode?: string;
+  sourceCodeObjectKey?: string;
+}
+
+export interface Submission {
+  id: string;
+  status: string;
+  score: number | null;
+  error: string | null;
+  logs?: string | null;
+  caseResults?: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateContestDto {
+  title: string;
+  description?: string;
+  startAt: string;
+  endAt: string;
+  testFeedbackPolicy?: 'SUMMARY_ONLY' | 'VERBOSE';
+  maxSubmissionsPerProblem?: number;
+  password?: string;
+  problems?: Array<{
+    problemId: string;
+    points?: number;
+    orderIndex?: number;
+    timeLimitMsOverride?: number;
+    memoryLimitMbOverride?: number;
+  }>;
+}
+
+export interface UpdateContestDto {
+  title?: string;
+  description?: string;
+  startAt?: string;
+  endAt?: string;
+  testFeedbackPolicy?: 'SUMMARY_ONLY' | 'VERBOSE';
+  maxSubmissionsPerProblem?: number;
+  password?: string;
+  problems?: Array<{
+    problemId: string;
+    points?: number;
+    orderIndex?: number;
+    timeLimitMsOverride?: number;
+    memoryLimitMbOverride?: number;
+  }>;
+}
+
 export const authApi = {
   async register(name: string, email: string, password: string): Promise<AuthTokens> {
     const tokens = await apiFetch<AuthTokens>('/auth/register', {
@@ -187,7 +331,7 @@ export const authApi = {
   },
 
   async logout() {
-    await apiFetch('/auth/logout', { method: 'POST' }).catch(() => { });
+    await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
     clearTokens();
   },
 
@@ -196,8 +340,128 @@ export const authApi = {
     window.location.href = `${BASE_URL}/auth/google`;
   },
 
-
   async refreshSession(): Promise<boolean> {
     return tryRefresh();
+  },
+};
+
+export const problemsApi = {
+  async findAll(query?: { search?: string; page?: number; limit?: number }): Promise<{
+    items: Problem[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams();
+    if (query?.search) params.set('search', query.search);
+    if (query?.page) params.set('page', query.page.toString());
+    if (query?.limit) params.set('limit', query.limit.toString());
+    const queryString = params.toString();
+    return apiFetch(`/problems${queryString ? `?${queryString}` : ''}`);
+  },
+
+  async findById(id: string): Promise<Problem> {
+    return apiFetch(`/problems/${id}`);
+  },
+
+  async create(dto: CreateProblemDto): Promise<Problem> {
+    return apiFetch('/problems', {
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async update(id: string, dto: UpdateProblemDto): Promise<Problem> {
+    return apiFetch(`/problems/${id}`, {
+      method: 'PATCH',
+      body: dto,
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    return apiFetch(`/problems/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+export const contestsApi = {
+  async findAll(query?: { search?: string; page?: number; limit?: number }): Promise<{
+    items: Contest[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams();
+    if (query?.search) params.set('search', query.search);
+    if (query?.page) params.set('page', query.page.toString());
+    if (query?.limit) params.set('limit', query.limit.toString());
+    const queryString = params.toString();
+    return apiFetch(`/contests${queryString ? `?${queryString}` : ''}`);
+  },
+
+  async findById(id: string): Promise<Contest> {
+    return apiFetch(`/contests/${id}`);
+  },
+
+  async create(dto: CreateContestDto): Promise<Contest> {
+    return apiFetch('/contests', {
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async update(id: string, dto: UpdateContestDto): Promise<Contest> {
+    return apiFetch(`/contests/${id}`, {
+      method: 'PATCH',
+      body: dto,
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    return apiFetch(`/contests/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+export interface PresignUploadResponse {
+  bucket: string;
+  objectKey: string;
+  uploadUrl: string;
+}
+
+export const storageApi = {
+  async presignUpload(body: {
+    resourceKind: 'submission-source';
+    submissionId: string;
+    fileName: string;
+    expiresInSeconds?: number;
+  }): Promise<PresignUploadResponse> {
+    return apiFetch('/storage/presign/upload', {
+      method: 'POST',
+      body,
+    });
+  },
+};
+
+export const submissionsApi = {
+  async create(dto: CreateSubmissionDto): Promise<{ submissionId: string; status: string }> {
+    return apiFetch('/submissions', {
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async findById(id: string): Promise<Submission> {
+    return apiFetch(`/submissions/${id}`);
+  },
+
+  async findAll(query?: { userId?: string; problemId?: string }): Promise<Submission[]> {
+    const params = new URLSearchParams();
+    if (query?.userId) params.set('userId', query.userId);
+    if (query?.problemId) params.set('problemId', query.problemId);
+    const queryString = params.toString();
+    return apiFetch(`/submissions${queryString ? `?${queryString}` : ''}`);
   },
 };

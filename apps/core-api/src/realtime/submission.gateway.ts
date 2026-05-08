@@ -30,7 +30,7 @@ export class SubmissionGateway implements OnGatewayInit, OnGatewayConnection {
   }
 
   handleConnection(client: any) {
-    const rawUserId = client?.handshake?.query?.userId;
+    const rawUserId = client?.handshake?.query?.userId ?? client?.handshake?.auth?.userId;
     const userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
     if (!userId || typeof userId !== 'string') return;
 
@@ -52,4 +52,3 @@ export class SubmissionGateway implements OnGatewayInit, OnGatewayConnection {
     client.emit('client:hello:ack', { ok: true });
   }
 }
-

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubmissionGateway } from '../realtime/submission.gateway';
@@ -17,6 +17,10 @@ export class SubmissionsService {
   ) {}
 
   async createAndEnqueue(dto: CreateSubmissionDto) {
+    if (!dto.sourceCode && !dto.sourceCodeObjectKey) {
+      throw new BadRequestException('sourceCode or sourceCodeObjectKey is required');
+    }
+
     // Dev-friendly upsert: ensure User/Problem exist so the base flow runs immediately.
     await this.prisma.user.upsert({
       where: { id: dto.userId },
@@ -25,9 +29,9 @@ export class SubmissionsService {
         id: dto.userId,
         name: dto.userId,
         email: `${dto.userId}@example.com`,
-        role: 'STUDENT',
+        role: 'CLIENT',
+        emailVerified: false,
         isActive: true,
-        instructorVerification: 'NONE',
       },
     });
 
@@ -52,6 +56,25 @@ export class SubmissionsService {
       },
     });
 
+    let contestId: string | undefined;
+    let context: 'PRACTICE' | 'CONTEST' = 'PRACTICE';
+    if (dto.contestId) {
+      const contest = await this.prisma.contest.findUnique({
+        where: { id: dto.contestId },
+        include: {
+          problems: { where: { problemId: dto.problemId }, select: { problemId: true } },
+        },
+      });
+      if (!contest) {
+        throw new BadRequestException('Contest không tồn tại');
+      }
+      if (contest.problems.length === 0) {
+        throw new BadRequestException('Problem không thuộc contest');
+      }
+      contestId = dto.contestId;
+      context = 'CONTEST';
+    }
+
     const sourceCode = dto.sourceCode ?? null;
     const shouldExternalizeCode = sourceCode !== null && sourceCode.length > 8192;
     const externalizedObjectKey = dto.sourceCodeObjectKey ?? null;
@@ -60,8 +83,12 @@ export class SubmissionsService {
         userId: dto.userId,
         problemId: dto.problemId,
         mode: dto.mode as any,
-        context: 'PRACTICE',
+        context,
+        contestId,
+        language: dto.language ?? null,
+        attemptNumber: 1,
         judgePriority: 0,
+        status: 'Pending',
         sourceCode: shouldExternalizeCode ? null : sourceCode,
         sourceCodeObjectKey: externalizedObjectKey,
       },
@@ -100,11 +127,65 @@ export class SubmissionsService {
 
     return submission;
   }
+
+  async findById(submissionId: string) {
+    const submission = await this.prisma.submission.findUnique({
+      where: { id: submissionId },
+      select: {
+        id: true,
+        status: true,
+        score: true,
+        error: true,
+        logs: true,
+        caseResults: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException('Submission không tồn tại');
+    }
+
+    return submission;
+  }
+
+  async findMany(filter: { userId?: string; problemId?: string }) {
+    const where: Record<string, unknown> = {};
+    if (filter.userId) {
+      where.userId = filter.userId;
+    }
+    if (filter.problemId) {
+      where.problemId = filter.problemId;
+    }
+
+    if (Object.keys(where).length === 0) {
+      return [];
+    }
+
+    return this.prisma.submission.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        score: true,
+        error: true,
+        logs: true,
+        caseResults: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
 }
 
 /** Slug duy nhất cho dev upsert (ký tự an toàn URL; fallback khi chuỗi rỗng). */
 function devProblemSlug(problemId: string): string {
-  const raw = problemId.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const raw = problemId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
   return raw.length > 0 ? raw : `p-${problemId.replace(/[^a-zA-Z0-9-_]/g, '') || 'unknown'}`;
 }
-

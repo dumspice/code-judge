@@ -30,7 +30,6 @@ import { AuthService, type GoogleProfile } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
-import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Cookie options shared across set/clear. */
@@ -160,12 +159,6 @@ export class AuthController {
       ...COOKIE_OPTS(this.isProduction),
     });
     return { success: true };
-  }
-
-  @ApiOperation({ summary: 'Lấy thông tin user hiện tại' })
-  @Get('me')
-  me(@CurrentUser() user: RequestUser) {
-    return this.auth.getUserProfile(user.userId);
   }
 
   // ---------------------------------------------------------------------------

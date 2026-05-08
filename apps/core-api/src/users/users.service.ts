@@ -28,8 +28,10 @@ export class UsersService {
         id,
         name: dto.name,
         email: dto.email,
-        role: dto.role ?? 'STUDENT',
+        role: dto.role ?? 'CLIENT',
         passwordHash,
+        emailVerified: false,
+        isActive: true,
       },
     });
   }

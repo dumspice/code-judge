@@ -1,7 +1,8 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
+import { FindSubmissionsDto } from './dto/find-submissions.dto';
 import { SubmissionsService } from './submissions.service';
 
 /** Tạm thời mở công khai; khi tích hợp auth, bỏ `@Public()` và truyền user từ JWT. */
@@ -20,5 +21,16 @@ export class SubmissionsController {
       status: submission.status,
     };
   }
-}
 
+  @ApiOperation({ summary: 'Lấy thông tin submission theo id' })
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.submissionsService.findById(id);
+  }
+
+  @ApiOperation({ summary: 'Lấy danh sách submission theo bộ lọc' })
+  @Get()
+  async findAll(@Query() query: FindSubmissionsDto) {
+    return this.submissionsService.findMany(query);
+  }
+}

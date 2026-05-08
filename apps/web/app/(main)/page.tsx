@@ -1,14 +1,47 @@
 'use client';
 
-
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, BarChart3, Code2, Shield, Sparkles, Users, Zap } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  ArrowRight,
+  BarChart3,
+  Code2,
+  Shield,
+  Sparkles,
+  Users,
+  Zap,
+  Calendar,
+  Trophy,
+} from 'lucide-react';
 import Link from 'next/link';
+import { problemsApi, contestsApi, type Problem, type Contest } from '@/services/api';
 
 export default function HomePage() {
+  const [featuredProblems, setFeaturedProblems] = useState<Problem[]>([]);
+  const [upcomingContests, setUpcomingContests] = useState<Contest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [problemsResult, contestsResult] = await Promise.all([
+          problemsApi.findAll({ limit: 6 }),
+          contestsApi.findAll({ limit: 3 }),
+        ]);
+        setFeaturedProblems(problemsResult.items);
+        setUpcomingContests(contestsResult.items);
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
   return (
     <>
-
       {/* Hero Section */}
       <section className="relative py-20 sm:py-32 lg:py-40 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-secondary/30 to-transparent"></div>
@@ -35,8 +68,14 @@ export default function HomePage() {
                   Get Started Free <ArrowRight className="w-4 h-4 ml-2" />
                 </Link>
               </Button>
+              <Button size="lg" variant="secondary" asChild className="text-base">
+                <Link href="/submit">Submit Code</Link>
+              </Button>
               <Button size="lg" variant="outline" asChild className="text-base">
-                <Link href="#demo">Watch Demo</Link>
+                <Link href="#features">Watch Demo</Link>
+              </Button>
+              <Button size="lg" variant="ghost" asChild className="text-base">
+                <Link href="/admin">Admin Panel</Link>
               </Button>
             </div>
           </div>
@@ -124,6 +163,163 @@ export default function HomePage() {
                 AST-based code similarity detection to maintain academic integrity in your contests.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Explore Problems Section */}
+      <section id="problems" className="py-20 sm:py-32 border-t border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl sm:text-5xl font-bold mb-4">Explore Problems</h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Practice with our curated collection of programming problems
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <Card key={i} className="animate-pulse">
+                  <CardHeader>
+                    <div className="h-4 bg-muted rounded w-3/4"></div>
+                    <div className="h-3 bg-muted rounded w-1/2"></div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-3 bg-muted rounded w-full mb-2"></div>
+                    <div className="h-3 bg-muted rounded w-2/3"></div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {featuredProblems.map((problem) => (
+                <Card key={problem.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="text-lg line-clamp-2">{problem.title}</CardTitle>
+                      <Badge
+                        variant={
+                          problem.difficulty === 'EASY'
+                            ? 'default'
+                            : problem.difficulty === 'MEDIUM'
+                              ? 'secondary'
+                              : 'destructive'
+                        }
+                      >
+                        {problem.difficulty}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Zap className="w-4 h-4" />
+                        {problem.timeLimitMs}ms
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <BarChart3 className="w-4 h-4" />
+                        {problem.memoryLimitMb}MB
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground text-sm line-clamp-3 mb-4">
+                      {problem.description || 'No description available'}
+                    </p>
+                    <Button variant="outline" size="sm" asChild className="w-full">
+                      <Link href={`/problems/${problem.id}`}>
+                        Solve Problem <ArrowRight className="w-4 h-4 ml-2" />
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <div className="text-center mt-12">
+            <Button size="lg" variant="outline" asChild>
+              <Link href="/problems">
+                View All Problems <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Upcoming Contests Section */}
+      <section id="contests" className="py-20 sm:py-32 border-t border-border bg-secondary/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl sm:text-5xl font-bold mb-4">Upcoming Contests</h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Join competitive programming contests and challenge yourself
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="grid md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {[...Array(3)].map((_, i) => (
+                <Card key={i} className="animate-pulse">
+                  <CardHeader>
+                    <div className="h-5 bg-muted rounded w-3/4"></div>
+                    <div className="h-4 bg-muted rounded w-1/2"></div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-4 bg-muted rounded w-full mb-2"></div>
+                    <div className="h-4 bg-muted rounded w-2/3 mb-4"></div>
+                    <div className="h-8 bg-muted rounded"></div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              {upcomingContests.map((contest) => (
+                <Card key={contest.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="text-xl">{contest.title}</CardTitle>
+                      <Badge variant={contest.status === 'PUBLISHED' ? 'default' : 'secondary'}>
+                        {contest.status}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="w-4 h-4" />
+                      <span>{new Date(contest.startAt).toLocaleDateString()}</span>
+                      <span>-</span>
+                      <span>{new Date(contest.endAt).toLocaleDateString()}</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground text-sm mb-4 line-clamp-3">
+                      {contest.description || 'No description available'}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Trophy className="w-4 h-4" />
+                          {contest.maxSubmissionsPerProblem || 'Unlimited'} submissions
+                        </span>
+                      </div>
+                      <Button size="sm" asChild>
+                        <Link href={`/contests/${contest.id}`}>
+                          Join Contest <ArrowRight className="w-4 h-4 ml-2" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <div className="text-center mt-12">
+            <Button size="lg" variant="outline" asChild>
+              <Link href="/contests">
+                View All Contests <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </Button>
           </div>
         </div>
       </section>
@@ -292,7 +488,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
     </>
   );
 }

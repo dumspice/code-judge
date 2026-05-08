@@ -30,6 +30,18 @@ export default function Header() {
           <a href="/#for-students" className="text-sm hover:text-primary transition">
             For Students
           </a>
+          <a href="/#problems" className="text-sm hover:text-primary transition">
+            Problems
+          </a>
+          <a href="/#contests" className="text-sm hover:text-primary transition">
+            Contests
+          </a>
+          <a
+            href="/admin"
+            className="text-sm font-semibold text-primary hover:text-primary/80 transition"
+          >
+            Admin
+          </a>
         </div>
         <div className="flex items-center gap-4">
           {!loading && (
