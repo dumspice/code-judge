@@ -97,7 +97,6 @@ export default function Sidebar() {
       )}
     >
       <div className="flex-1 flex flex-col gap-2 p-3 overflow-y-auto overflow-x-hidden">
-
         {/* MAIN MENU */}
         {menuItems.map((item, index) => renderItem(item, index))}
 
@@ -122,25 +121,22 @@ export default function Sidebar() {
               </span>
             </div>
 
-            {(isOpen || isTeachingExpanded) && (
-              isTeachingExpanded ? (
+            {(isOpen || isTeachingExpanded) &&
+              (isTeachingExpanded ? (
                 <ChevronUp className="w-4 h-4" />
               ) : (
                 <ChevronDown className="w-4 h-4" />
-              )
-            )}
+              ))}
           </button>
 
           {isTeachingExpanded && (
             <div className="flex flex-col gap-1">
               {teachingList.length === 0 ? (
-                <div className="text-sm text-gray-400 px-3">
+                <div className="hidden px-3 text-sm text-gray-400 group-hover:block">
                   No classrooms
                 </div>
               ) : (
-                teachingList.map((item, index) =>
-                  renderItem(item, `teach-${index}`),
-                )
+                teachingList.map((item, index) => renderItem(item, `teach-${index}`))
               )}
             </div>
           )}
@@ -167,25 +163,22 @@ export default function Sidebar() {
               </span>
             </div>
 
-            {(isOpen || isEnrolledExpanded) && (
-              isEnrolledExpanded ? (
+            {(isOpen || isEnrolledExpanded) &&
+              (isEnrolledExpanded ? (
                 <ChevronUp className="w-4 h-4" />
               ) : (
                 <ChevronDown className="w-4 h-4" />
-              )
-            )}
+              ))}
           </button>
 
           {isEnrolledExpanded && (
             <div className="flex flex-col gap-1">
               {enrolledList.length === 0 ? (
-                <div className="text-sm text-gray-400 px-3">
+                <div className="hidden px-3 text-sm text-gray-400 group-hover:block">
                   No enrolled classes
                 </div>
               ) : (
-                enrolledList.map((item, index) =>
-                  renderItem(item, `enrolled-${index}`),
-                )
+                enrolledList.map((item, index) => renderItem(item, `enrolled-${index}`))
               )}
             </div>
           )}
