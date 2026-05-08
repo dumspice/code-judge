@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authApi, ApiRequestError } from '@/services/auth.apis';
 import { useAuthStore } from '@/store/auth-store';
@@ -17,9 +17,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get('redirect');
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
@@ -28,7 +25,7 @@ export default function LoginPage() {
     try {
       await authApi.login(email, password);
       await refreshUser();
-      router.push(redirect || '/dashboard');
+      router.push('/dashboard');
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setError(err.body.message);
