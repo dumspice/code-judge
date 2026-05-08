@@ -1,12 +1,10 @@
 import ClassTabs from '@/components/dashboard/class-detail/class-tabs';
 
 export default async function ClassDetailLayout({
-export default async function ClassDetailLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ id: string }>;
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
