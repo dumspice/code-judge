@@ -31,9 +31,7 @@ export function clearTokens() {
   accessToken = null;
 }
 
-// ---------------------------------------------------------------------------
 // Refresh logic
-// ---------------------------------------------------------------------------
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -70,9 +68,7 @@ async function tryRefresh(): Promise<boolean> {
   return refreshPromise;
 }
 
-// ---------------------------------------------------------------------------
 // Core fetch wrapper
-// ---------------------------------------------------------------------------
 
 export interface ApiError {
   code: number;
@@ -139,9 +135,7 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
   return (data?.result ?? data) as T;
 }
 
-// ---------------------------------------------------------------------------
 // Auth-specific API calls
-// ---------------------------------------------------------------------------
 
 export interface AuthTokens {
   accessToken: string;
@@ -331,8 +325,12 @@ export const authApi = {
   },
 
   async logout() {
-    await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
-    clearTokens();
+    try {
+      await apiFetch('/auth/logout', { method: 'POST' });
+    } finally {
+      clearTokens();
+      setAccessToken(null);
+    }
   },
 
   /** Google OAuth: redirect browser to backend /auth/google. */

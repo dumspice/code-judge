@@ -153,11 +153,12 @@ export class AuthController {
 
   @Public()
   @Post('logout')
-  @ApiOperation({ summary: 'Đăng xuất, xoá cookie refreshToken' })
   logout(@Res({ passthrough: true }) res: Response) {
-    res.clearCookie('refreshToken', {
-      ...COOKIE_OPTS(this.isProduction),
-    });
+    const opts = COOKIE_OPTS(this.isProduction);
+
+    res.clearCookie('refreshToken', opts);
+    res.clearCookie('accessToken', opts);
+
     return { success: true };
   }
 

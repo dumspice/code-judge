@@ -3,15 +3,13 @@
 import { Button } from '@/components/ui/button';
 import { Code2 } from 'lucide-react';
 import Link from 'next/link';
-import { useAuthStore } from '@/store/auth-store';
-import { UserNav } from './user-nav';
 
 export default function Header() {
-  const { user, loading } = useAuthStore();
-
   return (
     <nav className="sticky top-0 z-40 bg-background border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+
+        {/* Logo */}
         <div className="flex items-center gap-2">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded flex items-center justify-center">
@@ -20,6 +18,8 @@ export default function Header() {
             <span className="text-xl font-bold">CodeJudge</span>
           </Link>
         </div>
+
+        {/* Menu */}
         <div className="hidden md:flex items-center gap-8">
           <a href="/#features" className="text-sm hover:text-primary transition">
             Features
@@ -43,23 +43,15 @@ export default function Header() {
             Admin
           </a>
         </div>
+
         <div className="flex items-center gap-4">
-          {!loading && (
-            <>
-              {user ? (
-                <UserNav />
-              ) : (
-                <>
-                  <Button variant="ghost" asChild>
-                    <Link href="/login">Sign In</Link>
-                  </Button>
-                  <Button asChild>
-                    <Link href="/register">Get Started</Link>
-                  </Button>
-                </>
-              )}
-            </>
-          )}
+          <Button variant="ghost" asChild>
+            <Link href="/login">Sign In</Link>
+          </Button>
+
+          <Button asChild>
+            <Link href="/register">Get Started</Link>
+          </Button>
         </div>
       </div>
     </nav>
