@@ -65,10 +65,8 @@ export default function InviteModal({ classRoomId }: InviteModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100">
-          <UserPlus2 className="w-6 h-6 text-gray-600" />
-        </button>
+      <DialogTrigger>
+        <UserPlus2 />
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-[480px] p-0">
