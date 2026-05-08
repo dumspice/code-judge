@@ -27,10 +27,21 @@ export class UsersController {
     return this.users.findAll(query);
   }
 
+  @Get('search')
+  searchUsers(@Query('q') q: string) {
+    return this.users.searchByEmail(q);
+  }
+
   @ApiOperation({ summary: 'Lấy thông tin user hiện tại' })
   @Get('me')
   me(@CurrentUser() user: RequestUser) {
     return this.users.findById(user.userId);
+  }
+
+  @ApiOperation({ summary: 'Cập nhật thông tin user hiện tại' })
+  @Patch('me')
+  updateMe(@CurrentUser() user: RequestUser, @Body() dto: UpdateUserDto) {
+    return this.users.update(user.userId, dto);
   }
 
   @ApiOperation({ summary: 'Lấy presigned URL upload avatar của user hiện tại' })

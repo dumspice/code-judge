@@ -28,8 +28,10 @@ export class UsersService {
         id,
         name: dto.name,
         email: dto.email,
-        role: dto.role ?? 'STUDENT',
+        role: dto.role!,
         passwordHash,
+        isActive: true,
+        emailVerified: true,
       },
     });
   }
@@ -67,7 +69,11 @@ export class UsersService {
   }
 
   async update(userId: string, dto: UpdateUserDto): Promise<User> {
-    await this.findById(userId);
+    const user = await this.findById(userId);
+    if (dto.email && dto.email !== user.email) {
+      const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      if (exists) throw new ConflictException('Email đã được sử dụng');
+    }
     return this.prisma.user.update({
       where: { id: userId },
       data: dto,
@@ -99,9 +105,26 @@ export class UsersService {
     return this.prisma.user.update({
       where: { id: userId },
       data: {
-        imageObjectKey: objectKey,
         image: this.storage.getObjectUrl(objectKey),
       },
     });
   }
+
+  async searchByEmail(q: string) {
+  return this.prisma.user.findMany({
+    where: {
+      email: {
+        contains: q,
+        mode: 'insensitive',
+      },
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      image: true,
+    },
+    take: 10,
+  });
+}
 }

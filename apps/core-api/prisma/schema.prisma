@@ -51,10 +51,10 @@ enum SubmissionContext {
 }
 
 enum ClassEnrollmentStatus {
-  PENDING
   ACTIVE
   REMOVED
-  INVITED
+  LEFT
+  BLOCKED
 }
 
 enum ContestStatus {
@@ -87,6 +87,13 @@ enum ExportJobStatus {
   FAILED
 }
 
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
 model User {
   id            String    @id @default(uuid())
   name          String
@@ -96,6 +103,7 @@ model User {
   emailVerified Boolean
   isActive      Boolean
   image         String?
+  imageObjectKey String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   lastLoginAt   DateTime?
@@ -111,6 +119,8 @@ model User {
   submissions           Submission[]
   reportExports         ReportExport[]
   codeSimilarityReports CodeSimilarityFinding[]
+
+  sentClassInvites ClassInvite[]
 }
 
 model OAuthAccount {
@@ -162,14 +172,32 @@ model ClassEnrollment {
 }
 
 model ClassInvite {
-  id          String    @id @default(uuid())
-  classRoomId String
-  email       String
-  token       String    @unique
-  expiresAt   DateTime
-  usedAt      DateTime?
+  id            String       @id @default(uuid())
+
+  classRoomId   String
+  invitedById   String
+
+  email         String
+
+  tokenHash     String       @unique
+
+  status        InviteStatus @default(PENDING)
+
+  expiresAt     DateTime
+
+  acceptedAt    DateTime?
+  revokedAt     DateTime?
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   classRoom ClassRoom @relation(fields: [classRoomId], references: [id], onDelete: Cascade)
+
+  invitedBy User @relation(fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([classRoomId])
+  @@index([classRoomId, email])
 }
 
 model ClassAssignment {

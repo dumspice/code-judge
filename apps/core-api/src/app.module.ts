@@ -9,6 +9,8 @@ import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
 import { ClassroomModule } from './classrooms/classroom.module';
 import { AiTestcaseModule } from './ai-testcase/ai-testcase.module';
+import { InvitesModule } from './invites/invites.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { AiTestcaseModule } from './ai-testcase/ai-testcase.module';
     RealtimeModule,
     BullMqModule,
     SubmissionsModule,
+    MailModule,
+    InvitesModule
   ],
 })
 export class AppModule { }

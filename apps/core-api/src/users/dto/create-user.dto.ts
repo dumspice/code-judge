@@ -16,7 +16,7 @@ export class CreateUserDto {
   @IsEmail()
   email!: string;
 
-  @ApiPropertyOptional({ enum: Role, default: Role.STUDENT })
+  @ApiPropertyOptional({ enum: Role, default: Role.CLIENT })
   @IsOptional()
   @IsEnum(Role)
   role?: Role;

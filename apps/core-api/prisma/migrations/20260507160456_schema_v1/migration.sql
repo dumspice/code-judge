@@ -20,7 +20,7 @@ CREATE TYPE "SubmissionStatus" AS ENUM ('Pending', 'Running', 'Accepted', 'Wrong
 CREATE TYPE "SubmissionContext" AS ENUM ('PRACTICE', 'CONTEST', 'CLASS_ASSIGNMENT');
 
 -- CreateEnum
-CREATE TYPE "ClassEnrollmentStatus" AS ENUM ('PENDING', 'ACTIVE', 'REMOVED', 'INVITED');
+CREATE TYPE "ClassEnrollmentStatus" AS ENUM ('ACTIVE', 'REMOVED', 'LEFT', 'BLOCKED');
 
 -- CreateEnum
 CREATE TYPE "ContestStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'RUNNING', 'ENDED');
@@ -37,6 +37,9 @@ CREATE TYPE "ExportFormat" AS ENUM ('XLSX', 'PDF');
 -- CreateEnum
 CREATE TYPE "ExportJobStatus" AS ENUM ('PENDING', 'DONE', 'FAILED');
 
+-- CreateEnum
+CREATE TYPE "InviteStatus" AS ENUM ('PENDING', 'ACCEPTED', 'EXPIRED', 'REVOKED');
+
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -47,6 +50,7 @@ CREATE TABLE "User" (
     "emailVerified" BOOLEAN NOT NULL,
     "isActive" BOOLEAN NOT NULL,
     "image" TEXT,
+    "imageObjectKey" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "lastLoginAt" TIMESTAMP(3),
@@ -98,10 +102,15 @@ CREATE TABLE "ClassEnrollment" (
 CREATE TABLE "ClassInvite" (
     "id" TEXT NOT NULL,
     "classRoomId" TEXT NOT NULL,
+    "invitedById" TEXT NOT NULL,
     "email" TEXT NOT NULL,
-    "token" TEXT NOT NULL,
+    "tokenHash" TEXT NOT NULL,
+    "status" "InviteStatus" NOT NULL DEFAULT 'PENDING',
     "expiresAt" TIMESTAMP(3) NOT NULL,
-    "usedAt" TIMESTAMP(3),
+    "acceptedAt" TIMESTAMP(3),
+    "revokedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "ClassInvite_pkey" PRIMARY KEY ("id")
 );
@@ -327,7 +336,16 @@ CREATE INDEX "ClassEnrollment_userId_idx" ON "ClassEnrollment"("userId");
 CREATE UNIQUE INDEX "ClassEnrollment_classRoomId_userId_key" ON "ClassEnrollment"("classRoomId", "userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ClassInvite_token_key" ON "ClassInvite"("token");
+CREATE UNIQUE INDEX "ClassInvite_tokenHash_key" ON "ClassInvite"("tokenHash");
+
+-- CreateIndex
+CREATE INDEX "ClassInvite_email_idx" ON "ClassInvite"("email");
+
+-- CreateIndex
+CREATE INDEX "ClassInvite_classRoomId_idx" ON "ClassInvite"("classRoomId");
+
+-- CreateIndex
+CREATE INDEX "ClassInvite_classRoomId_email_idx" ON "ClassInvite"("classRoomId", "email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Problem_slug_key" ON "Problem"("slug");
@@ -376,6 +394,9 @@ ALTER TABLE "ClassEnrollment" ADD CONSTRAINT "ClassEnrollment_userId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "ClassInvite" ADD CONSTRAINT "ClassInvite_classRoomId_fkey" FOREIGN KEY ("classRoomId") REFERENCES "ClassRoom"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ClassInvite" ADD CONSTRAINT "ClassInvite_invitedById_fkey" FOREIGN KEY ("invitedById") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ClassAssignment" ADD CONSTRAINT "ClassAssignment_classRoomId_fkey" FOREIGN KEY ("classRoomId") REFERENCES "ClassRoom"("id") ON DELETE CASCADE ON UPDATE CASCADE;
