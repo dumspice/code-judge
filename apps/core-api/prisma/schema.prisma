@@ -286,6 +286,7 @@ model GoldenSolution {
   problemId   String
   language    String
   sourceCode  String
+  sourceCodeObjectKey String?
   isPrimary   Boolean
   createdById String
   createdAt   DateTime @default(now())
@@ -301,6 +302,10 @@ model AiGenerationJob {
   createdById      String
   status           AiJobStatus
   inputDocUrl      String?
+  inputDocObjectKey String?
+  inputDocFileName String?
+  inputDocContentType String?
+  inputDocSizeBytes Int?
   promptVersion    String?
   structuredOutput Json?
   errorMessage     String?
@@ -387,6 +392,7 @@ model Submission {
   testsTotal        Int?
   caseResults       Json?
   sourceCode        String?
+  sourceCodeObjectKey String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
@@ -411,6 +417,7 @@ model ReportExport {
   format        ExportFormat
   status        ExportJobStatus
   fileUrl       String?
+  fileObjectKey String?
   errorMessage  String?
   createdAt     DateTime        @default(now())
   completedAt   DateTime?

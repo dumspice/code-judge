@@ -1,12 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ProblemMode } from '@prisma/client';
 import { EnvKeys } from '../common';
+import { buildAiGeneratedTestcaseObjectKeys } from '../storage/storage-key.builder';
+import { StorageService } from '../storage/storage.service';
+import { PrismaService } from '../prisma/prisma.service';
 import {
   buildAiTestcaseMessages,
   generatedTestcaseSchema,
   GeneratedTestcaseOutput,
 } from './ai-testcase.prompt';
 import { GenerateAiTestcaseDto } from './dto/generate-ai-testcase.dto';
+import { GenerateAndSaveAiTestcaseDto } from './dto/generate-and-save-ai-testcase.dto';
 import { QuickGenerateAiTestcaseDto } from './dto/quick-generate-ai-testcase.dto';
 
 interface GenerateDraftResult {
@@ -18,9 +23,27 @@ interface GenerateDraftResult {
   parseError?: string;
 }
 
+interface GenerateAndSaveResult {
+  jobId: string;
+  mode: ProblemMode;
+  persistedTestCaseCount: number;
+  provider?: 'openai' | 'google';
+  model?: string;
+  promptVersion?: string;
+  parseError?: string;
+  projectSetup?: {
+    storageIntegrated: false;
+    plannedObjectKeys: Array<{ index: number; input: string; expected: string }>;
+  };
+}
+
 @Injectable()
 export class AiTestcaseService {
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async quickGenerate(input: QuickGenerateAiTestcaseDto): Promise<GenerateDraftResult> {
     return this.generateDraft({
@@ -37,6 +60,8 @@ export class AiTestcaseService {
   }
 
   async generateDraft(input: GenerateAiTestcaseDto): Promise<GenerateDraftResult> {
+    // Fast mode trades output richness for lower latency.
+    // It disables fallback provider and lowers creativity to reduce malformed JSON risk.
     const fastMode = this.isFastModeEnabled();
     const primaryProvider = input.provider ?? this.getDefaultProvider();
     const primaryModel = input.model ?? this.getDefaultModel(primaryProvider);
@@ -58,6 +83,8 @@ export class AiTestcaseService {
           { provider: fallbackProvider, model: fallbackModel },
         ];
 
+    // Try provider/model plans in order (primary -> fallback).
+    // We keep lastError to expose a useful failure reason if all plans fail.
     let text = '';
     let usedProvider = primaryProvider;
     let usedModel = primaryModel;
@@ -97,6 +124,8 @@ export class AiTestcaseService {
         throw new Error('AI output exceeds maxTestCases');
       }
     } catch (error) {
+      // If output looks truncated, try once with compact instruction
+      // to nudge model to return shorter but valid JSON.
       if (!fastMode && this.isLikelyTruncatedOutput(text)) {
         const compactMessages = this.buildCompactRetryMessages(messages);
         try {
@@ -129,6 +158,240 @@ export class AiTestcaseService {
       raw: text,
       parsed,
       parseError,
+    };
+  }
+
+  async generateAndSave(input: GenerateAndSaveAiTestcaseDto): Promise<GenerateAndSaveResult> {
+    // Read a consistent problem snapshot first; this is the source of truth for prompt context.
+    const problem = await this.prisma.problem.findUnique({
+      where: { id: input.problemId },
+      select: {
+        id: true,
+        title: true,
+        mode: true,
+        difficulty: true,
+        statementMd: true,
+        description: true,
+        timeLimitMs: true,
+        memoryLimitMb: true,
+        supportedLanguages: true,
+        maxTestCases: true,
+      },
+    });
+
+    if (!problem) {
+      throw new Error('Problem not found');
+    }
+
+    const promptVersion = this.config.get<string>(EnvKeys.AI_PROMPT_VERSION) ?? 'ai-testcase-v1';
+    // Create job early so upload/bind and auditing always have a stable job id.
+    const createdJob = await this.prisma.aiGenerationJob.create({
+      data: {
+        problemId: problem.id,
+        createdById: input.createdById,
+        status: 'PENDING',
+        promptVersion,
+      },
+    });
+
+    // PROJECT mode is intentionally "setup-only" for now:
+    // we generate planned storage keys and persist metadata, but do not insert TestCase rows yet.
+    if (problem.mode === ProblemMode.PROJECT) {
+      const plannedCount = Math.min(input.maxTestCases ?? problem.maxTestCases ?? 8, 20);
+      const plannedObjectKeys = Array.from({ length: plannedCount }, (_, index) => {
+        const keys = buildAiGeneratedTestcaseObjectKeys(createdJob.id, index);
+        return { index, input: keys.input, expected: keys.expected };
+      });
+
+      await this.prisma.aiGenerationJob.update({
+        where: { id: createdJob.id },
+        data: {
+          status: 'SUCCEEDED',
+          structuredOutput: {
+            mode: 'PROJECT',
+            storageIntegrated: false,
+            message:
+              'Project testcase generation setup is prepared. Storage persistence is intentionally not integrated yet.',
+            plannedObjectKeys,
+          },
+        },
+      });
+
+      return {
+        jobId: createdJob.id,
+        mode: ProblemMode.PROJECT,
+        persistedTestCaseCount: 0,
+        projectSetup: {
+          storageIntegrated: false,
+          plannedObjectKeys,
+        },
+      };
+    }
+
+    await this.prisma.aiGenerationJob.update({
+      where: { id: createdJob.id },
+      data: { status: 'RUNNING' },
+    });
+
+    // Reuse generateDraft so prompt build, provider routing, retries, and parser logic
+    // stay in one place and remain behaviorally consistent.
+    const generated = await this.generateDraft({
+      title: problem.title,
+      statement: problem.statementMd ?? problem.description ?? '',
+      difficulty: problem.difficulty,
+      timeLimitMs: problem.timeLimitMs,
+      memoryLimitMb: problem.memoryLimitMb,
+      supportedLanguages: Array.isArray(problem.supportedLanguages)
+        ? (problem.supportedLanguages as string[])
+        : undefined,
+      maxTestCases: input.maxTestCases ?? problem.maxTestCases,
+      ioSpec: input.ioSpec,
+      supplementaryText: input.supplementaryText,
+      provider: input.provider,
+      model: input.model,
+    });
+
+    // If model output cannot be parsed to schema, keep raw payload for debugging/review.
+    if (!generated.parsed) {
+      await this.prisma.aiGenerationJob.update({
+        where: { id: createdJob.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: generated.parseError ?? 'Failed to parse generated output',
+          structuredOutput: {
+            raw: generated.raw,
+            parseError: generated.parseError ?? 'unknown parse error',
+          },
+        },
+      });
+
+      return {
+        jobId: createdJob.id,
+        mode: ProblemMode.ALGO,
+        persistedTestCaseCount: 0,
+        provider: generated.provider,
+        model: generated.model,
+        promptVersion: generated.promptVersion,
+        parseError: generated.parseError,
+      };
+    }
+
+    const existingMax = await this.prisma.testCase.aggregate({
+      where: { problemId: problem.id },
+      _max: { orderIndex: true },
+    });
+    const nextOrderIndex = (existingMax._max.orderIndex ?? -1) + 1;
+    // Append new cases after existing orderIndex to avoid clashing unique(problemId, orderIndex).
+    const testcaseRows = generated.parsed.testCases.map((testCase, idx) => ({
+      problemId: problem.id,
+      orderIndex: nextOrderIndex + idx,
+      input: testCase.input,
+      expectedOutput: testCase.expectedOutput,
+      isHidden: testCase.isHidden ?? false,
+      weight: testCase.weight ?? 1,
+    }));
+
+    // Persist generated testcases and mark the AI job as succeeded in one transaction.
+    await this.prisma.$transaction([
+      this.prisma.testCase.createMany({ data: testcaseRows }),
+      this.prisma.aiGenerationJob.update({
+        where: { id: createdJob.id },
+        data: {
+          status: 'SUCCEEDED',
+          promptVersion: generated.promptVersion,
+          structuredOutput: {
+            provider: generated.provider,
+            model: generated.model,
+            promptVersion: generated.promptVersion,
+            parsed: generated.parsed,
+            raw: generated.raw,
+          },
+        },
+      }),
+    ]);
+
+    return {
+      jobId: createdJob.id,
+      mode: ProblemMode.ALGO,
+      persistedTestCaseCount: testcaseRows.length,
+      provider: generated.provider,
+      model: generated.model,
+      promptVersion: generated.promptVersion,
+    };
+  }
+
+  async listProblemDocuments(problemId: string) {
+    // Documents are attached to generation jobs via storage/bind-object-key.
+    const jobs = await this.prisma.aiGenerationJob.findMany({
+      where: {
+        problemId,
+        inputDocObjectKey: {
+          not: null,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        createdAt: true,
+        inputDocObjectKey: true,
+        inputDocUrl: true,
+        inputDocFileName: true,
+        inputDocContentType: true,
+        inputDocSizeBytes: true,
+      },
+    });
+
+    return {
+      problemId,
+      documents: jobs.map((job) => ({
+        jobId: job.id,
+        uploadedAt: job.createdAt,
+        objectKey: job.inputDocObjectKey,
+        fileName: job.inputDocFileName,
+        contentType: job.inputDocContentType,
+        sizeBytes: job.inputDocSizeBytes,
+        viewUrl:
+          job.inputDocUrl ??
+          (job.inputDocObjectKey ? this.storage.getObjectUrl(job.inputDocObjectKey) : null),
+      })),
+    };
+  }
+
+  async getJobDocumentDownload(jobId: string, expiresInSeconds?: number) {
+    const job = await this.prisma.aiGenerationJob.findUnique({
+      where: { id: jobId },
+      select: {
+        id: true,
+        inputDocObjectKey: true,
+        inputDocUrl: true,
+        inputDocFileName: true,
+        inputDocContentType: true,
+        inputDocSizeBytes: true,
+      },
+    });
+
+    if (!job) {
+      throw new Error('AI generation job not found');
+    }
+    if (!job.inputDocObjectKey) {
+      throw new Error('No input document has been attached to this job');
+    }
+
+    // Download URLs are temporary to avoid exposing permanent direct access.
+    const downloadUrl = await this.storage.createPresignedDownloadUrl(
+      job.inputDocObjectKey,
+      expiresInSeconds ?? 900,
+    );
+
+    return {
+      jobId: job.id,
+      objectKey: job.inputDocObjectKey,
+      fileName: job.inputDocFileName,
+      contentType: job.inputDocContentType,
+      sizeBytes: job.inputDocSizeBytes,
+      viewUrl: job.inputDocUrl ?? this.storage.getObjectUrl(job.inputDocObjectKey),
+      downloadUrl,
+      expiresInSeconds: expiresInSeconds ?? 900,
     };
   }
 
@@ -232,6 +495,8 @@ export class AiTestcaseService {
   }
 
   private parseOutput(raw: string): GeneratedTestcaseOutput {
+    // Model responses can contain markdown fences or stray prose.
+    // We try multiple normalized candidates before failing hard.
     const normalized = raw.trim().replace(/^\uFEFF/, '');
     const fencedBlocks = [...normalized.matchAll(/```[a-zA-Z0-9_-]*\s*([\s\S]*?)\s*```/g)].map(
       (match) => match[1]?.trim(),
@@ -285,6 +550,8 @@ export class AiTestcaseService {
   }
 
   private extractFirstJsonObject(text: string): string | null {
+    // Streaming-style scanner that respects string escaping,
+    // so braces inside string literals do not break balance counting.
     const start = text.indexOf('{');
     if (start < 0) {
       return null;

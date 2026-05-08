@@ -41,6 +41,10 @@ interface BindObjectKeyBody {
   resourceKind: 'ai-input' | 'export' | 'golden-solution';
   recordId: string;
   objectKey: string;
+  // Optional metadata used for document listing in feature modules (for example ai-testcase).
+  fileName?: string;
+  contentType?: string;
+  sizeBytes?: number;
 }
 
 @ApiTags('storage')
@@ -55,6 +59,7 @@ export class StorageController {
   @Post('presign/upload')
   @ApiOperation({ summary: 'Tạo presigned PUT URL cho MinIO/S3' })
   async presignUpload(@Body() body: PresignRequestBody) {
+    // The server controls key format to keep object namespace predictable and safe.
     const objectKey = this.resolveObjectKey(body);
     const uploadUrl = await this.storage.createPresignedUploadUrl({
       objectKey,
@@ -78,6 +83,7 @@ export class StorageController {
       throw new BadRequestException('objectKey is required');
     }
     const ttl = expiresInSeconds ? Number(expiresInSeconds) : 900;
+    // Download URL is short-lived and should be requested on demand.
     const downloadUrl = await this.storage.createPresignedDownloadUrl(objectKey, ttl);
     return { objectKey, downloadUrl };
   }
@@ -92,14 +98,20 @@ export class StorageController {
 
     switch (body.resourceKind) {
       case 'ai-input':
+        // Persist both object key and lightweight file metadata
+        // so consumers can show document list without reading MinIO directly.
         return this.prisma.aiGenerationJob.update({
           where: { id: body.recordId },
           data: {
             inputDocObjectKey: body.objectKey,
             inputDocUrl: this.storage.getObjectUrl(body.objectKey),
+            inputDocFileName: body.fileName,
+            inputDocContentType: body.contentType,
+            inputDocSizeBytes: body.sizeBytes,
           },
         });
       case 'export':
+        // Persist object key and resolved URL for report retrieval.
         return this.prisma.reportExport.update({
           where: { id: body.recordId },
           data: {
@@ -108,6 +120,7 @@ export class StorageController {
           },
         });
       case 'golden-solution':
+        // Golden source may be stored externally to avoid large DB text payloads.
         return this.prisma.goldenSolution.update({
           where: { id: body.recordId },
           data: {
@@ -120,6 +133,7 @@ export class StorageController {
   }
 
   private resolveObjectKey(body: PresignRequestBody): string {
+    // Keep all object-key naming centralized to enforce consistent bucket taxonomy.
     switch (body.resourceKind) {
       case 'avatar':
         return buildAvatarObjectKey(body.userId ?? 'unknown', body.extension ?? 'bin');
