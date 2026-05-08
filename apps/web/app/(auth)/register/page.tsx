@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authApi, ApiRequestError } from '@/services/auth.apis';
 import { useAuthStore } from '@/store/auth-store';
