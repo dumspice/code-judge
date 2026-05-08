@@ -25,9 +25,7 @@ export default function AcceptInvitePage() {
         setLoading(true);
 
         if (!user) {
-          router.push(
-            `/login?redirect=/invites/accept?token=${token}`
-          );
+          router.push(`/login`);
           return;
         }
 
@@ -50,20 +48,14 @@ export default function AcceptInvitePage() {
   }, [token, user, router]);
 
   if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        Accepting invitation...
-      </div>
-    );
+    return <div className="h-screen flex items-center justify-center">Accepting invitation...</div>;
   }
 
   if (error) {
     return (
       <div className="h-screen flex flex-col items-center justify-center gap-4">
         <p className="text-red-500">{error}</p>
-        <Button onClick={() => router.push('/')}>
-          Go Home
-        </Button>
+        <Button onClick={() => router.push('/')}>Go Home</Button>
       </div>
     );
   }

@@ -17,8 +17,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get('redirect');
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -28,7 +26,7 @@ export default function LoginPage() {
     try {
       await authApi.login(email, password);
       await refreshUser();
-      router.push(redirect || '/dashboard');
+      router.push('/dashboard');
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setError(err.body.message);
