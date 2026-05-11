@@ -1,8 +1,9 @@
-'use client';
-
-import { useSearchParams } from 'next/navigation';
+// import { Suspense } from 'react';
+// import { useSearchParams } from 'next/navigation';
 import { startOfWeek, addDays, isSameDay, parseISO, format } from 'date-fns';
 import { enUS } from 'date-fns/locale';
+
+export const dynamic = 'force-dynamic';
 
 const MOCK_EVENTS = [
   { date: '2024-03-24', title: '1.todo-app-assignment-trainee', time: '23:59' },
@@ -10,11 +11,15 @@ const MOCK_EVENTS = [
 ];
 
 export default function SchedulePage() {
-  const searchParams = useSearchParams();
+  return <SchedulePageContent />;
+}
 
-  // Đọc ngày từ URL tương tự như bên Navigation
-  const dateParam = searchParams.get('date');
-  const currentDate = dateParam ? new Date(dateParam) : new Date();
+function SchedulePageContent() {
+  // const searchParams = useSearchParams();
+
+  // // Đọc ngày từ URL tương tự như bên Navigation
+  // const dateParam = searchParams.get('date');
+  const currentDate = new Date(); // dateParam ? new Date(dateParam) : new Date();
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
 
   const daysInWeek = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));

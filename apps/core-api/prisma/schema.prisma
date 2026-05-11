@@ -102,8 +102,8 @@ model User {
   role          Role
   emailVerified Boolean
   isActive      Boolean
-  image         String?
   imageObjectKey String?
+  image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   lastLoginAt   DateTime?
@@ -285,11 +285,12 @@ model GoldenSolution {
   id          String   @id @default(uuid())
   problemId   String
   language    String
-  sourceCode  String
-  isPrimary   Boolean
-  createdById String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  sourceCode         String?
+  sourceCodeObjectKey String?
+  isPrimary          Boolean
+  createdById        String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
   createdBy User    @relation(fields: [createdById], references: [id], onDelete: Cascade)
@@ -299,13 +300,14 @@ model AiGenerationJob {
   id               String      @id @default(uuid())
   problemId        String
   createdById      String
-  status           AiJobStatus
-  inputDocUrl      String?
-  promptVersion    String?
-  structuredOutput Json?
-  errorMessage     String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  status             AiJobStatus
+  inputDocObjectKey  String?
+  inputDocUrl        String?
+  promptVersion      String?
+  structuredOutput   Json?
+  errorMessage       String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
   createdBy User    @relation(fields: [createdById], references: [id], onDelete: Cascade)
@@ -371,8 +373,8 @@ model Submission {
   contestId         String?
   classRoomId       String?
   classAssignmentId String?
-  attemptNumber     Int
-  judgePriority     Int
+  attemptNumber     Int     @default(1)
+  judgePriority     Int     @default(0)
   language          String?
   status            SubmissionStatus
   score             Int?
@@ -386,9 +388,10 @@ model Submission {
   testsPassed       Int?
   testsTotal        Int?
   caseResults       Json?
-  sourceCode        String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  sourceCodeObjectKey String?
+  sourceCode         String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   problem         Problem          @relation(fields: [problemId], references: [id], onDelete: Cascade)
@@ -410,6 +413,7 @@ model ReportExport {
   requestedById String
   format        ExportFormat
   status        ExportJobStatus
+  fileObjectKey String?
   fileUrl       String?
   errorMessage  String?
   createdAt     DateTime        @default(now())

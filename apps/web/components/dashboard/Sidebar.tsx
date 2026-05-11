@@ -13,6 +13,7 @@ import {
 import { cn } from '@/lib/utils';
 import { usePathname } from 'next/navigation';
 import { useSidebarStore } from '@/store/sidebar-store';
+import { useAuthStore } from '@/store/auth-store';
 import { useClassroomStore } from '@/store/classroom-store';
 import Link from 'next/link';
 
@@ -20,6 +21,8 @@ const menuItems = [
   { icon: Home, label: 'Classroom', path: '/dashboard' },
   { icon: Calendar, label: 'Schedule', path: '/dashboard/schedule' },
 ];
+
+const adminMenuItems = [{ icon: Settings, label: 'Admin Panel', path: '/dashboard/admin' }];
 
 export default function Sidebar() {
   const pathname = usePathname();

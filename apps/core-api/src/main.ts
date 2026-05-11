@@ -49,16 +49,21 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   // Thành công → bọc thêm envelope; không đụng `StreamableFile` / response đã gửi.
   app.useGlobalInterceptors(new TransformResponseInterceptor());
+  console.log('aaa');
 
-  const swaggerOff =
-    process.env.NODE_ENV === 'production' || process.env.SWAGGER_ENABLED === '0';
+  const swaggerOff = process.env.NODE_ENV === 'production' || process.env.SWAGGER_ENABLED === '0';
   if (!swaggerOff) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Code Judge API')
       .setDescription('HTTP API cho Code Judge (response thực tế bọc envelope qua interceptor).')
       .setVersion('0.1.0')
       .addBearerAuth(
-        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'JWT từ POST /auth/login' },
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'JWT từ POST /auth/login',
+        },
         'JWT',
       )
       .build();
@@ -80,4 +85,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-

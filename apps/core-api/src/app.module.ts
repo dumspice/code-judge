@@ -7,6 +7,8 @@ import { SubmissionsModule } from './submissions/submissions.module';
 import { AuthModule } from './auth/auth.module';
 import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
+import { ProblemsModule } from './problems/problems.module';
+import { ContestsModule } from './contests/contests.module';
 import { ClassroomModule } from './classrooms/classroom.module';
 import { InvitesModule } from './invites/invites.module';
 import { MailModule } from './mail/mail.module';
@@ -24,10 +26,11 @@ import { MailModule } from './mail/mail.module';
     PrismaModule,
     RealtimeModule,
     BullMqModule,
+    ProblemsModule,
+    ContestsModule,
     SubmissionsModule,
     MailModule,
     InvitesModule
   ],
 })
-export class AppModule { }
-
+export class AppModule {}

@@ -20,7 +20,7 @@ CREATE TYPE "SubmissionStatus" AS ENUM ('Pending', 'Running', 'Accepted', 'Wrong
 CREATE TYPE "SubmissionContext" AS ENUM ('PRACTICE', 'CONTEST', 'CLASS_ASSIGNMENT');
 
 -- CreateEnum
-CREATE TYPE "ClassEnrollmentStatus" AS ENUM ('ACTIVE', 'REMOVED', 'LEFT', 'BLOCKED');
+CREATE TYPE "ClassEnrollmentStatus" AS ENUM ('PENDING', 'ACTIVE', 'REMOVED', 'INVITED');
 
 -- CreateEnum
 CREATE TYPE "ContestStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'RUNNING', 'ENDED');
@@ -37,9 +37,6 @@ CREATE TYPE "ExportFormat" AS ENUM ('XLSX', 'PDF');
 -- CreateEnum
 CREATE TYPE "ExportJobStatus" AS ENUM ('PENDING', 'DONE', 'FAILED');
 
--- CreateEnum
-CREATE TYPE "InviteStatus" AS ENUM ('PENDING', 'ACCEPTED', 'EXPIRED', 'REVOKED');
-
 -- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
@@ -49,8 +46,8 @@ CREATE TABLE "User" (
     "role" "Role" NOT NULL,
     "emailVerified" BOOLEAN NOT NULL,
     "isActive" BOOLEAN NOT NULL,
-    "image" TEXT,
     "imageObjectKey" TEXT,
+    "image" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "lastLoginAt" TIMESTAMP(3),
@@ -102,15 +99,10 @@ CREATE TABLE "ClassEnrollment" (
 CREATE TABLE "ClassInvite" (
     "id" TEXT NOT NULL,
     "classRoomId" TEXT NOT NULL,
-    "invitedById" TEXT NOT NULL,
     "email" TEXT NOT NULL,
-    "tokenHash" TEXT NOT NULL,
-    "status" "InviteStatus" NOT NULL DEFAULT 'PENDING',
+    "token" TEXT NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL,
-    "acceptedAt" TIMESTAMP(3),
-    "revokedAt" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "usedAt" TIMESTAMP(3),
 
     CONSTRAINT "ClassInvite_pkey" PRIMARY KEY ("id")
 );
@@ -189,7 +181,8 @@ CREATE TABLE "GoldenSolution" (
     "id" TEXT NOT NULL,
     "problemId" TEXT NOT NULL,
     "language" TEXT NOT NULL,
-    "sourceCode" TEXT NOT NULL,
+    "sourceCode" TEXT,
+    "sourceCodeObjectKey" TEXT,
     "isPrimary" BOOLEAN NOT NULL,
     "createdById" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -204,6 +197,7 @@ CREATE TABLE "AiGenerationJob" (
     "problemId" TEXT NOT NULL,
     "createdById" TEXT NOT NULL,
     "status" "AiJobStatus" NOT NULL,
+    "inputDocObjectKey" TEXT,
     "inputDocUrl" TEXT,
     "promptVersion" TEXT,
     "structuredOutput" JSONB,
@@ -265,8 +259,8 @@ CREATE TABLE "Submission" (
     "contestId" TEXT,
     "classRoomId" TEXT,
     "classAssignmentId" TEXT,
-    "attemptNumber" INTEGER NOT NULL,
-    "judgePriority" INTEGER NOT NULL,
+    "attemptNumber" INTEGER NOT NULL DEFAULT 1,
+    "judgePriority" INTEGER NOT NULL DEFAULT 0,
     "language" TEXT,
     "status" "SubmissionStatus" NOT NULL,
     "score" INTEGER,
@@ -280,6 +274,7 @@ CREATE TABLE "Submission" (
     "testsPassed" INTEGER,
     "testsTotal" INTEGER,
     "caseResults" JSONB,
+    "sourceCodeObjectKey" TEXT,
     "sourceCode" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -294,6 +289,7 @@ CREATE TABLE "ReportExport" (
     "requestedById" TEXT NOT NULL,
     "format" "ExportFormat" NOT NULL,
     "status" "ExportJobStatus" NOT NULL,
+    "fileObjectKey" TEXT,
     "fileUrl" TEXT,
     "errorMessage" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -336,16 +332,7 @@ CREATE INDEX "ClassEnrollment_userId_idx" ON "ClassEnrollment"("userId");
 CREATE UNIQUE INDEX "ClassEnrollment_classRoomId_userId_key" ON "ClassEnrollment"("classRoomId", "userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ClassInvite_tokenHash_key" ON "ClassInvite"("tokenHash");
-
--- CreateIndex
-CREATE INDEX "ClassInvite_email_idx" ON "ClassInvite"("email");
-
--- CreateIndex
-CREATE INDEX "ClassInvite_classRoomId_idx" ON "ClassInvite"("classRoomId");
-
--- CreateIndex
-CREATE INDEX "ClassInvite_classRoomId_email_idx" ON "ClassInvite"("classRoomId", "email");
+CREATE UNIQUE INDEX "ClassInvite_token_key" ON "ClassInvite"("token");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Problem_slug_key" ON "Problem"("slug");
@@ -394,9 +381,6 @@ ALTER TABLE "ClassEnrollment" ADD CONSTRAINT "ClassEnrollment_userId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "ClassInvite" ADD CONSTRAINT "ClassInvite_classRoomId_fkey" FOREIGN KEY ("classRoomId") REFERENCES "ClassRoom"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "ClassInvite" ADD CONSTRAINT "ClassInvite_invitedById_fkey" FOREIGN KEY ("invitedById") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ClassAssignment" ADD CONSTRAINT "ClassAssignment_classRoomId_fkey" FOREIGN KEY ("classRoomId") REFERENCES "ClassRoom"("id") ON DELETE CASCADE ON UPDATE CASCADE;
