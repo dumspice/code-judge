@@ -63,7 +63,7 @@ export class AuthController {
   @Post('register')
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.auth.register(dto.name, dto.email, dto.password);
-    this.setRefreshTokenCookie(res, tokens.refreshToken);
+    this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     return { accessToken: tokens.accessToken, tokenType: tokens.tokenType };
   }
 
@@ -72,7 +72,7 @@ export class AuthController {
   @Post('login')
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.auth.login(dto.email, dto.password);
-    this.setRefreshTokenCookie(res, tokens.refreshToken);
+    this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     return { accessToken: tokens.accessToken, tokenType: tokens.tokenType };
   }
 
@@ -89,7 +89,7 @@ export class AuthController {
       throw new UnauthorizedException('Refresh token không tìm thấy trong cookie');
     }
     const tokens = await this.auth.refresh(refreshToken);
-    this.setRefreshTokenCookie(res, tokens.refreshToken);
+    this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
     return { accessToken: tokens.accessToken, tokenType: tokens.tokenType };
   }
 
@@ -114,8 +114,8 @@ export class AuthController {
 
     const tokens = await this.auth.googleLogin(profile);
 
-    // Set HttpOnly refresh token cookie
-    this.setRefreshTokenCookie(res, tokens.refreshToken);
+    // Set HttpOnly refresh token and access token cookies
+    this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
 
     const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001';
 
@@ -166,10 +166,19 @@ export class AuthController {
   // Internal Helpers
   // ---------------------------------------------------------------------------
 
-  private setRefreshTokenCookie(res: Response, refreshToken: string) {
+  private setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
+    const opts = COOKIE_OPTS(this.isProduction);
+
+    // Refresh token (7 days)
     res.cookie('refreshToken', refreshToken, {
-      ...COOKIE_OPTS(this.isProduction),
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      ...opts,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    // Access token (15 mins - khớp với cấu hình JWT)
+    res.cookie('accessToken', accessToken, {
+      ...opts,
+      maxAge: 15 * 60 * 1000,
     });
   }
 }

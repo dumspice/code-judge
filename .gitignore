@@ -21,3 +21,5 @@ coverage/
 # Misc
 .DS_Store
 .eslintcache
+
+package-lock.json
