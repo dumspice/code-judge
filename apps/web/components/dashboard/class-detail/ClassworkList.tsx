@@ -4,11 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, Search } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import AssignmentItem from '@/components/dashboard/class-detail/assignment-item';
-import { Problem, problemsApi, type UpdateProblemDto } from '@/services/auth.apis';
-import ClassProblemCreate from '@/components/dashboard/class-detail/ClassProblemCreate';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Problem, problemsApi } from '@/services/problem.apis';
 
 export default function ClassworkList({
   classId,
@@ -98,6 +96,3 @@ export default function ClassworkList({
     </div>
   );
 }
-
-// I need Input component for the search
-import { Input } from '@/components/ui/input';

@@ -22,15 +22,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import {
-  contestsApi,
-  problemsApi,
-  type Contest,
-  type Problem,
-  type CreateContestDto,
-  type UpdateContestDto,
-} from '@/services/auth.apis';
-import { Plus, Search, Calendar } from 'lucide-react';
+
+import { Plus, Search } from 'lucide-react';
+import { Contest, contestsApi, CreateContestDto, UpdateContestDto } from '@/services/contest.apis';
+import { Problem, problemsApi } from '@/services/problem.apis';
 
 export default function ContestsTab() {
   const [contests, setContests] = useState<Contest[]>([]);
