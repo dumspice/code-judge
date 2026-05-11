@@ -2,15 +2,14 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export function middleware(request: NextRequest) {
-  // Thay đổi: Kiểm tra 'refreshToken' thay vì 'access_token'
-  // Backend NestJS chỉ lưu refreshToken vào cookie, accessToken chỉ nằm trên bộ nhớ (RAM)
-  const token = request.cookies.get('refreshToken')?.value
+  // Lưu accessToken vào cookie
+  const token = request.cookies.get('accessToken')?.value
   const { pathname } = request.nextUrl
 
   // 1 & 2. Xử lý khi CHƯA đăng nhập
   if (!token) {
-    // Chỉ cho phép truy cập trang chủ (/) và trang đăng nhập (/login)
-    if (pathname === '/' || pathname === '/login') {
+    // Cho phép truy cập trang chủ (/), trang đăng nhập (/login) và đăng ký (/register)
+    if (pathname === '/' || pathname === '/login' || pathname === '/register') {
       return NextResponse.next()
     }
     // Các route khác tự động redirect về /login
@@ -18,8 +17,8 @@ export function middleware(request: NextRequest) {
   }
 
   // 3. Xử lý khi ĐÃ đăng nhập
-  // Nếu cố truy cập vào /login, tự động redirect về /dashboard
-  if (pathname === '/login') {
+  // Nếu cố truy cập vào /login hoặc /register, tự động redirect về /dashboard
+  if (pathname === '/login' || pathname === '/register') {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

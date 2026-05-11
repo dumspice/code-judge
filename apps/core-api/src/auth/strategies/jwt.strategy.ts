@@ -9,6 +9,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { EnvKeys } from '../../common';
 import type { RequestUser } from '../../common/interfaces/request-user.interface';
 import type { JwtPayload } from '../interfaces/jwt-payload.interface';
+import { Request } from 'express';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -18,7 +19,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new Error(`${EnvKeys.JWT_SECRET} is required for JWT authentication`);
     }
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        (req: Request) => req.cookies?.accessToken || null,
+      ]),
       ignoreExpiration: false,
       secretOrKey: secret,
     });
