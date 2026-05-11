@@ -19,7 +19,6 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
@@ -33,8 +32,19 @@ export default function RegisterPage() {
 
     try {
       await authApi.register(name, email, password);
+      
+      // Đợi lấy thông tin user xong
       await refreshUser();
-      router.push('/dashboard');
+
+      // Lấy state mới nhất từ Zustand
+      const user = useAuthStore.getState().user;
+
+      // Bẻ lái dựa theo Role
+      if (user?.role === 'ADMIN') {
+        router.push('/admin/users');
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setError(err.body.message);

@@ -29,11 +29,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       await authApi.logout();
     } finally {
-      clearTokens();
       set({ user: null, loading: false });
-
-      // optional nhưng nên có
-      window.location.replace('/');
+      window.location.replace('/login');
     }
   },
 }));

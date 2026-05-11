@@ -1,14 +1,31 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// Hàm giải mã JWT cơ bản chạy được trên Edge Runtime
+function decodeJwtPayload(token: string) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    // Giải mã payload
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    return null;
+  }
+}
+
 export function middleware(request: NextRequest) {
-  // Lưu accessToken vào cookie
   const token = request.cookies.get('accessToken')?.value
   const { pathname } = request.nextUrl
 
-  // 1 & 2. Xử lý khi CHƯA đăng nhập
+  // 1. Xử lý khi CHƯA đăng nhập
   if (!token) {
-    // Cho phép truy cập trang chủ (/), trang đăng nhập (/login) và đăng ký (/register)
+    // Cho phép truy cập trang chủ (/), login, register
     if (pathname === '/' || pathname === '/login' || pathname === '/register') {
       return NextResponse.next()
     }
@@ -16,9 +33,23 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // 3. Xử lý khi ĐÃ đăng nhập
-  // Nếu cố truy cập vào /login hoặc /register, tự động redirect về /dashboard
+  // 2. Giải mã Token lấy thông tin Role
+  const decodedToken = decodeJwtPayload(token)
+  const userRole = decodedToken?.role || 'CLIENT' 
+
+  // 3. Xử lý khi ĐÃ đăng nhập mà cố vào trang Auth
   if (pathname === '/login' || pathname === '/register') {
+    // Phân luồng theo Role
+    if (userRole === 'ADMIN') {
+      return NextResponse.redirect(new URL('/admin/users', request.url))
+    } else {
+      return NextResponse.redirect(new URL('/dashboard', request.url))
+    }
+  }
+
+  // 4. Bảo vệ route Admin (Ngăn chặn Client truy cập trái phép)
+  if (pathname.startsWith('/admin') && userRole !== 'ADMIN') {
+    // Trả về dashboard hoặc trang 403
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
@@ -26,17 +57,9 @@ export function middleware(request: NextRequest) {
   return NextResponse.next()
 }
 
-// 4. Cấu hình matcher để bảo vệ các route cần thiết
+// 5. Cấu hình matcher
 export const config = {
   matcher: [
-    /*
-     * Match tất cả request paths ngoại trừ:
-     * - api (API routes)
-     * - _next/static (các file tĩnh)
-     * - _next/image (các file ảnh đã được tối ưu)
-     * - favicon.ico (favicon)
-     * - và các file có extension thông dụng (nếu cần thiết có thể mở rộng thêm)
-     */
     '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 }
