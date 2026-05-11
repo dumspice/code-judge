@@ -9,6 +9,8 @@ body {
   height: 100%;
 }
 
+@variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
