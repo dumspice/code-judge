@@ -43,7 +43,7 @@ export default function ContestDetailPage() {
     return (
       <main className="max-w-6xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
         <div className="rounded-3xl border border-border bg-background/80 p-10 text-center text-lg text-destructive">
-          Contest ID không hợp lệ.
+          Contest ID invalid or missing.
         </div>
       </main>
     );
@@ -53,7 +53,7 @@ export default function ContestDetailPage() {
     return (
       <main className="max-w-6xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
         <div className="rounded-3xl border border-border bg-background/80 p-10 text-center text-lg text-muted-foreground">
-          Đang tải contest...
+          Loading contest...
         </div>
       </main>
     );
@@ -61,19 +61,19 @@ export default function ContestDetailPage() {
 
   if (error || !contest) {
     return (
-      <main className="max-w-6xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="rounded-3xl border border-border bg-background/80 p-10 text-center text-lg text-destructive">
-          {error ?? 'Contest không tồn tại hoặc đã xảy ra lỗi.'}
+          {error ?? 'Contest not found or an error occurred.'}
         </div>
       </main>
     );
   }
 
-  const startAt = contest.startAt ? new Date(contest.startAt).toLocaleString() : 'Chưa khai báo';
-  const endAt = contest.endAt ? new Date(contest.endAt).toLocaleString() : 'Chưa khai báo';
+  const startAt = contest.startAt ? new Date(contest.startAt).toLocaleString() : 'Not specified';
+  const endAt = contest.endAt ? new Date(contest.endAt).toLocaleString() : 'Not specified';
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+    <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between mb-10">
         <div className="space-y-3">
           <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">
@@ -81,11 +81,11 @@ export default function ContestDetailPage() {
           </p>
           <h1 className="text-4xl font-bold tracking-tight">{contest.title}</h1>
           <p className="max-w-2xl text-muted-foreground">
-            {contest.description || 'Không có mô tả contest.'}
+            {contest.description || 'No contest description available.'}
           </p>
         </div>
         <Button variant="secondary" size="lg" asChild>
-          <Link href="/">Trở về trang chủ</Link>
+          <Link href="/dashboard">Return to Home</Link>
         </Button>
       </div>
 
@@ -123,9 +123,7 @@ export default function ContestDetailPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Max submissions/problem</p>
-              <p className="font-semibold">
-                {contest.maxSubmissionsPerProblem ?? 'Không giới hạn'}
-              </p>
+              <p className="font-semibold">{contest.maxSubmissionsPerProblem ?? 'Unlimited'}</p>
             </div>
           </div>
 
@@ -134,7 +132,7 @@ export default function ContestDetailPage() {
               <Calendar className="w-4 h-4" />
               <span>Contest metadata</span>
             </div>
-            <p>{contest.description || 'Contest này chưa có nội dung mô tả chi tiết.'}</p>
+            <p>{contest.description || 'No detailed description available for this contest.'}</p>
           </div>
         </section>
 
@@ -142,13 +140,13 @@ export default function ContestDetailPage() {
           <Card className="border border-border shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">
-                <List className="w-5 h-5" /> Danh sách bài toán
+                <List className="w-5 h-5" /> Problem List
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {!contest.problems || contest.problems.length === 0 ? (
                 <div className="rounded-xl border border-border bg-background/80 p-4 text-sm text-muted-foreground">
-                  Contest chưa có bài toán nào.
+                  Contest has no problems.
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -170,7 +168,7 @@ export default function ContestDetailPage() {
                           <p className="text-sm text-muted-foreground">
                             {item.problem?.description
                               ? item.problem.description.slice(0, 120) + '...'
-                              : 'Không có mô tả ngắn.'}
+                              : 'No short description available.'}
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
