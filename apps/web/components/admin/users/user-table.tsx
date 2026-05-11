@@ -79,7 +79,7 @@ export default function UserTable() {
       await usersApi.updateUserRole(user.id, { role: newRole });
       fetchUsers();
     } catch (error) {
-      alert('Lỗi cập nhật quyền!');
+      alert('Permission update error!');
     }
   };
 
@@ -90,18 +90,18 @@ export default function UserTable() {
       await usersApi.toggleUserStatus(user.id, { isActive: !user.isActive });
       fetchUsers();
     } catch (error) {
-      alert('Lỗi cập nhật trạng thái!');
+      alert('Status update error!');
     }
   };
 
   // Hành động: Xóa
   const handleDelete = async (id: string) => {
-    if (!confirm('Bạn có chắc chắn muốn vô hiệu hóa người dùng này?')) return;
+    if (!confirm('Are you sure you want to disable this user?')) return;
     try {
       await usersApi.deleteUser(id);
       fetchUsers();
     } catch (error) {
-      alert('Lỗi xóa người dùng!');
+      alert('User deletion error!');
     }
   };
 
@@ -111,7 +111,7 @@ export default function UserTable() {
         <div className="flex items-center gap-2 max-w-sm w-full relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Tìm kiếm email, tên..."
+            placeholder="Search by email, name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-8 bg-background"
@@ -129,10 +129,10 @@ export default function UserTable() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Người dùng</TableHead>
-              <TableHead>Vai trò</TableHead>
-              <TableHead>Trạng thái</TableHead>
-              <TableHead className="text-right">Hành động</TableHead>
+              <TableHead>User</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -145,7 +145,7 @@ export default function UserTable() {
             ) : data?.items.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                  Không tìm thấy người dùng nào.
+                  No users found.
                 </TableCell>
               </TableRow>
             ) : (
@@ -169,7 +169,7 @@ export default function UserTable() {
                         user.isActive ? 'text-green-500 border-green-500/20 bg-green-500/10' : ''
                       }
                     >
-                      {user.isActive ? 'Hoạt động' : 'Bị khóa'}
+                      {user.isActive ? 'Active' : 'Lock'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -180,11 +180,11 @@ export default function UserTable() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Tùy chọn</DropdownMenuLabel>
+                        <DropdownMenuLabel>Option</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => handleUpdateRole(user)}>
                           <ShieldAlert className="mr-2 h-4 w-4" />
-                          {user.role === Role.ADMIN ? 'Hạ cấp xuống Client' : 'Nâng cấp lên Admin'}
+                          {user.role === Role.ADMIN ? 'Downgrade to Client' : 'Upgrade to Admin'}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleToggleStatus(user)}>
                           {user.isActive ? (
@@ -192,7 +192,7 @@ export default function UserTable() {
                           ) : (
                             <CheckCircle className="mr-2 h-4 w-4" />
                           )}
-                          {user.isActive ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
+                          {user.isActive ? 'Lock' : 'Unlock'}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
@@ -200,7 +200,7 @@ export default function UserTable() {
                           className="text-destructive focus:text-destructive"
                         >
                           <Trash2 className="mr-2 h-4 w-4" />
-                          Xóa người dùng
+                          Delete user
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -221,10 +221,10 @@ export default function UserTable() {
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1 || loading}
           >
-            Trang trước
+            Previous
           </Button>
           <div className="text-sm text-muted-foreground font-medium">
-            Trang {page} / {data.totalPages}
+            Page {page} / {data.totalPages}
           </div>
           <Button
             variant="outline"
@@ -232,7 +232,7 @@ export default function UserTable() {
             onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
             disabled={page === data.totalPages || loading}
           >
-            Trang sau
+            Next
           </Button>
         </div>
       )}
