@@ -1,35 +1,106 @@
-import { ClipboardList, MoreVertical } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+'use client';
 
-interface AssignmentItemProps {
-  title: string;
-  dueDate?: string;
-  status?: string;
+import { ArrowRight, ClipboardList, Gauge, MemoryStick, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Problem } from '@/services/auth.apis';
+import { formatDate } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+interface AssignmentItemProps extends Problem {
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  showActions?: boolean;
 }
 
-export default function AssignmentItem({ title, dueDate, status }: AssignmentItemProps) {
+export default function AssignmentItem({
+  id,
+  title,
+  createdAt,
+  timeLimitMs,
+  memoryLimitMb,
+  difficulty,
+  mode,
+  onEdit,
+  onDelete,
+  showActions = true,
+}: AssignmentItemProps) {
   return (
-    <div className="flex items-center justify-between py-4 border-b border-gray-200 hover:bg-gray-50 group transition-colors px-2 rounded-md cursor-pointer">
-      <div className="flex items-center gap-4 flex-1">
-        <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 group-hover:bg-black group-hover:text-white transition-colors">
-          <ClipboardList className="w-5 h-5 text-gray-600 group-hover:text-white transition-colors" />
-        </div>
+    <div className="w-full rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:shadow-md group">
+      <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
-          <h3 className="font-medium text-gray-900">{title}</h3>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-black line-clamp-1">{title}</h2>
+            {showActions && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-32 p-1 rounded-xl shadow-xl">
+                  <DropdownMenuItem 
+                    onClick={() => onEdit?.(id)}
+                    className="rounded-lg gap-2 cursor-pointer py-2 text-sm"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" /> Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => onDelete?.(id)}
+                    className="rounded-lg gap-2 cursor-pointer py-2 text-sm text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+
+          <div className="mt-3 flex items-center gap-5 text-gray-500">
+            <div className="flex items-center gap-1.5">
+              <Gauge className="h-4 w-4 text-emerald-500" />
+              <span className="text-xs font-medium">{timeLimitMs}ms</span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <MemoryStick className="h-4 w-4 text-blue-500" />
+              <span className="text-xs font-medium">{memoryLimitMb}MB</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-4 text-sm text-gray-500">
-        {status && <span className="hidden sm:inline-block font-medium">{status}</span>}
-        {dueDate && <span className="hidden sm:inline-block">Due date {dueDate}</span>}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-gray-500 hover:text-black hover:bg-gray-200 rounded-full"
+      <div className="mt-4 flex items-center gap-2">
+        <div
+          className={`
+            rounded-full px-2.5 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider
+            ${
+              difficulty === 'EASY'
+                ? 'bg-emerald-500'
+                : difficulty === 'MEDIUM'
+                  ? 'bg-amber-500'
+                  : 'bg-rose-500'
+            }
+          `}
         >
-          <MoreVertical className="w-4 h-4" />
-        </Button>
+          {difficulty}
+        </div>
+        <div className="rounded-full px-2.5 py-0.5 text-[10px] font-bold text-gray-400 border border-gray-200 uppercase tracking-wider">
+          {mode}
+        </div>
       </div>
+
+      <Button
+        className="mt-5 cursor-pointer h-10 w-full rounded-xl border border-gray-200 bg-white text-sm font-semibold text-black hover:bg-gray-50 hover:border-black transition-all"
+        variant="ghost"
+      >
+        <span>Solve Problem</span>
+        <ArrowRight className="ml-2 h-4 w-4" />
+      </Button>
     </div>
   );
 }
