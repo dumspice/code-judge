@@ -10,6 +10,7 @@ export default function ClassTabs({ classId }: { classId: string }) {
   const tabs = [
     { name: 'Class Posts', href: `/dashboard/${classId}` },
     { name: 'Class Assignments', href: `/dashboard/${classId}/classwork` },
+    { name: 'Contests', href: `/dashboard/${classId}/contests` },
     { name: 'People', href: `/dashboard/${classId}/people` },
   ];
 

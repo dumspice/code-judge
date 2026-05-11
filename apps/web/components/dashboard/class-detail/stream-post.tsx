@@ -1,40 +1,60 @@
-import { MoreVertical, ClipboardList } from 'lucide-react';
+import { ArrowRight, CalendarDays, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Contest } from '@/services/auth.apis';
+import { formatDate } from '@/lib/utils';
+import Link from 'next/link';
 
-interface StreamPostProps {
-  author: string;
-  time: string;
-  content: string;
-  type?: 'announcement' | 'assignment';
-}
-
-export default function StreamPost({ author, time, content, type = 'announcement' }: StreamPostProps) {
+export default function StreamPost(
+  { id, title, endAt, createdAt, status, maxSubmissionsPerProblem, description }: Contest,
+  classId: string,
+) {
   return (
-    <div className="flex bg-white rounded-lg border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex-shrink-0 mr-4 mt-1">
-        {type === 'assignment' ? (
-          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-            <ClipboardList className="w-5 h-5 text-gray-700" />
+    <div className="w-full rounded-2xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:shadow-md">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-black">{title}</h2>
+
+          <div className="mt-3 flex items-center gap-2 text-gray-500">
+            <CalendarDays className="h-4 w-4" />
+
+            <span className="text-sm">
+              {formatDate(createdAt)} - {formatDate(endAt)}
+            </span>
           </div>
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-semibold text-lg">
-            {author.charAt(0)}
-          </div>
-        )}
+        </div>
+
+        <div
+          className={`
+        rounded-full px-3 py-1 text-xs font-semibold text-white
+        ${status === 'PUBLISHED' ? 'bg-black' : status === 'DRAFT' ? 'bg-gray-500' : 'bg-red-500'}
+      `}
+        >
+          {status}
+        </div>
       </div>
-      <div className="flex-1">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="font-semibold text-gray-900">{author}</h3>
-            <p className="text-xs text-gray-500">{time}</p>
-          </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-black hover:bg-gray-100 rounded-full">
-            <MoreVertical className="w-4 h-4" />
-          </Button>
+
+      <div className="mt-5">
+        <p className="text-md text-gray-500">{description}</p>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 text-gray-500">
+          <Trophy className="h-4 w-4" />
+
+          <span className="text-sm">
+            {maxSubmissionsPerProblem
+              ? `${maxSubmissionsPerProblem} submissions`
+              : 'Unlimited submissions'}
+          </span>
         </div>
-        <div className="mt-2 text-sm text-gray-800 whitespace-pre-wrap">
-          {content}
-        </div>
+
+        <Link
+          href={`/dashboard/${classId}/contests/${id}`}
+          className="h-10 flex items-center gap-1 cursor-pointer rounded-xl bg-black px-5 text-sm font-medium text-white hover:bg-gray-800"
+        >
+          <span>Join Contest</span>
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Link>
       </div>
     </div>
   );

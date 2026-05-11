@@ -3,12 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, List, Calendar, Trophy, Shield, Zap, BarChart3 } from 'lucide-react';
+import { List, Calendar, Trophy, Zap, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import { contestsApi, type Contest } from '@/services/auth.apis';
+import { Contest, contestsApi } from '@/services/contest.apis';
 
 export default function ContestDetailPage() {
   const params = useParams();

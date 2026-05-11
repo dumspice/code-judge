@@ -16,15 +16,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  problemsApi,
-  storageApi,
-  submissionsApi,
-  type Problem,
-  type Submission,
-} from '@/services/auth.apis';
+
 import { useAuthStore } from '@/store/auth-store';
 import { io, Socket } from 'socket.io-client';
+import { Problem, problemsApi } from '@/services/problem.apis';
+import { Submission, submissionsApi } from '@/services/submission.apis';
+import { storageApi } from '@/services/storage.apis';
 
 const languageOptions = [
   { value: 'PYTHON', label: 'Python', extension: 'py' },
