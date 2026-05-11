@@ -29,7 +29,7 @@ import {
   type Problem,
   type CreateContestDto,
   type UpdateContestDto,
-} from '@/services/api';
+} from '@/services/auth.apis';
 import { Plus, Search, Calendar } from 'lucide-react';
 
 export default function ContestsTab() {

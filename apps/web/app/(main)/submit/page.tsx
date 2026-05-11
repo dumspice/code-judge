@@ -15,7 +15,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowRight, Cloud, Code2, Upload } from 'lucide-react';
 import Link from 'next/link';
-import { problemsApi, storageApi, submissionsApi, type Problem } from '@/services/api';
+import { problemsApi, storageApi, submissionsApi, type Problem } from '@/services/auth.apis';
 
 const languageOptions = [
   { value: 'PYTHON', label: 'Python', extension: 'py' },

@@ -104,7 +104,6 @@ model User {
   isActive      Boolean
   imageObjectKey String?
   image         String?
-  imageObjectKey String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   lastLoginAt   DateTime?

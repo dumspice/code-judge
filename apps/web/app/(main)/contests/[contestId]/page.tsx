@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { contestsApi, type Contest } from '@/services/api';
+import { contestsApi, type Contest } from '@/services/auth.apis';
 
 export default function ContestDetailPage() {
   const params = useParams();

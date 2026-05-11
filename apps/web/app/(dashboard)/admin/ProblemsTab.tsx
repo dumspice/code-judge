@@ -27,7 +27,7 @@ import {
   type Problem,
   type CreateProblemDto,
   type UpdateProblemDto,
-} from '@/services/api';
+} from '@/services/auth.apis';
 import { Plus, Search } from 'lucide-react';
 
 export default function ProblemsTab() {

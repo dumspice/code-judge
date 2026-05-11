@@ -126,6 +126,13 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token không hợp lệ hoặc đã hết hạn');
     }
 
+    // Defensive: Prisma `findUnique` requires a defined unique field.
+    // If refresh token was minted by an older version or different config,
+    // `sub` may be missing and would otherwise cause a 500.
+    if (!payload?.sub || typeof payload.sub !== 'string') {
+      throw new UnauthorizedException('Refresh token không hợp lệ (thiếu subject)');
+    }
+
     // 2. Load user & check still active
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user || !user.isActive) {

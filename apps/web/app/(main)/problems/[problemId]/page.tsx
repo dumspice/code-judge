@@ -22,7 +22,7 @@ import {
   submissionsApi,
   type Problem,
   type Submission,
-} from '@/services/api';
+} from '@/services/auth.apis';
 import { useAuthStore } from '@/store/auth-store';
 import { io, Socket } from 'socket.io-client';
 
