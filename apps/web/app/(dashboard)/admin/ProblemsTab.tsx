@@ -28,7 +28,12 @@ import {
   type CreateProblemDto,
   type UpdateProblemDto,
 } from '@/services/auth.apis';
-import { Plus, Search } from 'lucide-react';
+import { Loader2, Plus, Search, Wand2 } from 'lucide-react';
+
+function buildStatementForAi(description: string, statementMd: string): string {
+  const parts = [statementMd?.trim(), description?.trim()].filter(Boolean);
+  return parts.join('\n\n');
+}
 
 export default function ProblemsTab() {
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -36,6 +41,9 @@ export default function ProblemsTab() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingProblemId, setEditingProblemId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [aiIoSpec, setAiIoSpec] = useState('');
+  const [generatingAi, setGeneratingAi] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [formData, setFormData] = useState<CreateProblemDto>({
     title: '',
     description: '',
@@ -53,6 +61,8 @@ export default function ProblemsTab() {
 
   const resetForm = () => {
     setEditingProblemId(null);
+    setAiIoSpec('');
+    setAiError(null);
     setFormData({
       title: '',
       description: '',
@@ -76,6 +86,8 @@ export default function ProblemsTab() {
 
   const handleEdit = async (problem: Problem) => {
     try {
+      setAiIoSpec('');
+      setAiError(null);
       const data = await problemsApi.findById(problem.id);
       setFormData({
         title: data.title,
@@ -145,10 +157,64 @@ export default function ProblemsTab() {
     }
   };
 
+  const handleGenerateTestCases = async () => {
+    const title = formData.title?.trim();
+    const statement = buildStatementForAi(
+      formData.description ?? '',
+      formData.statementMd ?? '',
+    );
+    if (!title) {
+      setAiError('Please enter a title before generating test cases.');
+      return;
+    }
+    if (!statement) {
+      setAiError('Please enter a description or statement (Markdown) for the problem.');
+      return;
+    }
+
+    setGeneratingAi(true);
+    setAiError(null);
+    try {
+      const maxTc = Math.min(Math.max(formData.maxTestCases ?? 10, 1), 20);
+      const result = await problemsApi.generateTestCasesDraft({
+        title,
+        statement,
+        difficulty: formData.difficulty ?? 'EASY',
+        timeLimitMs: formData.timeLimitMs,
+        memoryLimitMb: formData.memoryLimitMb,
+        supportedLanguages: formData.supportedLanguages?.map((l) => l.toLowerCase()),
+        maxTestCases: maxTc,
+        ioSpec: aiIoSpec.trim() || undefined,
+      });
+
+      if (result.parsed?.testCases?.length) {
+        setFormData((prev) => ({
+          ...prev,
+          testCases: result.parsed!.testCases.map((tc) => ({
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            isHidden: tc.isHidden ?? false,
+            weight: tc.weight ?? 1,
+          })),
+        }));
+      } else {
+        setAiError(
+          result.parseError ??
+            'AI did not return usable test cases. You can edit manually or try again.',
+        );
+      }
+    } catch (error) {
+      console.error('AI testcase generation failed:', error);
+      setAiError(error instanceof Error ? error.message : 'Generation failed.');
+    } finally {
+      setGeneratingAi(false);
+    }
+  };
+
   const handleSave = async () => {
     try {
       if (editingProblemId) {
-        await problemsApi.update(editingProblemId, formData);
+        await problemsApi.update(editingProblemId, formData as UpdateProblemDto);
       } else {
         await problemsApi.create(formData);
       }
@@ -249,15 +315,50 @@ export default function ProblemsTab() {
               />
             </div>
 
-            <div>
-              <Label htmlFor="statementMd">Statement (Markdown)</Label>
-              <Textarea
-                id="statementMd"
-                value={formData.statementMd}
-                onChange={(e) => setFormData({ ...formData, statementMd: e.target.value })}
-                placeholder="Problem statement in markdown"
-                rows={6}
-              />
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="statementMd">Statement (Markdown)</Label>
+                <Textarea
+                  id="statementMd"
+                  value={formData.statementMd}
+                  onChange={(e) => setFormData({ ...formData, statementMd: e.target.value })}
+                  placeholder="Problem statement in markdown"
+                  rows={6}
+                />
+              </div>
+              <div>
+                <Label htmlFor="aiIoSpec">I/O spec for AI (optional)</Label>
+                <Textarea
+                  id="aiIoSpec"
+                  value={aiIoSpec}
+                  onChange={(e) => setAiIoSpec(e.target.value)}
+                  placeholder="e.g. First line: n. Next n lines: integers. Output: single integer."
+                  rows={2}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={generatingAi}
+                  onClick={handleGenerateTestCases}
+                >
+                  {generatingAi ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Wand2 className="w-4 h-4 mr-2" />
+                  )}
+                  Generate test cases
+                </Button>
+                {!editingProblemId && (
+                  <p className="text-sm text-muted-foreground">
+                    Draft only. The problem and test cases are saved when you confirm below.
+                  </p>
+                )}
+              </div>
+              {aiError && (
+                <p className="text-sm text-destructive whitespace-pre-wrap">{aiError}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -372,9 +473,9 @@ export default function ProblemsTab() {
               <Button variant="outline" onClick={handleCancel} className="px-6">
                 Cancel
               </Button>
-              <Button onClick={handleSave} className="px-6">
+              <Button onClick={handleSave} className="px-6" disabled={generatingAi}>
                 <Plus className="w-4 h-4 mr-2" />
-                {editingProblemId ? 'Save Changes' : 'Create Problem'}
+                {editingProblemId ? 'Save Changes' : 'Confirm & create problem'}
               </Button>
             </div>
           </CardContent>

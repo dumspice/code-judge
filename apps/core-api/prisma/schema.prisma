@@ -418,7 +418,6 @@ model ReportExport {
   status        ExportJobStatus
   fileObjectKey String?
   fileUrl       String?
-  fileObjectKey String?
   errorMessage  String?
   createdAt     DateTime        @default(now())
   completedAt   DateTime?
