@@ -48,11 +48,11 @@ export default function ClassCard({
 
       {/* Footer */}
       <div className="border-t border-gray-100 p-3 flex justify-end gap-4 text-gray-500">
-        <Link href={`/dashboard/classroom/${id}/people`}>
+        <Link href={`/dashboard/${id}/people`}>
           <Contact2 className="w-5 h-5 hover:text-blue-500" />
         </Link>
 
-        <Link href={`/dashboard/classroom/${id}/classwork`}>
+        <Link href={`/dashboard/${id}/classwork`}>
           <FolderOpen className="w-5 h-5 hover:text-blue-500" />
         </Link>
       </div>
