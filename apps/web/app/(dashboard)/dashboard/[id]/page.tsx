@@ -2,13 +2,14 @@ import { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { Button } from '@/components/ui/button';
 import { getClassroomDetail } from '@/services/classroom.apis';
-import { Contest, contestsApi, setAccessToken } from '@/services/auth.apis';
+import { setAccessToken } from '@/services/auth.apis';
 import { getPublicCoreUrl } from '@/lib/public-config';
 import { Copy } from 'lucide-react';
 import StreamPost from '@/components/dashboard/class-detail/stream-post';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getClassroomBannerColor } from '@/lib/classroom-banner';
+import { Contest, contestsApi } from '@/services/contest.apis';
 
 export const metadata: Metadata = {
   title: 'Class Stream | CodeJudge',

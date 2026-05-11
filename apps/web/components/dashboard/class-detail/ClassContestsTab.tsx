@@ -22,14 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import {
-  contestsApi,
-  problemsApi,
-  type Contest,
-  type Problem,
-  type CreateContestDto,
-  type UpdateContestDto,
-} from '@/services/auth.apis';
+
 import { Plus, Search, Calendar, Edit2, Trash2, Clock, Trophy, MoreVertical } from 'lucide-react';
 import {
   DropdownMenu,
@@ -38,6 +31,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
+import { Contest, contestsApi, CreateContestDto, UpdateContestDto } from '@/services/contest.apis';
+import { Problem, problemsApi } from '@/services/problem.apis';
 
 export default function ClassContestsTab({ classId }: { classId: string }) {
   const [contests, setContests] = useState<Contest[]>([]);

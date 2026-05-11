@@ -1,15 +1,15 @@
 'use client';
 
-import { ArrowRight, ClipboardList, Gauge, MemoryStick, MoreVertical, Edit2, Trash2 } from 'lucide-react';
+import { ArrowRight, Gauge, MemoryStick, MoreVertical, Edit2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Problem } from '@/services/auth.apis';
-import { formatDate } from '@/lib/utils';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Problem } from '@/services/problem.apis';
 
 interface AssignmentItemProps extends Problem {
   onEdit?: (id: string) => void;
@@ -38,18 +38,22 @@ export default function AssignmentItem({
             {showActions && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  >
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-32 p-1 rounded-xl shadow-xl">
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     onClick={() => onEdit?.(id)}
                     className="rounded-lg gap-2 cursor-pointer py-2 text-sm"
                   >
                     <Edit2 className="w-3.5 h-3.5" /> Edit
                   </DropdownMenuItem>
-                  <DropdownMenuItem 
+                  <DropdownMenuItem
                     onClick={() => onDelete?.(id)}
                     className="rounded-lg gap-2 cursor-pointer py-2 text-sm text-red-600 focus:text-red-600 focus:bg-red-50"
                   >

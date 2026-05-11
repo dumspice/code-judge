@@ -14,15 +14,22 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+
 import {
-  problemsApi,
-  type Problem,
-  type CreateProblemDto,
-  type UpdateProblemDto,
-} from '@/services/auth.apis';
-import { 
-  Plus, Search, Edit2, Trash2, Clock, Trophy, MoreVertical, 
-  Beaker, Database, Globe, Lock, Save, Languages, ArrowLeft 
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Clock,
+  Trophy,
+  MoreVertical,
+  Beaker,
+  Database,
+  Globe,
+  Lock,
+  Save,
+  Languages,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -40,6 +47,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { CreateProblemDto, Problem, problemsApi, UpdateProblemDto } from '@/services/problem.apis';
 
 export default function ClassProblemsTab({ classId }: { classId: string }) {
   const router = useRouter();
@@ -145,7 +153,7 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
       alert('Please enter a title for the problem.');
       return;
     }
-    
+
     setFormLoading(true);
     try {
       if (editingProblemId) {
@@ -224,9 +232,9 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
       <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
-              size="icon" 
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setShowCreateForm(false)}
               className="rounded-full hover:bg-gray-100"
             >
@@ -237,15 +245,26 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                 {editingProblemId ? 'Edit Problem' : 'Create Problem'}
               </h1>
               <p className="text-muted-foreground text-lg">
-                {editingProblemId ? 'Update your existing problem.' : 'Design a new challenge for your students.'}
+                {editingProblemId
+                  ? 'Update your existing problem.'
+                  : 'Design a new challenge for your students.'}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={() => setShowCreateForm(false)} disabled={formLoading} className="cursor-pointer">
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateForm(false)}
+              disabled={formLoading}
+              className="cursor-pointer"
+            >
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={formLoading} className="cursor-pointer bg-black hover:bg-gray-800 text-white min-w-[120px]">
+            <Button
+              onClick={handleSave}
+              disabled={formLoading}
+              className="cursor-pointer bg-black hover:bg-gray-800 text-white min-w-[120px]"
+            >
               {formLoading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               ) : (
@@ -266,7 +285,9 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
               </CardHeader>
               <CardContent className="p-6 space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="title" className="text-sm font-semibold">Problem Title</Label>
+                  <Label htmlFor="title" className="text-sm font-semibold">
+                    Problem Title
+                  </Label>
                   <Input
                     id="title"
                     value={formData.title}
@@ -276,7 +297,9 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="description" className="text-sm font-semibold">Brief Description</Label>
+                  <Label htmlFor="description" className="text-sm font-semibold">
+                    Brief Description
+                  </Label>
                   <Textarea
                     id="description"
                     value={formData.description}
@@ -286,7 +309,9 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="statementMd" className="text-sm font-semibold">Full Problem Statement (Markdown)</Label>
+                  <Label htmlFor="statementMd" className="text-sm font-semibold">
+                    Full Problem Statement (Markdown)
+                  </Label>
                   <Textarea
                     id="statementMd"
                     value={formData.statementMd}
@@ -302,9 +327,17 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
               <CardHeader className="border-b flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-xl">Test Cases</CardTitle>
-                  <CardDescription>Add examples and hidden test cases for evaluation.</CardDescription>
+                  <CardDescription>
+                    Add examples and hidden test cases for evaluation.
+                  </CardDescription>
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={addTestCase} className="rounded-lg cursor-pointer">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addTestCase}
+                  className="rounded-lg cursor-pointer"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Case
                 </Button>
@@ -318,10 +351,15 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                     </div>
                   ) : (
                     formData.testCases?.map((tc, index) => (
-                      <div key={index} className="group relative border border-gray-100 rounded-2xl p-5 bg-gray-50/30 hover:bg-white hover:shadow-lg transition-all duration-300">
+                      <div
+                        key={index}
+                        className="group relative border border-gray-100 rounded-2xl p-5 bg-gray-50/30 hover:bg-white hover:shadow-lg transition-all duration-300"
+                      >
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Input</Label>
+                            <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                              Input
+                            </Label>
                             <Textarea
                               value={tc.input}
                               onChange={(e) => updateTestCase(index, 'input', e.target.value)}
@@ -329,10 +367,14 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Expected Output</Label>
+                            <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                              Expected Output
+                            </Label>
                             <Textarea
                               value={tc.expectedOutput}
-                              onChange={(e) => updateTestCase(index, 'expectedOutput', e.target.value)}
+                              onChange={(e) =>
+                                updateTestCase(index, 'expectedOutput', e.target.value)
+                              }
                               className="min-h-[100px] rounded-xl border-gray-200 focus:border-black bg-white font-mono text-xs"
                             />
                           </div>
@@ -340,9 +382,11 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                         <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
                           <div className="flex items-center gap-6">
                             <div className="flex items-center gap-2">
-                              <Switch 
+                              <Switch
                                 checked={tc.isHidden}
-                                onCheckedChange={(checked) => updateTestCase(index, 'isHidden', checked)}
+                                onCheckedChange={(checked) =>
+                                  updateTestCase(index, 'isHidden', checked)
+                                }
                                 className="cursor-pointer"
                               />
                               <Label className="text-sm font-medium flex items-center gap-1.5">
@@ -354,7 +398,9 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                               <Input
                                 type="number"
                                 value={tc.weight}
-                                onChange={(e) => updateTestCase(index, 'weight', Number(e.target.value))}
+                                onChange={(e) =>
+                                  updateTestCase(index, 'weight', Number(e.target.value))
+                                }
                                 className="w-16 h-8 rounded-lg border-gray-200 text-center font-bold"
                               />
                             </div>
@@ -389,7 +435,9 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                     <Label className="text-sm font-semibold">Difficulty</Label>
                     <Select
                       value={formData.difficulty}
-                      onValueChange={(value: any) => setFormData({ ...formData, difficulty: value })}
+                      onValueChange={(value: any) =>
+                        setFormData({ ...formData, difficulty: value })
+                      }
                     >
                       <SelectTrigger className="rounded-xl border-gray-200 h-10">
                         <SelectValue />
@@ -407,7 +455,9 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                       <Input
                         type="number"
                         value={formData.timeLimitMs}
-                        onChange={(e) => setFormData({ ...formData, timeLimitMs: Number(e.target.value) })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, timeLimitMs: Number(e.target.value) })
+                        }
                         className="rounded-xl border-gray-200 h-10 font-bold"
                       />
                     </div>
@@ -416,7 +466,9 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                       <Input
                         type="number"
                         value={formData.memoryLimitMb}
-                        onChange={(e) => setFormData({ ...formData, memoryLimitMb: Number(e.target.value) })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, memoryLimitMb: Number(e.target.value) })
+                        }
                         className="rounded-xl border-gray-200 h-10 font-bold"
                       />
                     </div>
@@ -424,9 +476,11 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                   <div className="space-y-3 pt-4 border-t">
                     <div className="flex items-center justify-between">
                       <Label className="text-sm font-semibold">Published</Label>
-                      <Switch 
+                      <Switch
                         checked={formData.isPublished}
-                        onCheckedChange={(checked) => setFormData({ ...formData, isPublished: checked })}
+                        onCheckedChange={(checked) =>
+                          setFormData({ ...formData, isPublished: checked })
+                        }
                         className="cursor-pointer"
                       />
                     </div>
@@ -436,17 +490,17 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                       <Languages className="w-4 h-4 text-gray-400" /> Languages
                     </Label>
                     <div className="flex flex-wrap gap-1.5">
-                      {['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'].map(lang => {
+                      {['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'].map((lang) => {
                         const isSelected = formData.supportedLanguages?.includes(lang);
                         return (
-                          <Badge 
+                          <Badge
                             key={lang}
                             variant={isSelected ? 'default' : 'outline'}
                             className="cursor-pointer"
                             onClick={() => {
                               const current = formData.supportedLanguages || [];
-                              const next = isSelected 
-                                ? current.filter(l => l !== lang)
+                              const next = isSelected
+                                ? current.filter((l) => l !== lang)
                                 : [...current, lang];
                               setFormData({ ...formData, supportedLanguages: next });
                             }}
@@ -473,7 +527,10 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
           <h2 className="text-2xl font-bold tracking-tight">Class Problems</h2>
           <p className="text-muted-foreground">Manage the bank of problems for your students.</p>
         </div>
-        <Button onClick={handleShowCreate} className="bg-black hover:bg-gray-800 text-white shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer">
+        <Button
+          onClick={handleShowCreate}
+          className="bg-black hover:bg-gray-800 text-white shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer"
+        >
           <Plus className="w-4 h-4 mr-2" />
           New Problem
         </Button>
@@ -515,18 +572,28 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                 </TableRow>
               ) : (
                 filteredProblems.map((problem) => (
-                  <TableRow key={problem.id} className="group hover:bg-black/[0.02] transition-colors">
+                  <TableRow
+                    key={problem.id}
+                    className="group hover:bg-black/[0.02] transition-colors"
+                  >
                     <TableCell className="py-4 pl-6">
                       <div className="flex flex-col">
-                        <span className="font-semibold text-gray-900 group-hover:text-black transition-colors">{problem.title}</span>
-                        <span className="text-xs text-muted-foreground line-clamp-1">{problem.description || 'No description'}</span>
+                        <span className="font-semibold text-gray-900 group-hover:text-black transition-colors">
+                          {problem.title}
+                        </span>
+                        <span className="text-xs text-muted-foreground line-clamp-1">
+                          {problem.description || 'No description'}
+                        </span>
                       </div>
                     </TableCell>
+                    <TableCell className="py-4">{getDifficultyBadge(problem.difficulty)}</TableCell>
                     <TableCell className="py-4">
-                      {getDifficultyBadge(problem.difficulty)}
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <Badge variant="outline" className="text-xs font-medium uppercase tracking-wider">{problem.mode}</Badge>
+                      <Badge
+                        variant="outline"
+                        className="text-xs font-medium uppercase tracking-wider"
+                      >
+                        {problem.mode}
+                      </Badge>
                     </TableCell>
                     <TableCell className="py-4">
                       <Badge variant={problem.isPublished ? 'default' : 'secondary'}>
@@ -536,18 +603,25 @@ export default function ClassProblemsTab({ classId }: { classId: string }) {
                     <TableCell className="py-4 text-right pr-6">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="rounded-full hover:bg-black/5 cursor-pointer">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-full hover:bg-black/5 cursor-pointer"
+                          >
                             <MoreVertical className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 p-1 rounded-xl shadow-xl border-gray-100">
-                          <DropdownMenuItem 
+                        <DropdownMenuContent
+                          align="end"
+                          className="w-48 p-1 rounded-xl shadow-xl border-gray-100"
+                        >
+                          <DropdownMenuItem
                             onClick={() => handleEdit(problem)}
                             className="rounded-lg gap-2 cursor-pointer py-2"
                           >
                             <Edit2 className="w-4 h-4" /> Edit Problem
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
+                          <DropdownMenuItem
                             onClick={() => handleDelete(problem.id)}
                             className="rounded-lg gap-2 cursor-pointer py-2 text-red-600 focus:text-red-600 focus:bg-red-50"
                           >

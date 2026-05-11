@@ -22,13 +22,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import {
-  problemsApi,
-  type Problem,
-  type CreateProblemDto,
-  type UpdateProblemDto,
-} from '@/services/auth.apis';
+
 import { Plus, Search } from 'lucide-react';
+import { CreateProblemDto, Problem, problemsApi } from '@/services/problem.apis';
 
 export default function ProblemsTab() {
   const [problems, setProblems] = useState<Problem[]>([]);

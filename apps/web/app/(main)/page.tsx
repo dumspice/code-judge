@@ -16,7 +16,8 @@ import {
   Trophy,
 } from 'lucide-react';
 import Link from 'next/link';
-import { problemsApi, contestsApi, type Problem, type Contest } from '@/services/auth.apis';
+import { Problem, problemsApi } from '@/services/problem.apis';
+import { Contest, contestsApi } from '@/services/contest.apis';
 
 export default function HomePage() {
   const [featuredProblems, setFeaturedProblems] = useState<Problem[]>([]);

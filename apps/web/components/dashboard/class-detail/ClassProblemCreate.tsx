@@ -14,7 +14,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { problemsApi, type CreateProblemDto, type UpdateProblemDto } from '@/services/auth.apis';
 import {
   Plus,
   ArrowLeft,
@@ -29,15 +28,16 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { CreateProblemDto, problemsApi, UpdateProblemDto } from '@/services/problem.apis';
 
 export default function ClassProblemCreate({ classId }: { classId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams?.get('edit');
-  
+
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(!!editId);
-  
+
   const [formData, setFormData] = useState<CreateProblemDto>({
     title: '',
     description: '',
@@ -151,7 +151,9 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
               {editId ? 'Edit Problem' : 'Create Problem'}
             </h1>
             <p className="text-muted-foreground text-lg">
-              {editId ? 'Update the details of your existing problem.' : 'Design a new challenge for your students.'}
+              {editId
+                ? 'Update the details of your existing problem.'
+                : 'Design a new challenge for your students.'}
             </p>
           </div>
         </div>
