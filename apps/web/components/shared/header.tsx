@@ -36,12 +36,6 @@ export default function Header() {
           <a href="/#contests" className="text-sm hover:text-primary transition">
             Contests
           </a>
-          <a
-            href="/admin"
-            className="text-sm font-semibold text-primary hover:text-primary/80 transition"
-          >
-            Admin
-          </a>
         </div>
 
         <div className="flex items-center gap-4">
