@@ -38,3 +38,17 @@ export async function putArtifactObject(
   await ensureBucketExists();
   await client.putObject(bucket, objectKey, body, undefined, metadata);
 }
+
+export async function getObjectString(objectKey: string): Promise<string> {
+  await ensureBucketExists();
+  const stream = await client.getObject(bucket, objectKey);
+
+  return new Promise<string>((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk) => {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk);
+    });
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    stream.on('error', reject);
+  });
+}

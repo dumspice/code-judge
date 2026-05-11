@@ -9,13 +9,44 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Contact, ChevronDown, ClipboardList } from 'lucide-react';
+import { getPublicCoreUrl } from '@/lib/public-config';
+import { cookies } from 'next/headers';
+import { setAccessToken } from '@/services/auth.apis';
+import { getClassroomDetail } from '@/services/classroom.apis';
 
 export const metadata: Metadata = {
   title: 'Classwork | CodeJudge',
   description: 'View class assignments',
 };
 
-export default function ClassworkPage() {
+export default async function ClassworkPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const BASE_URL = getPublicCoreUrl();
+
+  // Refresh token on server side
+  try {
+    const cookieStore = await cookies();
+    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: cookieStore.toString(),
+      },
+      credentials: 'include',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const result = data.result ?? data;
+      setAccessToken(result.accessToken);
+    }
+  } catch (error) {
+    console.warn('Failed to refresh token on server:', error);
+  }
+
+  // Fetch classroom details
+  const classroom = await getClassroomDetail(id);
+
   const assignments = [
     { id: 1, title: 'CV', dueDate: '11:30 14 thg 4' },
     { id: 2, title: 'Nộp bài Final Test', dueDate: 'Không có ngày đến hạn' },
@@ -73,14 +104,20 @@ export default function ClassworkPage() {
           </Button>
         </div>
         <div className="border-t border-gray-200">
-          {assignments.map((assignment) => (
-            <AssignmentItem
-              key={assignment.id}
-              title={assignment.title}
-              dueDate={assignment.dueDate}
-              status={assignment.status}
-            />
-          ))}
+          {assignments.length > 0 ? (
+            assignments.map((assignment) => (
+              <AssignmentItem
+                key={assignment.id}
+                title={assignment.title}
+                dueDate={assignment.dueDate}
+                status={assignment.status}
+              />
+            ))
+          ) : (
+            <div className="flex items-center justify-center mt-5">
+              <h2 className="text-lg font-medium">No assignments found.</h2>
+            </div>
+          )}
         </div>
       </div>
     </div>

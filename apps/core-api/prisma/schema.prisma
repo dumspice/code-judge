@@ -102,8 +102,8 @@ model User {
   role          Role
   emailVerified Boolean
   isActive      Boolean
-  image         String?
   imageObjectKey String?
+  image         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   lastLoginAt   DateTime?
@@ -300,17 +300,17 @@ model AiGenerationJob {
   id               String      @id @default(uuid())
   problemId        String
   createdById      String
-  status           AiJobStatus
-  inputDocUrl      String?
-  inputDocObjectKey String?
+  status             AiJobStatus
+  inputDocObjectKey  String?
+  inputDocUrl        String?
   inputDocFileName String?
   inputDocContentType String?
   inputDocSizeBytes Int?
-  promptVersion    String?
-  structuredOutput Json?
-  errorMessage     String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  promptVersion      String?
+  structuredOutput   Json?
+  errorMessage       String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
   createdBy User    @relation(fields: [createdById], references: [id], onDelete: Cascade)
@@ -376,8 +376,8 @@ model Submission {
   contestId         String?
   classRoomId       String?
   classAssignmentId String?
-  attemptNumber     Int
-  judgePriority     Int
+  attemptNumber     Int     @default(1)
+  judgePriority     Int     @default(0)
   language          String?
   status            SubmissionStatus
   score             Int?
@@ -416,6 +416,7 @@ model ReportExport {
   requestedById String
   format        ExportFormat
   status        ExportJobStatus
+  fileObjectKey String?
   fileUrl       String?
   fileObjectKey String?
   errorMessage  String?

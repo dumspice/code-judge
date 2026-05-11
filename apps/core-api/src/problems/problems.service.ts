@@ -1,0 +1,166 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import { Difficulty, ProblemMode, ProblemVisibility, Prisma, Problem } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateProblemDto } from './dto/create-problem.dto';
+import { UpdateProblemDto } from './dto/update-problem.dto';
+
+@Injectable()
+export class ProblemsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(dto: CreateProblemDto, creatorId: string): Promise<Problem> {
+    const slug = await this.buildUniqueSlug(dto.title);
+    const supportedLanguages = dto.supportedLanguages ?? [];
+
+    return this.prisma.$transaction(async (tx) => {
+      const problem = await tx.problem.create({
+        data: {
+          title: dto.title,
+          description: dto.description ?? null,
+          statementMd: dto.statementMd ?? null,
+          slug,
+          difficulty: dto.difficulty ?? Difficulty.EASY,
+          mode: dto.mode ?? ProblemMode.ALGO,
+          timeLimitMs: dto.timeLimitMs ?? 1000,
+          memoryLimitMb: dto.memoryLimitMb ?? 256,
+          isPublished: dto.isPublished ?? true,
+          visibility: dto.visibility ?? ProblemVisibility.PUBLIC,
+          supportedLanguages: supportedLanguages.length > 0 ? supportedLanguages : undefined,
+          maxTestCases: dto.maxTestCases ?? 100,
+          creatorId,
+        },
+      });
+
+      if (dto.testCases && dto.testCases.length > 0) {
+        await tx.testCase.createMany({
+          data: dto.testCases.map((tc, index) => ({
+            problemId: problem.id,
+            orderIndex: index + 1,
+            input: tc.input,
+            expectedOutput: tc.expectedOutput,
+            isHidden: tc.isHidden ?? false,
+            weight: tc.weight ?? 1,
+          })),
+        });
+      }
+
+      return problem;
+    });
+  }
+
+  async findAll(query: { search?: string; page?: number; limit?: number }) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+    const search = query.search?.trim();
+    const where: Prisma.ProblemWhereInput = {
+      isPublished: true,
+      visibility: { not: 'PRIVATE' },
+      ...(search
+        ? {
+            OR: [
+              { title: { contains: search, mode: 'insensitive' as const } },
+              { description: { contains: search, mode: 'insensitive' as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.problem.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      this.prisma.problem.count({ where }),
+    ]);
+    return { items, total, page, limit };
+  }
+
+  async findById(problemId: string) {
+    const problem = await this.prisma.problem.findUnique({
+      where: { id: problemId },
+      include: {
+        testCases: { orderBy: { orderIndex: 'asc' } },
+      },
+    });
+    if (!problem) {
+      throw new NotFoundException('Problem not found');
+    }
+    return problem;
+  }
+
+  async update(problemId: string, dto: UpdateProblemDto, updaterId: string) {
+    const existing = await this.findById(problemId);
+    const slug =
+      dto.title && dto.title !== existing.title
+        ? await this.buildUniqueSlug(dto.title)
+        : existing.slug;
+
+    return this.prisma.$transaction(async (tx) => {
+      const data: any = {
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+        ...(dto.description !== undefined ? { description: dto.description } : {}),
+        ...(dto.statementMd !== undefined ? { statementMd: dto.statementMd } : {}),
+        ...(dto.difficulty !== undefined ? { difficulty: dto.difficulty } : {}),
+        ...(dto.mode !== undefined ? { mode: dto.mode } : {}),
+        ...(dto.timeLimitMs !== undefined ? { timeLimitMs: dto.timeLimitMs } : {}),
+        ...(dto.memoryLimitMb !== undefined ? { memoryLimitMb: dto.memoryLimitMb } : {}),
+        ...(dto.isPublished !== undefined ? { isPublished: dto.isPublished } : {}),
+        ...(dto.visibility !== undefined ? { visibility: dto.visibility } : {}),
+        ...(dto.supportedLanguages !== undefined
+          ? { supportedLanguages: dto.supportedLanguages }
+          : {}),
+        ...(dto.maxTestCases !== undefined ? { maxTestCases: dto.maxTestCases } : {}),
+        slug,
+      };
+
+      const updatedProblem = await tx.problem.update({
+        where: { id: problemId },
+        data,
+      });
+
+      if (dto.testCases) {
+        await tx.testCase.deleteMany({ where: { problemId } });
+        if (dto.testCases.length > 0) {
+          await tx.testCase.createMany({
+            data: dto.testCases.map((tc, index) => ({
+              problemId,
+              orderIndex: index + 1,
+              input: tc.input,
+              expectedOutput: tc.expectedOutput,
+              isHidden: tc.isHidden ?? false,
+              weight: tc.weight ?? 1,
+            })),
+          });
+        }
+      }
+
+      return updatedProblem;
+    });
+  }
+
+  async delete(problemId: string) {
+    await this.findById(problemId);
+    return this.prisma.$transaction(async (tx) => {
+      await tx.contestProblem.deleteMany({ where: { problemId } });
+      return tx.problem.delete({ where: { id: problemId } });
+    });
+  }
+
+  private async buildUniqueSlug(title: string): Promise<string> {
+    const baseSlug = slugify(title);
+    let slug = baseSlug;
+    let counter = 1;
+    while (await this.prisma.problem.findUnique({ where: { slug } })) {
+      slug = `${baseSlug}-${counter++}`;
+    }
+    return slug;
+  }
+}
+
+function slugify(value: string): string {
+  const raw = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return raw.length > 0 ? raw : `problem-${randomBytes(4).toString('hex')}`;
+}

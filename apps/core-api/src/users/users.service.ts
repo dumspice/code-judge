@@ -111,20 +111,46 @@ export class UsersService {
   }
 
   async searchByEmail(q: string) {
-  return this.prisma.user.findMany({
-    where: {
-      email: {
-        contains: q,
-        mode: 'insensitive',
+    const query = q.trim();
+
+    if (!query) return [];
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        OR: [
+          {
+            name: {
+              contains: query,
+              mode: 'insensitive',
+            },
+          },
+          {
+            email: {
+              startsWith: query,
+              mode: 'insensitive',
+            },
+          },
+        ],
       },
-    },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      image: true,
-    },
-    take: 10,
-  });
-}
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        image: true,
+      },
+      take: 10,
+    });
+
+    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query);
+    if (isEmail && !users.find(u => u.email === query)) {
+      users.push({
+        id: `external-${query}`,
+        email: query,
+        name: query,
+        image: null,
+      });
+    }
+
+    return users;
+  }
 }

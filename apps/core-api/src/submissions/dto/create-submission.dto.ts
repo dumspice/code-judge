@@ -12,10 +12,20 @@ export class CreateSubmissionDto {
   @IsNotEmpty()
   problemId!: string;
 
+  @ApiPropertyOptional({ example: 'clxxxxxxxxxxxxxxxxxxxxxxxx' })
+  @IsOptional()
+  @IsString()
+  contestId?: string;
+
   @ApiProperty({ enum: ['ALGO', 'PROJECT'], example: 'ALGO' })
   @IsString()
   @IsIn(['ALGO', 'PROJECT'])
   mode!: 'ALGO' | 'PROJECT';
+
+  @ApiPropertyOptional({ example: 'python' })
+  @IsOptional()
+  @IsString()
+  language?: string;
 
   @ApiPropertyOptional({ example: 'print("hi")' })
   @IsOptional()
@@ -30,4 +40,3 @@ export class CreateSubmissionDto {
   @IsString()
   sourceCodeObjectKey?: string;
 }
-
