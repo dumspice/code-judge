@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ProblemMode } from '@prisma/client';
+import { ProblemMode, Prisma, Role } from '@prisma/client';
 import { EnvKeys } from '../common';
+import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { buildAiGeneratedTestcaseObjectKeys } from '../storage/storage-key.builder';
 import { StorageService } from '../storage/storage.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -161,12 +162,12 @@ export class AiTestcaseService {
     };
   }
 
-  async generateAndSave(input: GenerateAndSaveAiTestcaseDto): Promise<GenerateAndSaveResult> {
-    // Read a consistent problem snapshot first; this is the source of truth for prompt context.
+  async generateAndSave(input: GenerateAndSaveAiTestcaseDto, user: RequestUser): Promise<GenerateAndSaveResult> {
     const problem = await this.prisma.problem.findUnique({
       where: { id: input.problemId },
       select: {
         id: true,
+        creatorId: true,
         title: true,
         mode: true,
         difficulty: true,
@@ -180,15 +181,15 @@ export class AiTestcaseService {
     });
 
     if (!problem) {
-      throw new Error('Problem not found');
+      throw new NotFoundException('Problem not found');
     }
+    this.assertUserCanManageProblemAi(problem.creatorId, user);
 
     const promptVersion = this.config.get<string>(EnvKeys.AI_PROMPT_VERSION) ?? 'ai-testcase-v1';
-    // Create job early so upload/bind and auditing always have a stable job id.
     const createdJob = await this.prisma.aiGenerationJob.create({
       data: {
         problemId: problem.id,
-        createdById: input.createdById,
+        createdById: user.userId,
         status: 'PENDING',
         promptVersion,
       },
@@ -320,15 +321,29 @@ export class AiTestcaseService {
     };
   }
 
-  async listProblemDocuments(problemId: string) {
-    // Documents are attached to generation jobs via storage/bind-object-key.
-    const jobs = await this.prisma.aiGenerationJob.findMany({
-      where: {
-        problemId,
-        inputDocObjectKey: {
-          not: null,
-        },
+  async listProblemDocuments(problemId: string, user: RequestUser) {
+    const problem = await this.prisma.problem.findUnique({
+      where: { id: problemId },
+      select: { id: true, creatorId: true },
+    });
+    if (!problem) {
+      throw new NotFoundException('Problem not found');
+    }
+
+    const baseWhere: Prisma.AiGenerationJobWhereInput = {
+      problemId,
+      inputDocObjectKey: {
+        not: null,
       },
+    };
+
+    const where: Prisma.AiGenerationJobWhereInput =
+      user.role === Role.ADMIN || problem.creatorId === user.userId
+        ? baseWhere
+        : { ...baseWhere, createdById: user.userId };
+
+    const jobs = await this.prisma.aiGenerationJob.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
@@ -357,11 +372,13 @@ export class AiTestcaseService {
     };
   }
 
-  async getJobDocumentDownload(jobId: string, expiresInSeconds?: number) {
+  async getJobDocumentDownload(jobId: string, user: RequestUser, expiresInSeconds?: number) {
     const job = await this.prisma.aiGenerationJob.findUnique({
       where: { id: jobId },
       select: {
         id: true,
+        problemId: true,
+        createdById: true,
         inputDocObjectKey: true,
         inputDocUrl: true,
         inputDocFileName: true,
@@ -371,13 +388,29 @@ export class AiTestcaseService {
     });
 
     if (!job) {
-      throw new Error('AI generation job not found');
-    }
-    if (!job.inputDocObjectKey) {
-      throw new Error('No input document has been attached to this job');
+      throw new NotFoundException('AI generation job not found');
     }
 
-    // Download URLs are temporary to avoid exposing permanent direct access.
+    const problem = await this.prisma.problem.findUnique({
+      where: { id: job.problemId },
+      select: { creatorId: true },
+    });
+    if (!problem) {
+      throw new NotFoundException('Problem not found');
+    }
+
+    const allowed =
+      user.role === Role.ADMIN ||
+      job.createdById === user.userId ||
+      problem.creatorId === user.userId;
+    if (!allowed) {
+      throw new ForbiddenException('Không có quyền tải tài liệu job này');
+    }
+
+    if (!job.inputDocObjectKey) {
+      throw new NotFoundException('No input document has been attached to this job');
+    }
+
     const downloadUrl = await this.storage.createPresignedDownloadUrl(
       job.inputDocObjectKey,
       expiresInSeconds ?? 900,
@@ -393,6 +426,14 @@ export class AiTestcaseService {
       downloadUrl,
       expiresInSeconds: expiresInSeconds ?? 900,
     };
+  }
+
+  private assertUserCanManageProblemAi(creatorId: string | null, user: RequestUser): void {
+    if (user.role === Role.ADMIN) return;
+    if (creatorId === null || creatorId === user.userId) return;
+    throw new ForbiddenException(
+      'Chỉ chủ đề (creator) hoặc admin mới có thể chạy AI generate-and-save trên problem này',
+    );
   }
 
   private async generateWithRetry(

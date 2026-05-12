@@ -17,3 +17,4 @@ export * from './utils/sleep';
 export * from './utils/required-env';
 export * from './utils/password';
 export * from './utils/paged-list';
+export * from './utils/excel-report';

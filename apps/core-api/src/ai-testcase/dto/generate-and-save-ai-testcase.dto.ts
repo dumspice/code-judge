@@ -7,10 +7,15 @@ export class GenerateAndSaveAiTestcaseDto {
   @MaxLength(100)
   problemId!: string;
 
-  @ApiProperty({ example: 'creator-user-id-uuid' })
+  @ApiPropertyOptional({
+    description:
+      'Đã bỏ tin cậy field này — server luôn dùng userId từ JWT. Giữ optional để tương thích client cũ.',
+    deprecated: true,
+  })
+  @IsOptional()
   @IsString()
   @MaxLength(100)
-  createdById!: string;
+  createdById?: string;
 
   @ApiPropertyOptional({ example: 8, description: 'Override max testcase generation for this run' })
   @IsOptional()

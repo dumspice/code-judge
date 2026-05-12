@@ -1,7 +1,9 @@
 import { BadRequestException, Body, Controller, Get, Post, Query } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Public } from '../common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../common';
+import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageAccessService } from './storage-access.service';
 import {
   buildAiGeneratedTestcaseObjectKeys,
   buildAiInputObjectKey,
@@ -41,25 +43,25 @@ interface BindObjectKeyBody {
   resourceKind: 'ai-input' | 'export' | 'golden-solution';
   recordId: string;
   objectKey: string;
-  // Optional metadata used for document listing in feature modules (for example ai-testcase).
   fileName?: string;
   contentType?: string;
   sizeBytes?: number;
 }
 
 @ApiTags('storage')
+@ApiBearerAuth('JWT')
 @Controller('storage')
 export class StorageController {
   constructor(
     private readonly storage: StorageService,
     private readonly prisma: PrismaService,
+    private readonly storageAccess: StorageAccessService,
   ) {}
 
-  @Public()
   @Post('presign/upload')
-  @ApiOperation({ summary: 'Tạo presigned PUT URL cho MinIO/S3' })
-  async presignUpload(@Body() body: PresignRequestBody) {
-    // The server controls key format to keep object namespace predictable and safe.
+  @ApiOperation({ summary: 'Tạo presigned PUT URL cho MinIO/S3 (yêu cầu JWT + đúng chủ sở hữu resource)' })
+  async presignUpload(@CurrentUser() user: RequestUser, @Body() body: PresignRequestBody) {
+    await this.storageAccess.assertPresignUploadAllowed(body, user);
     const objectKey = this.resolveObjectKey(body);
     const uploadUrl = await this.storage.createPresignedUploadUrl({
       objectKey,
@@ -72,34 +74,32 @@ export class StorageController {
     };
   }
 
-  @Public()
   @Get('presign/download')
-  @ApiOperation({ summary: 'Tạo presigned GET URL từ object key' })
+  @ApiOperation({ summary: 'Tạo presigned GET URL từ object key (yêu cầu JWT + quyền đọc)' })
   async presignDownload(
+    @CurrentUser() user: RequestUser,
     @Query('objectKey') objectKey?: string,
     @Query('expiresInSeconds') expiresInSeconds?: string,
   ) {
     if (!objectKey) {
       throw new BadRequestException('objectKey is required');
     }
+    await this.storageAccess.assertPresignDownloadAllowed(objectKey, user);
     const ttl = expiresInSeconds ? Number(expiresInSeconds) : 900;
-    // Download URL is short-lived and should be requested on demand.
     const downloadUrl = await this.storage.createPresignedDownloadUrl(objectKey, ttl);
     return { objectKey, downloadUrl };
   }
 
-  @Public()
   @Post('bind-object-key')
-  @ApiOperation({ summary: 'Gắn object key vào record nghiệp vụ (AI input / export / golden)' })
-  async bindObjectKey(@Body() body: BindObjectKeyBody) {
+  @ApiOperation({ summary: 'Gắn object key vào record (AI input / export / golden) — JWT + chủ record' })
+  async bindObjectKey(@CurrentUser() user: RequestUser, @Body() body: BindObjectKeyBody) {
     if (!body.recordId || !body.objectKey) {
       throw new BadRequestException('recordId and objectKey are required');
     }
+    await this.storageAccess.assertBindObjectKeyAllowed(body, user);
 
     switch (body.resourceKind) {
       case 'ai-input':
-        // Persist both object key and lightweight file metadata
-        // so consumers can show document list without reading MinIO directly.
         return this.prisma.aiGenerationJob.update({
           where: { id: body.recordId },
           data: {
@@ -111,7 +111,6 @@ export class StorageController {
           },
         });
       case 'export':
-        // Persist object key and resolved URL for report retrieval.
         return this.prisma.reportExport.update({
           where: { id: body.recordId },
           data: {
@@ -120,7 +119,6 @@ export class StorageController {
           },
         });
       case 'golden-solution':
-        // Golden source may be stored externally to avoid large DB text payloads.
         return this.prisma.goldenSolution.update({
           where: { id: body.recordId },
           data: {
@@ -133,7 +131,6 @@ export class StorageController {
   }
 
   private resolveObjectKey(body: PresignRequestBody): string {
-    // Keep all object-key naming centralized to enforce consistent bucket taxonomy.
     switch (body.resourceKind) {
       case 'avatar':
         return buildAvatarObjectKey(body.userId ?? 'unknown', body.extension ?? 'bin');
