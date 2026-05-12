@@ -49,16 +49,14 @@ export class ProblemsController {
   }
 
   @ApiBearerAuth('JWT')
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin tạo problem mới' })
+  @ApiOperation({ summary: 'Owner tạo problem mới' })
   @Post()
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateProblemDto) {
     return this.problemsService.create(dto, user.userId);
   }
 
   @ApiBearerAuth('JWT')
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin cập nhật problem' })
+  @ApiOperation({ summary: 'Owner cập nhật problem' })
   @Patch(':id')
   async update(
     @Param('id') id: string,
@@ -69,10 +67,9 @@ export class ProblemsController {
   }
 
   @ApiBearerAuth('JWT')
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin xóa problem' })
+  @ApiOperation({ summary: 'Owner xóa problem' })
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return this.problemsService.delete(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.problemsService.delete(id, user.userId);
   }
 }

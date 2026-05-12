@@ -1,7 +1,6 @@
 import { Metadata } from 'next';
 import { getPublicCoreUrl } from '@/lib/public-config';
 import { cookies } from 'next/headers';
-import { setAccessToken } from '@/services/auth.apis';
 import ClassworkList from '@/components/dashboard/class-detail/ClassworkList';
 import { Problem, problemsApi } from '@/services/problem.apis';
 
@@ -14,28 +13,13 @@ export default async function ClassworkPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const BASE_URL = getPublicCoreUrl();
 
-  // Refresh token on server side
-  try {
-    const cookieStore = await cookies();
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: cookieStore.toString(),
-      },
-      credentials: 'include',
-    });
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore.toString();
 
-    if (res.ok) {
-      const data = await res.json();
-      const result = data.result ?? data;
-      setAccessToken(result.accessToken);
-    }
-  } catch (error) {
-    console.warn('Failed to refresh token on server:', error);
-  }
-
-  const problemsResult = await problemsApi.findAll({ limit: 50 });
+  const problemsResult = await problemsApi.findAll({ 
+    limit: 50,
+    headers: { Cookie: cookieHeader }
+  });
   const initialProblems = problemsResult.items as Problem[];
 
   return (
