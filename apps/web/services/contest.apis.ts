@@ -1,4 +1,4 @@
-import { apiFetch } from './auth.apis';
+import { apiFetch } from './api-client';
 import { Problem } from './problem.apis';
 
 export interface Contest {
