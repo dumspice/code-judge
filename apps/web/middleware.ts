@@ -23,37 +23,48 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get('accessToken')?.value
   const { pathname } = request.nextUrl
 
-  // 1. Xử lý khi CHƯA đăng nhập
+  // CHƯA LOGIN
   if (!token) {
-    // Cho phép truy cập trang chủ (/), login, register
-    if (pathname === '/' || pathname === '/login' || pathname === '/register') {
+    // Public routes
+    if (
+      pathname === '/' ||
+      pathname === '/login' ||
+      pathname === '/register'
+    ) {
       return NextResponse.next()
     }
-    // Các route khác tự động redirect về /login
+
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // 2. Giải mã Token lấy thông tin Role
+  // ĐÃ LOGIN
   const decodedToken = decodeJwtPayload(token)
-  const userRole = decodedToken?.role || 'CLIENT' 
+  const userRole = decodedToken?.role || 'CLIENT'
 
-  // 3. Xử lý khi ĐÃ đăng nhập mà cố vào trang Auth
-  if (pathname === '/login' || pathname === '/register') {
-    // Phân luồng theo Role
+  // NEW:
+  // Nếu user đã login mà vào "/" -> redirect luôn
+  if (pathname === '/') {
     if (userRole === 'ADMIN') {
       return NextResponse.redirect(new URL('/admin/users', request.url))
-    } else {
-      return NextResponse.redirect(new URL('/dashboard', request.url))
     }
-  }
 
-  // 4. Bảo vệ route Admin (Ngăn chặn Client truy cập trái phép)
-  if (pathname.startsWith('/admin') && userRole !== 'ADMIN') {
-    // Trả về dashboard hoặc trang 403
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  // Các route khác cho phép truy cập bình thường
+  // Nếu đã login mà cố vào login/register
+  if (pathname === '/login' || pathname === '/register') {
+    if (userRole === 'ADMIN') {
+      return NextResponse.redirect(new URL('/admin/users', request.url))
+    }
+
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
+  // Protect admin routes
+  if (pathname.startsWith('/admin') && userRole !== 'ADMIN') {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
+
   return NextResponse.next()
 }
 
