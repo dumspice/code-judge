@@ -71,7 +71,7 @@ export default function ClassworkList({
             placeholder="Search assignments..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="border-0 focus-visible:ring-0 shadow-none h-auto p-0 text-sm"
+            className="border-0 focus-visible:ring-0 shadow-none h-auto p-1 text-sm"
           />
         </div>
       </div>
