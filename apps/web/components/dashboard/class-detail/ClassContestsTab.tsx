@@ -94,10 +94,15 @@ export default function ClassContestsTab({ classId }: { classId: string }) {
 
   const handleSave = async () => {
     try {
+      const payload = {
+        ...formData,
+        classRoomId: classId,
+      };
+
       if (editingContestId) {
-        await contestsApi.update(editingContestId, formData as UpdateContestDto);
+        await contestsApi.update(editingContestId, payload as UpdateContestDto);
       } else {
-        await contestsApi.create(formData);
+        await contestsApi.create(payload as CreateContestDto);
       }
       resetForm();
       setShowCreateForm(false);

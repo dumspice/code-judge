@@ -25,6 +25,7 @@ export interface Contest {
 }
 
 export interface CreateContestDto {
+  classRoomId?: string;
   title: string;
   description?: string;
   startAt: string;
@@ -42,6 +43,7 @@ export interface CreateContestDto {
 }
 
 export interface UpdateContestDto {
+  classRoomId?: string;
   title?: string;
   description?: string;
   startAt?: string;
