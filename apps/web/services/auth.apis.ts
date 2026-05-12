@@ -12,53 +12,35 @@ import { getPublicCoreUrl } from '@/lib/public-config';
 const BASE_URL = getPublicCoreUrl();
 
 // ---------------------------------------------------------------------------
-// In-memory token store (not persisted across page refresh — refreshToken
-// in localStorage will recover it).
+// Token storage is now strictly cookie-based (HttpOnly).
 // ---------------------------------------------------------------------------
-
-let accessToken: string | null = null;
-
-export function setAccessToken(token: string | null) {
-  accessToken = token;
-}
-
-export function getAccessToken(): string | null {
-  return accessToken;
-}
-
-/** Clear all auth state (logout). */
-export function clearTokens() {
-  accessToken = null;
-}
 
 // Refresh logic
 
 let refreshPromise: Promise<boolean> | null = null;
 
-async function tryRefresh(): Promise<boolean> {
+async function tryRefresh(headers?: Headers): Promise<boolean> {
   // Deduplicate concurrent refresh attempts
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
     try {
+      const refreshHeaders = new Headers({ 'Content-Type': 'application/json' });
+      if (headers?.has('Cookie')) {
+        refreshHeaders.set('Cookie', headers.get('Cookie')!);
+      }
+
       const res = await fetch(`${BASE_URL}/auth/refresh`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: refreshHeaders,
         credentials: 'include',
       });
 
       if (!res.ok) {
-        clearTokens();
         return false;
       }
-
-      const data = await res.json();
-      // The response is wrapped in envelope: { result: { accessToken, refreshToken } }
-      const result = data.result ?? data;
-      setAccessToken(result.accessToken);
       return true;
     } catch {
-      clearTokens();
       return false;
     } finally {
       refreshPromise = null;
@@ -100,9 +82,6 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
     if (!headers.has('Content-Type') && options.body) {
       headers.set('Content-Type', 'application/json');
     }
-    if (accessToken) {
-      headers.set('Authorization', `Bearer ${accessToken}`);
-    }
 
     return fetch(`${BASE_URL}${path}`, {
       ...options,
@@ -116,7 +95,7 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
 
   // Auto refresh on 401
   if (res.status === 401) {
-    const refreshed = await tryRefresh();
+    const refreshed = await tryRefresh(new Headers(options.headers));
     if (refreshed) {
       res = await doFetch();
     }
@@ -137,9 +116,8 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
 
 // Auth-specific API calls
 
-export interface AuthTokens {
-  accessToken: string;
-  tokenType: string;
+export interface AuthSuccess {
+  success: boolean;
 }
 
 export interface UserProfile {
@@ -155,22 +133,18 @@ export interface UserProfile {
 }
 
 export const authApi = {
-  async register(name: string, email: string, password: string): Promise<AuthTokens> {
-    const tokens = await apiFetch<AuthTokens>('/auth/register', {
+  async register(name: string, email: string, password: string): Promise<AuthSuccess> {
+    return apiFetch<AuthSuccess>('/auth/register', {
       method: 'POST',
       body: { name, email, password },
     });
-    setAccessToken(tokens.accessToken);
-    return tokens;
   },
 
-  async login(email: string, password: string): Promise<AuthTokens> {
-    const tokens = await apiFetch<AuthTokens>('/auth/login', {
+  async login(email: string, password: string): Promise<AuthSuccess> {
+    return apiFetch<AuthSuccess>('/auth/login', {
       method: 'POST',
       body: { email, password },
     });
-    setAccessToken(tokens.accessToken);
-    return tokens;
   },
 
   async me(): Promise<UserProfile> {
@@ -181,8 +155,7 @@ export const authApi = {
     try {
       await apiFetch('/auth/logout', { method: 'POST' });
     } finally {
-      clearTokens();
-      setAccessToken(null);
+      // Cookies are cleared by the backend
     }
   },
 

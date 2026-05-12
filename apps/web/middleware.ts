@@ -20,7 +20,7 @@ function decodeJwtPayload(token: string) {
 }
 
 export function middleware(request: NextRequest) {
-  const token = request.cookies.get('accessToken')?.value
+  const token = request.cookies.get('refreshToken')?.value
   const { pathname } = request.nextUrl
 
   // CHƯA LOGIN

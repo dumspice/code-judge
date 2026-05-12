@@ -64,7 +64,7 @@ export class AuthController {
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.auth.register(dto.name, dto.email, dto.password);
     this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-    return { accessToken: tokens.accessToken, tokenType: tokens.tokenType };
+    return { success: true };
   }
 
   @Public()
@@ -73,7 +73,7 @@ export class AuthController {
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.auth.login(dto.email, dto.password);
     this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-    return { accessToken: tokens.accessToken, tokenType: tokens.tokenType };
+    return { success: true };
   }
 
   // ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ export class AuthController {
     }
     const tokens = await this.auth.refresh(refreshToken);
     this.setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-    return { accessToken: tokens.accessToken, tokenType: tokens.tokenType };
+    return { success: true };
   }
 
   // ---------------------------------------------------------------------------

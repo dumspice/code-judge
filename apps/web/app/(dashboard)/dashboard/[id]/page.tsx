@@ -2,7 +2,6 @@ import { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { Button } from '@/components/ui/button';
 import { getClassroomDetail } from '@/services/classroom.apis';
-import { setAccessToken } from '@/services/auth.apis';
 import { getPublicCoreUrl } from '@/lib/public-config';
 import { Copy } from 'lucide-react';
 import StreamPost from '@/components/dashboard/class-detail/stream-post';
@@ -21,31 +20,18 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
   const BASE_URL = getPublicCoreUrl();
   const bannerBg = getClassroomBannerColor(id);
 
-  const contests = (await contestsApi.findAll({ limit: 3 })).items as Contest[];
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore.toString();
 
-  // Refresh token on server side
-  try {
-    const cookieStore = await cookies();
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: cookieStore.toString(),
-      },
-      credentials: 'include',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const result = data.result ?? data;
-      setAccessToken(result.accessToken);
-    }
-  } catch (error) {
-    console.warn('Failed to refresh token on server:', error);
-  }
+  const contests = (await contestsApi.findAll({ 
+    limit: 3, 
+    headers: { Cookie: cookieHeader } 
+  })).items as Contest[];
 
   // Fetch classroom details
-  const classroom = await getClassroomDetail(id);
+  const classroom = await getClassroomDetail(id, {
+    headers: { Cookie: cookieHeader }
+  });
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
