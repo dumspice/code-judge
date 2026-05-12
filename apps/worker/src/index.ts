@@ -8,7 +8,13 @@ import { JUDGE_SUBMISSIONS_QUEUE_NAME } from './lib/constants';
 import { getOptionalEnv, getRequiredEnv } from './lib/env';
 import { createWorkerLogger } from './lib/logger';
 import { sleep } from './lib/sleep';
-import { getObjectString, putArtifactObject } from './lib/storage';
+import { putArtifactObject, getObjectString } from './lib/storage';
+import { createHash } from 'crypto';
+import fs from 'fs/promises';
+import path from 'path';
+import { execa } from 'execa';
+import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 
 const log = createWorkerLogger('worker');
 
@@ -38,6 +44,10 @@ const lambdaClient = lambdaFunctionName
       },
     })
   : null;
+const judge0Url = getOptionalEnv(process.env.JUDGE0_URL, 'http://localhost:2358');
+
+// Cache for compiled binaries: hash(lang + code) -> { binary: Buffer, fileName: string }
+const compilationCache = new Map<string, { binary: Buffer; fileName: string }>();
 
 function tryParseJson(value: unknown) {
   if (typeof value !== 'string') {
@@ -51,22 +61,32 @@ function tryParseJson(value: unknown) {
   }
 }
 
-function normalizeLanguage(language: string) {
+function getJudge0LanguageId(language: string): number {
   const normalized = language?.trim().toUpperCase();
   switch (normalized) {
     case 'PYTHON':
-      return 'python';
+      return 71;
     case 'JAVASCRIPT':
     case 'JS':
-      return 'javascript';
+      return 63;
     case 'JAVA':
-      return 'java';
+      return 62;
     case 'CPP':
     case 'C++':
-      return 'cpp';
+      return 53;
     default:
-      return language?.toLowerCase() ?? language;
+      return 71; // Default to Python
   }
+}
+
+function normalizeOutput(out: string): string {
+  if (!out) return '';
+  return out
+    .replace(/\r\n/g, '\n') // Normalize line endings
+    .split('\n')
+    .map((line) => line.trimEnd()) // Trim each line
+    .join('\n')
+    .trim(); // Trim overall output
 }
 
 function unwrapLambdaResult(payload: unknown): unknown {
@@ -163,7 +183,7 @@ async function processSubmission(job: any) {
 
   job.updateProgress({ pct: 10, log: 'Starting judge process.' });
 
-  console.log('existingSubmission', existingSubmission);
+  
 
   let sourceCode = existingSubmission.sourceCode;
   if (!sourceCode && existingSubmission.sourceCodeObjectKey) {
@@ -189,22 +209,12 @@ async function processSubmission(job: any) {
     }
   }
 
-  if (sourceCode === '') {
-    const errorMessage = 'Loaded source code is empty';
-    await prisma.submission.update({
-      where: { id: submissionId },
-      data: {
-        status: SubmissionStatus.Error,
-        error: errorMessage,
-        logs: `${existingSubmission.logs ?? ''}\n${errorMessage}`,
-      },
-    });
-    throw new Error(errorMessage);
-  }
+  // --- Debug Logs ---
+  console.log(`[worker] Processing Submission: ${submissionId}`);
+  console.log(`[worker] Language: ${existingSubmission.language}, Problem: ${existingSubmission.problemId}`);
 
   if (!sourceCode) {
-    const errorMessage =
-      'Submission source code is missing and no sourceCodeObjectKey is available';
+    const errorMessage = 'Submission source code is missing or empty';
     await prisma.submission.update({
       where: { id: submissionId },
       data: {
@@ -216,7 +226,227 @@ async function processSubmission(job: any) {
     throw new Error(errorMessage);
   }
 
-  if (lambdaClient && lambdaFunctionName) {
+  // --- Judge0 Engine ---
+  if (judge0Url) {
+    const testCaseResults = [];
+    let totalScore = 0;
+    let totalWeight = 0;
+    let maxTime = 0;
+    let maxMemory = 0;
+    let combinedLogs = '';
+    let finalStatus: SubmissionStatus = SubmissionStatus.Accepted;
+    let stopEarly = false;
+
+    const languageId = getJudge0LanguageId(existingSubmission.language as string);
+    job.updateProgress({ pct: 20, log: `Judging with Judge0 (ID: ${languageId})...` });
+
+    try {
+      for (let i = 0; i < problem.testCases.length; i++) {
+      const testCase = problem.testCases[i];
+      totalWeight += testCase.weight;
+
+      if (stopEarly) {
+        testCaseResults.push({
+          testCaseId: testCase.id,
+          status: 'Skipped',
+          runtimeMs: 0,
+          memoryMb: 0,
+          output: '',
+          error: null,
+          passed: false,
+        });
+        continue;
+      }
+
+      try {
+        const encodedCode = Buffer.from(sourceCode).toString('base64');
+        const encodedInput = Buffer.from(testCase.input || '').toString('base64');
+        const encodedExpected = Buffer.from(testCase.expectedOutput || '').toString('base64');
+
+        // 1. Submit
+        const submitResponse = await axios.post(`${judge0Url}/submissions?base64_encoded=true`, {
+          source_code: encodedCode,
+          language_id: languageId,
+          stdin: encodedInput,
+          expected_output: encodedExpected,
+          cpu_time_limit: problem.timeLimitMs / 1000,
+          memory_limit: problem.memoryLimitMb * 1024,
+        }, { timeout: 10000 });
+
+        const { token } = submitResponse.data;
+
+        // 2. Poll
+        let result: any = null;
+        let pollRetries = 30;
+        while (pollRetries > 0) {
+          const pollResponse = await axios.get(`${judge0Url}/submissions/${token}?base64_encoded=true`, { timeout: 5000 });
+          if (pollResponse.data.status.id > 2) {
+            result = pollResponse.data;
+            break;
+          }
+          await sleep(1000);
+          pollRetries--;
+        }
+
+        if (!result) throw new Error(`Judge0 result timeout (token: ${token})`);
+
+        // 3. Process Result
+        const stdout = result.stdout ? Buffer.from(result.stdout, 'base64').toString('utf-8') : '';
+        const stderr = result.stderr ? Buffer.from(result.stderr, 'base64').toString('utf-8') : '';
+        const compileOut = result.compile_output ? Buffer.from(result.compile_output, 'base64').toString('utf-8') : '';
+        
+        const runtimeMs = Math.round((result.time || 0) * 1000);
+        const memoryMb = Math.round((result.memory || 0) / 1024);
+        maxTime = Math.max(maxTime, runtimeMs);
+        maxMemory = Math.max(maxMemory, memoryMb);
+
+        const normalizedActual = normalizeOutput(stdout);
+        const normalizedExpected = normalizeOutput(testCase.expectedOutput || '');
+        const isMatch = normalizedActual === normalizedExpected;
+
+        let caseStatus: string = 'RuntimeError';
+        const sId = result.status?.id;
+
+        if (sId === 3) caseStatus = 'Accepted';
+        else if (sId === 4) caseStatus = 'Wrong';
+        else if (sId === 5) caseStatus = 'TimeLimitExceeded';
+        else if (sId === 6) caseStatus = 'CompilationError';
+        else if (sId >= 7 && sId <= 12) caseStatus = 'RuntimeError';
+        else if (sId === 13) {
+          // Internal error (usually 'Cleanup failed' on Windows)
+          // Heuristic:
+          // 1. Lỗi biên dịch: Không thấy file thực thi (exit 127)
+          // 2. Lỗi thực thi: Có tín hiệu lỗi (exit > 128 và không phải 124 timeout)
+          // 3. Qu quá thời gian: exit 124 HOẶC (đạt ngưỡng time + không output + không có exit signal)
+          const isTimeLimitReached = result.time && (parseFloat(result.time) * 1000 >= problem.timeLimitMs - 50);
+          const hasNoOutput = !result.stdout || result.stdout.length === 0;
+          const isBinaryMissing = result.exit_code === 127 || (stderr && stderr.includes('No such file or directory'));
+          const isRuntimeSignal = (result.exit_code > 128 && result.exit_code !== 124) || 
+                                  (stderr && (stderr.includes('Floating point exception') || 
+                                             stderr.includes('Segmentation fault') || 
+                                             stderr.includes('Aborted')));
+
+          if (isBinaryMissing) {
+            caseStatus = 'CompilationError';
+          } else if (isRuntimeSignal) {
+            caseStatus = 'RuntimeError';
+          } else if (result.exit_code === 124 || (isTimeLimitReached && hasNoOutput)) {
+            caseStatus = 'TimeLimitExceeded';
+          } else {
+            caseStatus = isMatch ? 'Accepted' : 'Wrong';
+          }
+        }
+        else caseStatus = 'RuntimeError';
+        
+
+        // Override if output matches (Crucial for stubs/custom runs)
+        if (isMatch && (caseStatus === 'Wrong' || caseStatus === 'RuntimeError')) {
+          caseStatus = 'Accepted';
+        }
+
+        const passed = caseStatus === 'Accepted';
+        if (passed) totalScore += testCase.weight;
+
+        testCaseResults.push({
+          testCaseId: testCase.id,
+          status: caseStatus,
+          runtimeMs,
+          memoryMb,
+          output: stdout,
+          error: stderr || null,
+          passed,
+        });
+
+        // TỐI ƯU: Nếu bị TLE, dừng ngay để tiết kiệm tài nguyên
+        if (caseStatus === 'TimeLimitExceeded') {
+          finalStatus = SubmissionStatus.TimeLimitExceeded;
+          break;
+        }
+
+        // Determine Overall Status Priority
+        if (caseStatus === 'CompilationError') {
+          finalStatus = SubmissionStatus.CompilationError;
+          combinedLogs += `Compilation Error:\n${compileOut}\n`;
+          stopEarly = true;
+        } else if (!passed && finalStatus === SubmissionStatus.Accepted) {
+          if (caseStatus === 'TimeLimitExceeded') finalStatus = SubmissionStatus.TimeLimitExceeded;
+          else if (caseStatus === 'MemoryLimitExceeded') finalStatus = SubmissionStatus.MemoryLimitExceeded;
+          else if (caseStatus === 'Wrong') finalStatus = SubmissionStatus.Wrong;
+          else if (caseStatus === 'RuntimeError') finalStatus = SubmissionStatus.RuntimeError;
+          else finalStatus = SubmissionStatus.Error;
+        }
+
+        if (passed) {
+          combinedLogs += `Test case ${i + 1}: PASSED (${runtimeMs}ms, ${memoryMb}MB)\n`;
+        } else if (caseStatus !== 'CompilationError') {
+          combinedLogs += `Test case ${i + 1}: ${caseStatus.toUpperCase()}\n`;
+          combinedLogs += `--- Input ---\n${testCase.input.substring(0, 100)}\n`;
+          combinedLogs += `--- Expected Output ---\n${testCase.expectedOutput.trim()}\n`;
+          combinedLogs += `--- Actual Output ---\n${stdout.trim()}\n`;
+          if (stderr) combinedLogs += `--- Stderr ---\n${stderr.substring(0, 200)}\n`;
+          combinedLogs += `-------------------\n`;
+        }
+
+      } catch (err: any) {
+        const errMsg = err.message || 'Judge execution failed';
+        testCaseResults.push({
+          testCaseId: testCase.id,
+          status: 'Error',
+          runtimeMs: 0,
+          memoryMb: 0,
+          output: '',
+          error: errMsg,
+          passed: false,
+        });
+        if (finalStatus === SubmissionStatus.Accepted) finalStatus = SubmissionStatus.Error;
+        combinedLogs += `Test case ${i + 1}: ERROR (${errMsg})\n`;
+      }
+
+      job.updateProgress({ 
+        pct: 20 + Math.round(((i + 1) / problem.testCases.length) * 70), 
+        log: `Case ${i + 1}/${problem.testCases.length} done.` 
+      });
+    }
+
+    // Final Update
+    const finalScore = totalWeight > 0 ? Math.round((totalScore / totalWeight) * 100) : 0;
+    const logObjectKey = `submissions/${submissionId}/artifacts/judge.log`;
+    
+    await putArtifactObject(logObjectKey, combinedLogs, { submissionId, contentType: 'text/plain' });
+
+    await prisma.submission.update({
+      where: { id: submissionId },
+      data: {
+        status: finalStatus,
+        score: finalScore,
+        runtimeMs: maxTime,
+        memoryMb: maxMemory,
+        testsPassed: testCaseResults.filter(r => r.passed).length,
+        testsTotal: problem.testCases.length,
+        logs: combinedLogs,
+        caseResults: {
+          logObjectKey,
+          testCases: testCaseResults,
+        },
+      },
+    });
+
+    job.updateProgress({ pct: 100, log: `Finished: ${finalStatus} (${finalScore}%)` });
+    return { submissionId, status: finalStatus, score: finalScore };
+
+    } catch (error) {
+      log.error(`Judge0 error: ${(error as Error).message}`);
+      await prisma.submission.update({
+        where: { id: submissionId },
+        data: {
+          status: SubmissionStatus.Error,
+          error: (error as Error).message,
+          logs: `${combinedLogs}\nSystem Error: ${(error as Error).message}`,
+        },
+      });
+      throw error;
+    }
+  } else if (lambdaClient && lambdaFunctionName) {
     try {
       const testCaseResults = [];
       let totalScore = 0;
@@ -229,13 +459,13 @@ async function processSubmission(job: any) {
         userId: existingSubmission.userId,
         problemId: existingSubmission.problemId,
         contestId: existingSubmission.contestId,
-        language: normalizeLanguage(existingSubmission.language as string),
+        language: (existingSubmission.language as string).toLowerCase(),
         code: sourceCode,
         sourceCodeObjectKey: existingSubmission.sourceCodeObjectKey,
         timeLimit: problem.timeLimitMs,
         memoryLimitMb: problem.memoryLimitMb,
         bucket: getOptionalEnv(process.env.MINIO_BUCKET, 'codejudge'),
-        testCases: problem.testCases.map((testCase) => ({
+        testCases: problem.testCases.map((testCase: any) => ({
           id: testCase.id,
           input: testCase.input,
           expectedOutput: testCase.expectedOutput,
@@ -337,6 +567,10 @@ async function processSubmission(job: any) {
       const updateData: any = {
         status: finalStatus,
         score: finalScore,
+        runtimeMs: testCaseResults.reduce((max, r) => Math.max(max, r.runtimeMs || 0), 0),
+        memoryMb: testCaseResults.reduce((max, r) => Math.max(max, r.memoryMb || 0), 0),
+        testsPassed: testCaseResults.filter(r => r.passed).length,
+        testsTotal: problem.testCases.length,
         logs,
         caseResults: {
           logObjectKey,
@@ -393,7 +627,7 @@ async function processSubmission(job: any) {
 async function main() {
   const worker = new Worker(JUDGE_SUBMISSIONS_QUEUE_NAME, processSubmission, {
     connection,
-    concurrency: 10, // Giảm từ 50 xuống 10 cho local testing
+    concurrency: 10,
   });
 
   worker.on('completed', (job) => {

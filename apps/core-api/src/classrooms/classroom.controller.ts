@@ -11,42 +11,42 @@ export class ClassroomController {
 
   // CREATE
   @Post()
-  create(@Body() dto: CreateClassroomDto, @CurrentUser() user) {
+  create(@Body() dto: CreateClassroomDto, @CurrentUser() user: any) {
     return this.service.create(dto, user.userId);
   }
 
   // GET MY CLASSES
   @Get('me')
-  getMyClasses(@CurrentUser() user) {
+  getMyClasses(@CurrentUser() user: any) {
     return this.service.getMyClasses(user.userId);
   }
 
   // GET DETAIL
   @Get(':id')
-  getDetail(@Param('id') id: string, @CurrentUser() user) {
+  getDetail(@Param('id') id: string, @CurrentUser() user: any) {
     return this.service.getDetail(id, user.userId);
   }
 
   @Get(':id/people')
-  getPeople(@Param('id') id: string, @CurrentUser() user) {
+  getPeople(@Param('id') id: string, @CurrentUser() user: any) {
     return this.service.getPeople(id, user.userId);
   }
 
   // UPDATE
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateClassroomDto, @CurrentUser() user) {
+  update(@Param('id') id: string, @Body() dto: UpdateClassroomDto, @CurrentUser() user: any) {
     return this.service.update(id, dto, user.userId);
   }
 
   // DELETE
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user) {
+  remove(@Param('id') id: string, @CurrentUser() user: any) {
     return this.service.remove(id, user.userId);
   }
 
   // JOIN
   @Post('join')
-  join(@Body() dto: JoinClassroomDto, @CurrentUser() user) {
+  join(@Body() dto: JoinClassroomDto, @CurrentUser() user: any) {
     return this.service.join(dto, user.userId);
   }
 }

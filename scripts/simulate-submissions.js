@@ -9,29 +9,18 @@
  */
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-const PROBLEM_ID = 'b76699fd-2cea-467a-bc03-5bd4dfe44775';
+const PROBLEM_ID = '95c4b03d-8913-44f8-873e-0fa265392ce1';
 const TOTAL_SUBMISSIONS = 1000;
 const CONCURRENCY = 10; // Giảm từ 50 xuống 10 để tránh rate limiting
 const LANGUAGE = 'CPP';
-const SOURCE_CODE = `#include <bits/stdc++.h>
-using namespace std;
-
+const SOURCE_CODE = `
 #include <bits/stdc++.h>
 using namespace std;
 
 int main() {
-    int n, q;
-    cin >> n >> q;
-    map<int, bool> mp;
-    for (int i = 0; i < n; i++) {
-    	int x; cin >> x;
-    	mp[x] = true;
-	}
-    for (int i = 0; i < q; i++) {
-    	int x; cin >> x;
-    	if (mp[x]) cout << "YES" << endl;
-    	else cout << "NO" << endl;
-	}
+    int a, b;
+    cin >> a >> b;
+    cout << a + b << endl;
 
     return 0;
 }
@@ -115,7 +104,7 @@ async function run() {
 
   for (let i = 0; i < TOTAL_SUBMISSIONS; i += 1) {
     // const userId = getUserId(i);
-    const userId = '1d6cc867-87dd-4197-b6cf-d1b7a986b203';
+    const userId = 'e729209b-400f-4b3a-bb3c-81ca4787df00';
     pending.push(submit(userId));
 
     if (pending.length >= CONCURRENCY) {

@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { InvitesService } from './invites.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CreateClassInviteDto } from './dto/create-class-invite.dto';
+import { User } from '@prisma/client';
 
 @Controller('invites')
 export class InvitesController {
@@ -11,13 +12,13 @@ export class InvitesController {
   inviteToClass(
     @Param('classRoomId') classRoomId: string,
     @Body() dto: CreateClassInviteDto,
-    @CurrentUser() user,
+    @CurrentUser() user: any,
   ) {
     return this.invitesService.inviteToClass(classRoomId, dto, user.userId);
   }
 
   @Get('accept')
-  acceptInvite(@Query('token') token: string, @CurrentUser() user) {
+  acceptInvite(@Query('token') token: string, @CurrentUser() user: any) {
     return this.invitesService.acceptInvite(token, user.userId);
   }
 }
