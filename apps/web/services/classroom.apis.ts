@@ -101,8 +101,8 @@ export async function getMyClassrooms(): Promise<MyClassroomItem[]> {
 }
 
 // GET CLASSROOM DETAIL
-export async function getClassroomDetail(id: string): Promise<Classroom> {
-  return apiFetch<Classroom>(`/classroom/${id}`);
+export async function getClassroomDetail(id: string, options?: RequestInit): Promise<Classroom> {
+  return apiFetch<Classroom>(`/classroom/${id}`, options);
 }
 
 // GET CLASSROOM PEOPLE

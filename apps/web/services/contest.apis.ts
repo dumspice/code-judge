@@ -61,22 +61,28 @@ export interface UpdateContestDto {
 }
 
 export const contestsApi = {
-  async findAll(query?: { search?: string; page?: number; limit?: number }): Promise<{
+  async findAll(
+    query?: { search?: string; page?: number; limit?: number },
+    options?: RequestInit,
+  ): Promise<{
     items: Contest[];
     total: number;
     page: number;
     limit: number;
   }> {
     const params = new URLSearchParams();
+
     if (query?.search) params.set('search', query.search);
     if (query?.page) params.set('page', query.page.toString());
     if (query?.limit) params.set('limit', query.limit.toString());
+
     const queryString = params.toString();
-    return apiFetch(`/contests${queryString ? `?${queryString}` : ''}`);
+
+    return apiFetch(`/contests${queryString ? `?${queryString}` : ''}`, options);
   },
 
-  async findById(id: string): Promise<Contest> {
-    return apiFetch(`/contests/${id}`);
+  async findById(id: string, options?: RequestInit): Promise<Contest> {
+    return apiFetch(`/contests/${id}`, options);
   },
 
   async create(dto: CreateContestDto): Promise<Contest> {
