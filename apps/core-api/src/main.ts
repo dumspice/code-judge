@@ -49,7 +49,6 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   // Thành công → bọc thêm envelope; không đụng `StreamableFile` / response đã gửi.
   app.useGlobalInterceptors(new TransformResponseInterceptor());
-  console.log('aaa');
 
   const swaggerOff = process.env.NODE_ENV === 'production' || process.env.SWAGGER_ENABLED === '0';
   if (!swaggerOff) {

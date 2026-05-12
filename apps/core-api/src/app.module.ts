@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { ProblemsModule } from './problems/problems.module';
 import { ContestsModule } from './contests/contests.module';
 import { ClassroomModule } from './classrooms/classroom.module';
+import { AiTestcaseModule } from './ai-testcase/ai-testcase.module';
 import { InvitesModule } from './invites/invites.module';
 import { MailModule } from './mail/mail.module';
 
@@ -22,6 +23,7 @@ import { MailModule } from './mail/mail.module';
     AuthModule,
     UsersModule,
     ClassroomModule,
+    AiTestcaseModule,
     StorageModule,
     PrismaModule,
     RealtimeModule,

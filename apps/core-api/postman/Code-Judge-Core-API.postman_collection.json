@@ -338,6 +338,39 @@
       ]
     },
     {
+      "name": "AI Testcase",
+      "item": [
+        {
+          "name": "Quick generate testcase (paste statement)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Tong hai so nguyen\",\n  \"statement\": \"Cho hai so nguyen a, b tren mot dong. Hay in ra tong cua chung.\\nInput: a b\\nOutput: a+b\",\n  \"ioSpec\": \"Input gom 2 so nguyen cach nhau boi khoang trang. Output la mot so nguyen duy nhat.\",\n  \"provider\": \"openai\"\n}"
+            },
+            "url": "{{baseUrl}}/ai-testcase/quick-generate",
+            "description": "API test nhanh: paste de bai va generate testcase ngay."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate draft testcase (full context + revision)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Kiem tra so nguyen to\",\n  \"statement\": \"Cho so nguyen duong n. Hay xac dinh n co phai la so nguyen to hay khong.\\nInput: n\\nOutput: YES neu la so nguyen to, nguoc lai NO\",\n  \"difficulty\": \"Easy\",\n  \"timeLimitMs\": 1000,\n  \"memoryLimitMb\": 256,\n  \"supportedLanguages\": [\"cpp\", \"python\", \"java\"],\n  \"maxTestCases\": 10,\n  \"ioSpec\": \"Input mot so nguyen duong n. Output YES/NO viet hoa.\",\n  \"provider\": \"openai\",\n  \"revision\": {\n    \"promptVersionUsed\": \"ai-testcase-v1\",\n    \"previousOutputSummary\": \"Thieu testcase bien n=1\",\n    \"userFeedback\": \"Them test bien n=1, n=2, n rat lon va tranh trung lap\",\n    \"validatorIssues\": [\"Some expectedOutput had lowercase yes/no\"]\n  }\n}"
+            },
+            "url": "{{baseUrl}}/ai-testcase/generate-draft",
+            "description": "API day du context prompt. Co the gui revision de cai tien ket qua."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Storage",
       "item": [
         {

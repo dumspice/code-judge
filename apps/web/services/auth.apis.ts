@@ -1,120 +1,20 @@
 /**
- * Reusable API client for Core API.
- *
- * Features:
- *  - Attaches accessToken from memory on every request.
- *  - Auto-refreshes token on 401 and retries the original request once.
- *  - Token storage: accessToken in-memory only; refreshToken in HttpOnly cookie (managed by browser).
+ * Auth API helpers and barrel re-exports (HTTP client lives in `api-client.ts`).
  */
 
-import { getPublicCoreUrl } from '@/lib/public-config';
+import { apiFetch, getApiBaseUrl, tryRefresh } from './api-client';
 
-const BASE_URL = getPublicCoreUrl();
+export {
+  apiFetch,
+  ApiRequestError,
+  getApiBaseUrl,
+  tryRefresh,
+  type ApiError,
+} from './api-client';
 
 // ---------------------------------------------------------------------------
-// Token storage is now strictly cookie-based (HttpOnly).
+// Auth-specific API calls (session = HttpOnly cookies, credentials: 'include')
 // ---------------------------------------------------------------------------
-
-// Refresh logic
-
-let refreshPromise: Promise<boolean> | null = null;
-
-async function tryRefresh(headers?: Headers): Promise<boolean> {
-  // Deduplicate concurrent refresh attempts
-  if (refreshPromise) return refreshPromise;
-
-  refreshPromise = (async () => {
-    try {
-      const refreshHeaders = new Headers({ 'Content-Type': 'application/json' });
-      if (headers?.has('Cookie')) {
-        refreshHeaders.set('Cookie', headers.get('Cookie')!);
-      }
-
-      const res = await fetch(`${BASE_URL}/auth/refresh`, {
-        method: 'POST',
-        headers: refreshHeaders,
-        credentials: 'include',
-      });
-
-      if (!res.ok) {
-        return false;
-      }
-      return true;
-    } catch {
-      return false;
-    } finally {
-      refreshPromise = null;
-    }
-  })();
-
-  return refreshPromise;
-}
-
-// Core fetch wrapper
-
-export interface ApiError {
-  code: number;
-  message: string;
-}
-
-export class ApiRequestError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly body: ApiError,
-  ) {
-    super(body.message);
-    this.name = 'ApiRequestError';
-  }
-}
-
-interface FetchOptions extends Omit<RequestInit, 'body'> {
-  body?: unknown;
-}
-
-/**
- * Wrapper around `fetch` with auto-auth and retry on 401.
- *
- * Returns the unwrapped `result` from the API envelope.
- */
-export async function apiFetch<T = unknown>(path: string, options: FetchOptions = {}): Promise<T> {
-  const doFetch = async (): Promise<Response> => {
-    const headers = new Headers(options.headers);
-    if (!headers.has('Content-Type') && options.body) {
-      headers.set('Content-Type', 'application/json');
-    }
-
-    return fetch(`${BASE_URL}${path}`, {
-      ...options,
-      headers,
-      credentials: 'include',
-      body: options.body ? JSON.stringify(options.body) : undefined,
-    });
-  };
-
-  let res = await doFetch();
-
-  // Auto refresh on 401
-  if (res.status === 401) {
-    const refreshed = await tryRefresh(new Headers(options.headers));
-    if (refreshed) {
-      res = await doFetch();
-    }
-  }
-
-  const data = await res.json().catch(() => null);
-
-  if (!res.ok) {
-    throw new ApiRequestError(res.status, {
-      code: res.status,
-      message: data?.message ?? res.statusText,
-    });
-  }
-
-  // Unwrap envelope { result: T }
-  return (data?.result ?? data) as T;
-}
-
-// Auth-specific API calls
 
 export interface AuthSuccess {
   success: boolean;
@@ -152,19 +52,38 @@ export const authApi = {
   },
 
   async logout() {
-    try {
-      await apiFetch('/auth/logout', { method: 'POST' });
-    } finally {
-      // Cookies are cleared by the backend
-    }
+    await apiFetch('/auth/logout', { method: 'POST' });
   },
 
-  /** Google OAuth: redirect browser to backend /auth/google. */
   googleLogin() {
-    window.location.href = `${BASE_URL}/auth/google`;
+    window.location.href = `${getApiBaseUrl()}/auth/google`;
   },
 
   async refreshSession(): Promise<boolean> {
     return tryRefresh();
   },
 };
+
+// ---------------------------------------------------------------------------
+// Other domains
+// ---------------------------------------------------------------------------
+
+export {
+  problemsApi,
+  type CreateProblemDto,
+  type GenerateTestCasesDraftDto,
+  type GenerateTestCasesDraftResult,
+  type Problem,
+  type UpdateProblemDto,
+} from './problems.api';
+
+export {
+  contestsApi,
+  type Contest,
+  type CreateContestDto,
+  type UpdateContestDto,
+} from './contests.api';
+
+export { submissionsApi, type CreateSubmissionDto, type Submission } from './submissions.api';
+
+export { storageApi, type PresignUploadResponse } from './storage.api';

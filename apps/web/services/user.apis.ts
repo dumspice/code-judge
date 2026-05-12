@@ -1,5 +1,6 @@
 import { Role } from '@/types/enums';
-import { apiFetch, type UserProfile } from './auth.apis';
+import { apiFetch } from './api-client';
+import type { UserProfile } from './auth.apis';
 
 export interface AvatarUploadResponse {
   objectKey: string;

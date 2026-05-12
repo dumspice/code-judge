@@ -25,6 +25,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2Icon } from 'lucide-react';
 import { getPublicCoreUrl } from '@/lib/public-config';
 
+function coreApiHeaders(jsonBody = false): HeadersInit {
+  const headers: Record<string, string> = {};
+  if (jsonBody) headers['Content-Type'] = 'application/json';
+  return headers;
+}
+
 type ResourceKind =
   | 'ai-input'
   | 'avatar'
@@ -210,7 +216,8 @@ export default function TestPage() {
       setLog((s) => s + `1) Xin presign upload từ Core API: ${coreUrl}/storage/presign/upload\n`);
       const presignRes = await fetch(`${coreUrl}/storage/presign/upload`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: coreApiHeaders(true),
+        credentials: 'include',
         body: JSON.stringify(body),
       });
       if (!presignRes.ok) {
@@ -236,7 +243,7 @@ export default function TestPage() {
       setLog((s) => s + `3) Xin presign download để test tải lại\n`);
       const downloadRes = await fetch(
         `${coreUrl}/storage/presign/download?objectKey=${encodeURIComponent(presign.objectKey)}&expiresInSeconds=${encodeURIComponent(String(ttl))}`,
-        { method: 'GET' },
+        { method: 'GET', headers: coreApiHeaders(), credentials: 'include' },
       );
       if (!downloadRes.ok) {
         const txt = await downloadRes.text().catch(() => '');
@@ -281,7 +288,8 @@ export default function TestPage() {
 
         const presignRes = await fetch(`${coreUrl}/storage/presign/upload`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: coreApiHeaders(true),
+          credentials: 'include',
           body: JSON.stringify({
             resourceKind: 'submission-artifact',
             submissionId: sid,
@@ -308,7 +316,7 @@ export default function TestPage() {
 
         const downloadRes = await fetch(
           `${coreUrl}/storage/presign/download?objectKey=${encodeURIComponent(presign.objectKey)}&expiresInSeconds=${encodeURIComponent(String(expires))}`,
-          { method: 'GET' },
+          { method: 'GET', headers: coreApiHeaders(), credentials: 'include' },
         );
         const download = downloadRes.ok
           ? unwrapApiResult<PresignDownloadResponse>(((await downloadRes.json()) as unknown))
@@ -338,7 +346,7 @@ export default function TestPage() {
           <p className={cn('max-w-2xl text-sm text-muted-foreground')}>
             UI này gọi Core API để xin <code className={cn('rounded bg-muted px-1 py-0.5 text-xs')}>presigned URL</code>{' '}
             rồi upload trực tiếp lên MinIO. Hỗ trợ ảnh, file bất kỳ, và <code className={cn('rounded bg-muted px-1 py-0.5 text-xs')}>.zip</code>{' '}
-            (để upload cả folder, hãy zip folder lại trước).
+            (để upload cả folder, hãy zip folder lại trước). Cần đăng nhập web (có access token) để gọi API storage.
           </p>
           <p className={cn('text-xs text-muted-foreground')}>
             Core API URL hiện tại: <code className={cn('rounded bg-muted px-1')}>{coreUrl}</code> (từ{' '}
