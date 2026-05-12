@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { Difficulty, ProblemMode, ProblemVisibility, Prisma, Problem } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,6 +10,7 @@ export class ProblemsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateProblemDto, creatorId: string): Promise<Problem> {
+    await this.ensureClassOwner(dto.classRoomId, creatorId);
     const slug = await this.buildUniqueSlug(dto.title);
     const supportedLanguages = dto.supportedLanguages ?? [];
 
@@ -45,6 +46,18 @@ export class ProblemsService {
         });
       }
 
+      // Create ClassAssignment automatically
+      await tx.classAssignment.create({
+        data: {
+          classRoomId: dto.classRoomId,
+          title: problem.title,
+          description: problem.description,
+          problemId: problem.id,
+          publishedAt: new Date(),
+          dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+        },
+      });
+
       return problem;
     });
   }
@@ -79,6 +92,7 @@ export class ProblemsService {
       where: { id: problemId },
       include: {
         testCases: { orderBy: { orderIndex: 'asc' } },
+        assignments: true,
       },
     });
     if (!problem) {
@@ -88,7 +102,24 @@ export class ProblemsService {
   }
 
   async update(problemId: string, dto: UpdateProblemDto, updaterId: string) {
-    const existing = await this.findById(problemId);
+    const existing = await this.prisma.problem.findUnique({
+      where: { id: problemId },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        creatorId: true,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Problem not found');
+    }
+
+    if (existing.creatorId !== updaterId) {
+      throw new ForbiddenException('Only Creator can update this problem');
+    }
+
     const slug =
       dto.title && dto.title !== existing.title
         ? await this.buildUniqueSlug(dto.title)
@@ -133,14 +164,44 @@ export class ProblemsService {
         }
       }
 
+      // Sync ClassAssignment details if changed
+      if (dto.title !== undefined || dto.description !== undefined || dto.dueAt !== undefined) {
+        await tx.classAssignment.updateMany({
+          where: { problemId },
+          data: {
+            ...(dto.title !== undefined ? { title: dto.title } : {}),
+            ...(dto.description !== undefined ? { description: dto.description } : {}),
+            ...(dto.dueAt !== undefined ? { dueAt: dto.dueAt ? new Date(dto.dueAt) : null } : {}),
+          },
+        });
+      }
+
       return updatedProblem;
     });
   }
 
-  async delete(problemId: string) {
-    await this.findById(problemId);
+  async delete(problemId: string, userId: string) {
+    const existing = await this.prisma.problem.findUnique({
+      where: { id: problemId },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        creatorId: true,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Problem not found');
+    }
+
+    if (existing.creatorId !== userId) {
+      throw new ForbiddenException('Only class owner can delete this problem');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       await tx.contestProblem.deleteMany({ where: { problemId } });
+      await tx.classAssignment.deleteMany({ where: { problemId } });
       return tx.problem.delete({ where: { id: problemId } });
     });
   }
@@ -153,6 +214,23 @@ export class ProblemsService {
       slug = `${baseSlug}-${counter++}`;
     }
     return slug;
+  }
+
+  private async ensureClassOwner(classRoomId: string, userId: string) {
+    const classRoom = await this.prisma.classRoom.findUnique({
+      where: { id: classRoomId },
+      select: { ownerId: true },
+    });
+
+    if (!classRoom) {
+      throw new NotFoundException('Class not found');
+    }
+
+    if (classRoom.ownerId !== userId) {
+      throw new ForbiddenException('Only owner can do this action');
+    }
+
+    return classRoom;
   }
 }
 

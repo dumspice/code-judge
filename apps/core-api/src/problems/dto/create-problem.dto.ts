@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
   IsBoolean,
+  IsDateString,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -14,6 +15,16 @@ import { Type } from 'class-transformer';
 import { CreateTestCaseDto } from './create-test-case.dto';
 
 export class CreateProblemDto {
+  @ApiProperty({ example: '123e4567-e89b-12d3-a456-426614174000' })
+  @IsString()
+  @IsNotEmpty()
+  classRoomId!: string;
+
+  @ApiPropertyOptional({ example: '2026-05-10T12:00:00.000Z' })
+  @IsOptional()
+  @IsDateString()
+  dueAt?: string;
+
   @ApiProperty({ example: 'Tính tổng hai số' })
   @IsString()
   @IsNotEmpty()

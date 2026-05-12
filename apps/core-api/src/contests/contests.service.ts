@@ -10,6 +10,10 @@ export class ContestsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateContestDto, creatorId: string): Promise<Contest> {
+    if (dto.classRoomId) {
+      await this.ensureClassOwner(dto.classRoomId, creatorId);
+    }
+
     const problems = dto.problems ?? [];
     const problemIds = problems.map((item) => item.problemId);
     if (problemIds.length > 0) {
@@ -34,28 +38,45 @@ export class ContestsService {
     const status = determineContestStatus(startAt, endAt, now);
     const passwordHash = dto.password ? await hashPassword(dto.password) : null;
 
-    return this.prisma.contest.create({
-      data: {
-        title: dto.title,
-        description: dto.description ?? null,
-        slug: buildContestSlug(dto.title),
-        passwordHash,
-        startAt,
-        endAt,
-        status,
-        testFeedbackPolicy: dto.testFeedbackPolicy ?? ContestTestFeedbackPolicy.SUMMARY_ONLY,
-        maxSubmissionsPerProblem: dto.maxSubmissionsPerProblem ?? null,
-        createdById: creatorId,
-        problems: {
-          create: problems.map((problem, index) => ({
-            problemId: problem.problemId,
-            orderIndex: problem.orderIndex ?? index,
-            points: problem.points ?? 100,
-            timeLimitMsOverride: problem.timeLimitMsOverride ?? null,
-            memoryLimitMbOverride: problem.memoryLimitMbOverride ?? null,
-          })),
+    return this.prisma.$transaction(async (tx) => {
+      const contest = await tx.contest.create({
+        data: {
+          title: dto.title,
+          description: dto.description ?? null,
+          slug: buildContestSlug(dto.title),
+          passwordHash,
+          startAt,
+          endAt,
+          status,
+          testFeedbackPolicy: dto.testFeedbackPolicy ?? ContestTestFeedbackPolicy.SUMMARY_ONLY,
+          maxSubmissionsPerProblem: dto.maxSubmissionsPerProblem ?? null,
+          createdById: creatorId,
+          problems: {
+            create: problems.map((problem, index) => ({
+              problemId: problem.problemId,
+              orderIndex: problem.orderIndex ?? index,
+              points: problem.points ?? 100,
+              timeLimitMsOverride: problem.timeLimitMsOverride ?? null,
+              memoryLimitMbOverride: problem.memoryLimitMbOverride ?? null,
+            })),
+          },
         },
-      },
+      });
+
+      if (dto.classRoomId) {
+        await tx.classAssignment.create({
+          data: {
+            classRoomId: dto.classRoomId,
+            title: contest.title,
+            description: contest.description,
+            contestId: contest.id,
+            publishedAt: new Date(),
+            dueAt: contest.endAt, // For contests, due date is end date
+          },
+        });
+      }
+
+      return contest;
     });
   }
 
@@ -104,6 +125,10 @@ export class ContestsService {
     });
     if (!contest) {
       throw new BadRequestException('Contest không tồn tại');
+    }
+
+    if (contest.createdById !== updaterId) {
+      throw new BadRequestException('Bạn không có quyền cập nhật cuộc thi này');
     }
 
     if (dto.problems && dto.problems.length > 0) {
@@ -165,13 +190,54 @@ export class ContestsService {
         }
       }
 
+      // Sync ClassAssignment details if changed
+      if (dto.title !== undefined || dto.description !== undefined || dto.endAt !== undefined) {
+        await tx.classAssignment.updateMany({
+          where: { contestId },
+          data: {
+            ...(dto.title !== undefined ? { title: dto.title } : {}),
+            ...(dto.description !== undefined ? { description: dto.description } : {}),
+            ...(dto.endAt !== undefined ? { dueAt: new Date(dto.endAt) } : {}),
+          },
+        });
+      }
+
       return updatedContest;
     });
   }
 
-  async delete(contestId: string) {
-    await this.findById(contestId);
-    return this.prisma.contest.delete({ where: { id: contestId } });
+  async delete(contestId: string, userId: string) {
+    const contest = await this.prisma.contest.findUnique({
+      where: { id: contestId },
+      select: { createdById: true },
+    });
+    if (!contest) {
+      throw new BadRequestException('Contest không tồn tại');
+    }
+    if (contest.createdById !== userId) {
+      throw new BadRequestException('Bạn không có quyền xóa cuộc thi này');
+    }
+    return this.prisma.$transaction(async (tx) => {
+      await tx.classAssignment.deleteMany({ where: { contestId } });
+      return tx.contest.delete({ where: { id: contestId } });
+    });
+  }
+
+  private async ensureClassOwner(classRoomId: string, userId: string) {
+    const classRoom = await this.prisma.classRoom.findUnique({
+      where: { id: classRoomId },
+      select: { ownerId: true },
+    });
+
+    if (!classRoom) {
+      throw new BadRequestException('Class not found');
+    }
+
+    if (classRoom.ownerId !== userId) {
+      throw new BadRequestException('Only owner can do this action');
+    }
+
+    return classRoom;
   }
 }
 

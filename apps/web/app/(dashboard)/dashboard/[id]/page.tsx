@@ -5,12 +5,10 @@ import { getClassroomDetail } from '@/services/classroom.apis';
 import { setAccessToken } from '@/services/auth.apis';
 import { getPublicCoreUrl } from '@/lib/public-config';
 import { Copy } from 'lucide-react';
-import StreamPost from '@/components/dashboard/class-detail/stream-post';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getClassroomBannerColor } from '@/lib/classroom-banner';
-import { Contest, contestsApi } from '@/services/contest.apis';
-
+import { ClassPost } from '@/components/dashboard/class-detail/class-post';
 export const metadata: Metadata = {
   title: 'Class Stream | CodeJudge',
   description: 'View class announcements and stream',
@@ -20,8 +18,6 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const BASE_URL = getPublicCoreUrl();
   const bannerBg = getClassroomBannerColor(id);
-
-  const contests = (await contestsApi.findAll({ limit: 3 })).items as Contest[];
 
   // Refresh token on server side
   try {
@@ -113,9 +109,16 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
 
           {/* Posts List */}
           <div className="space-y-4">
-            {contests.map((post) => (
-              <div key={post.id}>{StreamPost(post, id)}</div>
-            ))}
+            {classroom.assignments && classroom.assignments.length > 0 ? (
+              classroom.assignments.map((assignment) => (
+                <ClassPost key={assignment.id} assignment={assignment} classId={id} />
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-100 text-gray-400">
+                <p className="font-medium">No posts yet.</p>
+                <p className="text-sm">Announcements and assignments will appear here.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

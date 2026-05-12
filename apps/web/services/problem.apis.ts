@@ -27,9 +27,16 @@ export interface Problem {
     createdAt: string;
     updatedAt: string;
   }>;
+  assignments?: Array<{
+    id: string;
+    classRoomId: string;
+    dueAt: string | null;
+  }>;
 }
 
 export interface CreateProblemDto {
+  classRoomId: string;
+  dueAt?: string;
   title: string;
   description?: string;
   statementMd?: string;
@@ -50,6 +57,7 @@ export interface CreateProblemDto {
 }
 
 export interface UpdateProblemDto {
+  dueAt?: string;
   title?: string;
   description?: string;
   statementMd?: string;
