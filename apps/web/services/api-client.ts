@@ -1,29 +1,15 @@
 /**
- * HTTP client for Core API: token store, refresh on 401, envelope unwrap.
+ * HTTP client for Core API: cookie session (`accessToken` / `refreshToken` HttpOnly),
+ * refresh on 401, envelope unwrap. JWT is read from cookies by the backend, not Bearer.
  */
 
 import { getPublicCoreUrl } from '@/lib/public-config';
 
 const BASE_URL = getPublicCoreUrl();
 
-let accessToken: string | null = null;
-
-export function setAccessToken(token: string | null) {
-  accessToken = token;
-}
-
-export function getAccessToken(): string | null {
-  return accessToken;
-}
-
-/** Clear access token (logout). */
-export function clearTokens() {
-  accessToken = null;
-}
-
 let refreshPromise: Promise<boolean> | null = null;
 
-/** Exposed for authApi.refreshSession; also used internally after 401. */
+/** Exchange refresh cookie for a new pair (sets cookies on success). Used after 401 and OAuth callback. */
 export async function tryRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
 
@@ -34,18 +20,8 @@ export async function tryRefresh(): Promise<boolean> {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       });
-
-      if (!res.ok) {
-        clearTokens();
-        return false;
-      }
-
-      const data = await res.json();
-      const result = data.result ?? data;
-      setAccessToken(result.accessToken);
-      return true;
+      return res.ok;
     } catch {
-      clearTokens();
       return false;
     } finally {
       refreshPromise = null;
@@ -87,9 +63,6 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
     const headers = new Headers(options.headers);
     if (!headers.has('Content-Type') && options.body) {
       headers.set('Content-Type', 'application/json');
-    }
-    if (accessToken) {
-      headers.set('Authorization', `Bearer ${accessToken}`);
     }
 
     return fetch(`${BASE_URL}${path}`, {
