@@ -2,10 +2,16 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import IORedis from 'ioredis';
 import { Queue, QueueEvents } from 'bullmq';
-import { JUDGE_SUBMISSIONS_QUEUE_NAME } from '../common';
+import { GOLDEN_VERIFY_QUEUE_NAME, JUDGE_SUBMISSIONS_QUEUE_NAME } from '../common';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { BullMqEventsService } from './bullmq-events.service';
-import { JUDGE_QUEUE, JUDGE_QUEUE_EVENTS, REDIS_CONNECTION } from './tokens';
+import {
+  GOLDEN_VERIFY_QUEUE,
+  GOLDEN_VERIFY_QUEUE_EVENTS,
+  JUDGE_QUEUE,
+  JUDGE_QUEUE_EVENTS,
+  REDIS_CONNECTION,
+} from './tokens';
 
 @Module({
   imports: [RealtimeModule],
@@ -32,9 +38,23 @@ import { JUDGE_QUEUE, JUDGE_QUEUE_EVENTS, REDIS_CONNECTION } from './tokens';
         return new QueueEvents(JUDGE_SUBMISSIONS_QUEUE_NAME, { connection: redis });
       },
     },
+    {
+      provide: GOLDEN_VERIFY_QUEUE,
+      inject: [REDIS_CONNECTION],
+      useFactory: (redis: IORedis) => {
+        return new Queue(GOLDEN_VERIFY_QUEUE_NAME, { connection: redis });
+      },
+    },
+    {
+      provide: GOLDEN_VERIFY_QUEUE_EVENTS,
+      inject: [REDIS_CONNECTION],
+      useFactory: (redis: IORedis) => {
+        return new QueueEvents(GOLDEN_VERIFY_QUEUE_NAME, { connection: redis });
+      },
+    },
     BullMqEventsService,
   ],
-  exports: [JUDGE_QUEUE],
+  exports: [JUDGE_QUEUE, GOLDEN_VERIFY_QUEUE, GOLDEN_VERIFY_QUEUE_EVENTS],
 })
 export class BullMqModule {}
 

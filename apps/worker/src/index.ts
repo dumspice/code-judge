@@ -4,7 +4,8 @@ import { Worker } from 'bullmq';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, SubmissionStatus } from '@prisma/client';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
-import { JUDGE_SUBMISSIONS_QUEUE_NAME } from './lib/constants';
+import { processGoldenVerifyJob } from './golden-verify-job';
+import { GOLDEN_VERIFY_QUEUE_NAME, JUDGE_SUBMISSIONS_QUEUE_NAME } from './lib/constants';
 import { getOptionalEnv, getRequiredEnv } from './lib/env';
 import { createWorkerLogger } from './lib/logger';
 import { sleep } from './lib/sleep';
@@ -391,20 +392,39 @@ async function processSubmission(job: any) {
 }
 
 async function main() {
-  const worker = new Worker(JUDGE_SUBMISSIONS_QUEUE_NAME, processSubmission, {
+  const judgeWorker = new Worker(JUDGE_SUBMISSIONS_QUEUE_NAME, processSubmission, {
     connection,
     concurrency: 10, // Giảm từ 50 xuống 10 cho local testing
   });
 
-  worker.on('completed', (job) => {
-    log.info(`completed job=${job?.id}`);
+  judgeWorker.on('completed', (job) => {
+    log.info(`judge completed job=${job?.id}`);
   });
 
-  worker.on('failed', (job, err) => {
-    log.error(`failed job=${job?.id} err=${err?.message}`);
+  judgeWorker.on('failed', (job, err) => {
+    log.error(`judge failed job=${job?.id} err=${err?.message}`);
   });
 
-  log.info(`listening queue=${JUDGE_SUBMISSIONS_QUEUE_NAME} redis=${redisUrl}`);
+  const goldenWorker = new Worker(
+    GOLDEN_VERIFY_QUEUE_NAME,
+    (job) => processGoldenVerifyJob(job, { lambdaClient, lambdaFunctionName }),
+    {
+      connection,
+      concurrency: 5,
+    },
+  );
+
+  goldenWorker.on('completed', (job) => {
+    log.info(`golden-verify completed job=${job?.id}`);
+  });
+
+  goldenWorker.on('failed', (job, err) => {
+    log.error(`golden-verify failed job=${job?.id} err=${err?.message}`);
+  });
+
+  log.info(
+    `listening queues=${JUDGE_SUBMISSIONS_QUEUE_NAME},${GOLDEN_VERIFY_QUEUE_NAME} redis=${redisUrl}`,
+  );
 }
 
 main().catch((err) => {

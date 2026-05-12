@@ -13,6 +13,7 @@ import { ClassroomModule } from './classrooms/classroom.module';
 import { AiTestcaseModule } from './ai-testcase/ai-testcase.module';
 import { InvitesModule } from './invites/invites.module';
 import { MailModule } from './mail/mail.module';
+import { GoldenSolutionsModule } from './golden-solutions/golden-solutions.module';
 
 @Module({
   imports: [
@@ -32,7 +33,8 @@ import { MailModule } from './mail/mail.module';
     ContestsModule,
     SubmissionsModule,
     MailModule,
-    InvitesModule
+    InvitesModule,
+    GoldenSolutionsModule,
   ],
 })
 export class AppModule {}

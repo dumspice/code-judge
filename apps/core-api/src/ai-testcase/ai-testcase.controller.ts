@@ -7,12 +7,17 @@ import { GenerateAiTestcaseDto } from './dto/generate-ai-testcase.dto';
 import { AiTestcaseService } from './ai-testcase.service';
 import { QuickGenerateAiTestcaseDto } from './dto/quick-generate-ai-testcase.dto';
 import { GenerateAndSaveAiTestcaseDto } from './dto/generate-and-save-ai-testcase.dto';
+import { VerifyTestcasesWithGoldenDto } from './dto/verify-testcases-with-golden.dto';
+import { AiGoldenVerifyService } from './ai-golden-verify.service';
 
 @ApiTags('ai-testcase')
 @ApiBearerAuth('JWT')
 @Controller('ai-testcase')
 export class AiTestcaseController {
-  constructor(private readonly aiTestcaseService: AiTestcaseService) {}
+  constructor(
+    private readonly aiTestcaseService: AiTestcaseService,
+    private readonly aiGoldenVerifyService: AiGoldenVerifyService,
+  ) {}
 
   @Roles(Role.ADMIN)
   @ApiOperation({
@@ -39,6 +44,20 @@ export class AiTestcaseController {
   @Post('generate-and-save')
   async generateAndSave(@CurrentUser() user: RequestUser, @Body() dto: GenerateAndSaveAiTestcaseDto) {
     return this.aiTestcaseService.generateAndSave(dto, user);
+  }
+
+  @ApiOperation({
+    summary:
+      'Chạy golden solution (Python) trên test case AI draft hoặc test đã lưu DB — so khớp stdout với expectedOutput',
+    description:
+      'Cần JWT. `goldenSourceCode` (Python): ADMIN hoặc chủ đề nếu có `problemId`. Hoặc bỏ `goldenSourceCode` và dùng golden đã lưu cho `problemId`.',
+  })
+  @Post('verify-testcases-with-golden')
+  async verifyTestcasesWithGolden(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: VerifyTestcasesWithGoldenDto,
+  ) {
+    return this.aiGoldenVerifyService.verify(dto, user);
   }
 
   @ApiOperation({
