@@ -34,16 +34,14 @@ export class ContestsController {
   }
 
   @ApiBearerAuth('JWT')
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin tạo contest mới' })
+  @ApiOperation({ summary: 'Tạo contest mới' })
   @Post()
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateContestDto) {
     return this.contestsService.create(dto, user.userId);
   }
 
   @ApiBearerAuth('JWT')
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin cập nhật contest' })
+  @ApiOperation({ summary: 'Cập nhật contest' })
   @Patch(':id')
   async update(
     @Param('id') id: string,
@@ -54,10 +52,9 @@ export class ContestsController {
   }
 
   @ApiBearerAuth('JWT')
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin xóa contest' })
+  @ApiOperation({ summary: 'Xóa contest' })
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return this.contestsService.delete(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.contestsService.delete(id, user.userId);
   }
 }

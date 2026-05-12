@@ -11,7 +11,7 @@ export default function AdminUsersPage() {
       <div className="flex items-center justify-between space-y-2">
         <div>
           <p className="text-muted-foreground">
-            Quản lý tài khoản, phân quyền và trạng thái hoạt động của hệ thống.
+            Manage accounts, assign permissions, and monitor system activity.
           </p>
         </div>
       </div>

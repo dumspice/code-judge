@@ -31,6 +31,7 @@ import { Switch } from '@/components/ui/switch';
 import { CreateProblemDto, problemsApi, UpdateProblemDto } from '@/services/problem.apis';
 
 export default function ClassProblemCreate({ classId }: { classId: string }) {
+  console.log(classId);
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams?.get('edit');
@@ -38,7 +39,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(!!editId);
 
-  const [formData, setFormData] = useState<CreateProblemDto>({
+  const [formData, setFormData] = useState<Omit<CreateProblemDto, 'classRoomId'>>({
     title: '',
     description: '',
     statementMd: '',
@@ -51,6 +52,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
     supportedLanguages: ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'],
     maxTestCases: 100,
     testCases: [],
+    dueAt: undefined,
   });
 
   useEffect(() => {
@@ -74,7 +76,10 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         visibility: data.visibility,
         supportedLanguages: data.supportedLanguages ?? ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'],
         maxTestCases: data.maxTestCases,
-        testCases: data.testCases ?? [],
+        testCases: (data.testCases ?? []).map(
+          ({ id, problemId, orderIndex, createdAt, updatedAt, ...rest }: any) => rest,
+        ),
+        dueAt: data.assignments?.find((a) => a.classRoomId === classId)?.dueAt ?? undefined,
       });
     } catch (error) {
       console.error('Failed to load problem:', error);
@@ -119,10 +124,23 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
 
     setLoading(true);
     try {
+      // Sanitize test cases to remove properties the API doesn't expect
+      const sanitizedTestCases = (formData.testCases || []).map(
+        ({ id, problemId, orderIndex, createdAt, updatedAt, ...rest }: any) => rest,
+      );
+
+      const payload = {
+        ...formData,
+        testCases: sanitizedTestCases,
+      };
+
       if (editId) {
-        await problemsApi.update(editId, formData as UpdateProblemDto);
+        await problemsApi.update(editId, payload as UpdateProblemDto);
       } else {
-        await problemsApi.create(formData);
+        await problemsApi.create({
+          ...payload,
+          classRoomId: classId,
+        } as CreateProblemDto);
       }
       router.push(`/dashboard/${classId}/classwork`);
     } catch (error) {
@@ -430,6 +448,36 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                       className="rounded-xl border-gray-200 h-10 font-bold"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <Label className="text-sm font-semibold flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" /> Due Date (Optional)
+                  </Label>
+                  <Input
+                    type="datetime-local"
+                    value={
+                      formData.dueAt
+                        ? new Date(
+                            new Date(formData.dueAt).getTime() -
+                              new Date().getTimezoneOffset() * 60000,
+                          )
+                            .toISOString()
+                            .slice(0, 16)
+                        : ''
+                    }
+                    onChange={(e) => {
+                      const date = e.target.value;
+                      setFormData({
+                        ...formData,
+                        dueAt: date ? new Date(date).toISOString() : undefined,
+                      });
+                    }}
+                    className="rounded-xl border-gray-200 h-10"
+                  />
+                  <p className="text-[10px] text-muted-foreground italic">
+                    Students will see this as the deadline.
+                  </p>
                 </div>
 
                 <div className="space-y-3 pt-4 border-t">
