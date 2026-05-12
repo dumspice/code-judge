@@ -104,7 +104,15 @@ export class ClassroomService {
         enrollments: {
           include: { user: true },
         },
-        assignments: true,
+        assignments: {
+          include: {
+            problem: true,
+            contest: true,
+          },
+          orderBy: {
+            publishedAt: 'desc',
+          },
+        },
       },
     });
   }

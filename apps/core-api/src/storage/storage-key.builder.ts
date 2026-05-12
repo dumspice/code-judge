@@ -4,6 +4,8 @@ function sanitizeSegment(value: string): string {
   return value.trim().replace(/[^a-zA-Z0-9._-]+/g, '-');
 }
 
+// Object key builders below define the canonical folder taxonomy in MinIO/S3.
+// Keep formats stable to avoid breaking existing stored links.
 export function buildAvatarObjectKey(userId: string, extension = 'bin'): string {
   const now = new Date();
   const year = now.getUTCFullYear();
@@ -38,6 +40,7 @@ export function buildAiInputObjectKey(jobId: string, fileName: string): string {
 }
 
 export function buildAiGeneratedTestcaseObjectKeys(jobId: string, index: number) {
+  // AI-generated testcase artifacts are split by index for easier replacement/debug.
   return {
     input: `ai-jobs/${sanitizeSegment(jobId)}/generated-testcases/${index}/input.txt`,
     expected: `ai-jobs/${sanitizeSegment(jobId)}/generated-testcases/${index}/expected.txt`,

@@ -1,4 +1,4 @@
-import { apiFetch } from './auth.apis';
+import { apiFetch } from './api-client';
 
 export interface Classroom {
   id: string;
@@ -16,7 +16,23 @@ export interface Classroom {
     createdAt: string;
     updatedAt: string;
   };
-  assignments: string[];
+  assignments: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    dueAt: string | null;
+    problemId: string | null;
+    contestId: string | null;
+    publishedAt: string;
+    problem?: {
+      id: string;
+      slug: string;
+    };
+    contest?: {
+      id: string;
+      slug: string;
+    };
+  }>;
   ownerId: string;
   createdAt: string;
   updatedAt: string;
@@ -85,8 +101,8 @@ export async function getMyClassrooms(): Promise<MyClassroomItem[]> {
 }
 
 // GET CLASSROOM DETAIL
-export async function getClassroomDetail(id: string): Promise<Classroom> {
-  return apiFetch<Classroom>(`/classroom/${id}`);
+export async function getClassroomDetail(id: string, options?: RequestInit): Promise<Classroom> {
+  return apiFetch<Classroom>(`/classroom/${id}`, options);
 }
 
 // GET CLASSROOM PEOPLE

@@ -1,5 +1,11 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { User } from '@prisma/client';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Role, User } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { formatPagedList, hashPassword } from '../common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,6 +23,26 @@ export class UsersService {
     private readonly storage: StorageService,
   ) {}
 
+  private async ensureNotLastAdmin(userId: string) {
+    const user = await this.findById(userId);
+
+    // Không phải admin -> bỏ qua
+    if (user.role !== Role.ADMIN) {
+      return;
+    }
+
+    const totalAdmins = await this.prisma.user.count({
+      where: {
+        role: Role.ADMIN,
+        isActive: true,
+      },
+    });
+
+    if (totalAdmins <= 1) {
+      throw new BadRequestException('Không thể thay đổi admin cuối cùng của hệ thống');
+    }
+  }
+
   async create(dto: CreateUserDto): Promise<User> {
     const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (exists) throw new ConflictException('Email đã được sử dụng');
@@ -28,7 +54,7 @@ export class UsersService {
         id,
         name: dto.name,
         email: dto.email,
-        role: dto.role!,
+        role: dto.role ?? Role.CLIENT,
         passwordHash,
         isActive: true,
         emailVerified: true,
@@ -70,20 +96,98 @@ export class UsersService {
 
   async update(userId: string, dto: UpdateUserDto): Promise<User> {
     const user = await this.findById(userId);
+
+    const data: Partial<
+      UpdateUserDto & {
+        emailVerified?: boolean;
+      }
+    > = {
+      ...dto,
+    };
+
+    // Email changed
     if (dto.email && dto.email !== user.email) {
-      const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
-      if (exists) throw new ConflictException('Email đã được sử dụng');
+      const exists = await this.prisma.user.findUnique({
+        where: {
+          email: dto.email,
+        },
+      });
+
+      if (exists) {
+        throw new ConflictException('Email đã được sử dụng');
+      }
+
+      // Require verify again
+      data.emailVerified = false;
     }
+
     return this.prisma.user.update({
-      where: { id: userId },
-      data: dto,
+      where: {
+        id: userId,
+      },
+      data,
     });
   }
 
-  async remove(userId: string): Promise<{ success: boolean }> {
-    await this.findById(userId);
-    await this.prisma.user.delete({ where: { id: userId } });
-    return { success: true };
+  async remove(currentUserId: string, targetUserId: string): Promise<{ success: boolean }> {
+    // Không cho tự xoá chính mình
+    if (currentUserId === targetUserId) {
+      throw new ForbiddenException('Bạn không thể tự xoá chính mình');
+    }
+
+    // Không cho xoá admin cuối cùng
+    await this.ensureNotLastAdmin(targetUserId);
+
+    await this.findById(targetUserId);
+
+    await this.prisma.user.update({
+      where: {
+        id: targetUserId,
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
+    return {
+      success: true,
+    };
+  }
+
+  async updateRole(targetUserId: string, role: Role): Promise<User> {
+    const user = await this.findById(targetUserId);
+
+    // Không cho downgrade admin cuối cùng
+    if (user.role === Role.ADMIN && role !== Role.ADMIN) {
+      await this.ensureNotLastAdmin(targetUserId);
+    }
+
+    return this.prisma.user.update({
+      where: {
+        id: targetUserId,
+      },
+      data: {
+        role,
+      },
+    });
+  }
+
+  async toggleStatus(targetUserId: string, isActive: boolean): Promise<User> {
+    const user = await this.findById(targetUserId);
+
+    // Không cho disable admin cuối cùng
+    if (user.role === Role.ADMIN && !isActive) {
+      await this.ensureNotLastAdmin(targetUserId);
+    }
+
+    return this.prisma.user.update({
+      where: {
+        id: targetUserId,
+      },
+      data: {
+        isActive,
+      },
+    });
   }
 
   async createAvatarUploadUrl(userId: string, dto: AvatarUploadDto) {
@@ -117,6 +221,8 @@ export class UsersService {
 
     const users = await this.prisma.user.findMany({
       where: {
+        isActive: true,
+
         OR: [
           {
             name: {
@@ -142,7 +248,7 @@ export class UsersService {
     });
 
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query);
-    if (isEmail && !users.find(u => u.email === query)) {
+    if (isEmail && !users.find((u) => u.email === query)) {
       users.push({
         id: `external-${query}`,
         email: query,

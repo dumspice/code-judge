@@ -2,13 +2,13 @@ import { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { Button } from '@/components/ui/button';
 import { getClassroomDetail } from '@/services/classroom.apis';
-import { setAccessToken } from '@/services/auth.apis';
 import { getPublicCoreUrl } from '@/lib/public-config';
 import { Copy } from 'lucide-react';
 import StreamPost from '@/components/dashboard/class-detail/stream-post';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getClassroomBannerColor } from '@/lib/classroom-banner';
+import { Contest, contestsApi } from '@/services/contest.apis';
 
 export const metadata: Metadata = {
   title: 'Class Stream | CodeJudge',
@@ -20,60 +20,24 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
   const BASE_URL = getPublicCoreUrl();
   const bannerBg = getClassroomBannerColor(id);
 
-  // Refresh token on server side
-  try {
-    const cookieStore = await cookies();
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: cookieStore.toString(),
-      },
-      credentials: 'include',
-    });
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore.toString();
 
-    if (res.ok) {
-      const data = await res.json();
-      const result = data.result ?? data;
-      setAccessToken(result.accessToken);
-    }
-  } catch (error) {
-    console.warn('Failed to refresh token on server:', error);
-  }
+  const contests = (
+    await contestsApi.findAll(
+      { limit: 3 },
+      {
+        headers: {
+          Cookie: cookieHeader,
+        },
+      },
+    )
+  ).items;
 
   // Fetch classroom details
-  const classroom = await getClassroomDetail(id);
-
-  const posts = [
-    {
-      id: 1,
-      author: 'Anh Tú Vũ',
-      time: '29 thg 4',
-      content: 'Đã đăng một bài tập mới: Đề thi lý thuyết ORM',
-      type: 'assignment' as const,
-    },
-    {
-      id: 2,
-      author: 'Anh Tú Vũ',
-      time: '29 thg 4',
-      content: 'Đã đăng một bài tập mới: Đề thi lý thuyết NestJS',
-      type: 'assignment' as const,
-    },
-    {
-      id: 3,
-      author: 'Anh Tú Vũ',
-      time: '16 thg 4',
-      content: 'Đã đăng một bài tập mới: Elevator pitch deck about mock project',
-      type: 'assignment' as const,
-    },
-    {
-      id: 4,
-      author: 'Tú Phạm',
-      time: '14 thg 4',
-      content: 'Đã đăng một bài tập mới: CV',
-      type: 'assignment' as const,
-    },
-  ];
+  const classroom = await getClassroomDetail(id, {
+    headers: { Cookie: cookieHeader },
+  });
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -122,7 +86,10 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
         <div className="flex-1 w-full space-y-4">
           {/* Announce something to your class box */}
           {classroom.owner && (
-            <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm flex items-center gap-4 cursor-text hover:bg-gray-50 transition-colors">
+            <Link
+              href={`/dashboard/${id}/contests`}
+              className="cursor-pointer bg-white border border-gray-200 rounded-lg p-4 shadow-sm flex items-center gap-4 hover:bg-gray-50 transition-colors"
+            >
               <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center font-semibold flex-shrink-0">
                 <Image
                   src={classroom.owner.image || '/default-avatar.png'}
@@ -132,14 +99,14 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
                   className="rounded-full border-0 border-white"
                 />
               </div>
-              <p className="text-gray-500 text-sm">Announce the content for your class.</p>
-            </div>
+              <p className="text-gray-500 text-sm">Create contest for your class.</p>
+            </Link>
           )}
 
           {/* Posts List */}
           <div className="space-y-4">
-            {posts.map((post) => (
-              <StreamPost key={post.id} {...post} />
+            {contests.map((post) => (
+              <div key={post.id}>{StreamPost(post, id)}</div>
             ))}
           </div>
         </div>

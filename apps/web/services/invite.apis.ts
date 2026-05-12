@@ -1,4 +1,4 @@
-import { apiFetch } from './auth.apis';
+import { apiFetch } from './api-client';
 
 export interface CreateClassInviteDto {
   email: string;

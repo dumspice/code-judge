@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
   IsBoolean,
+  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
@@ -13,6 +14,11 @@ import { Type } from 'class-transformer';
 import { CreateTestCaseDto } from './create-test-case.dto';
 
 export class UpdateProblemDto {
+  @ApiPropertyOptional({ example: '2026-05-10T12:00:00.000Z' })
+  @IsOptional()
+  @IsDateString()
+  dueAt?: string;
+
   @ApiPropertyOptional({ example: 'Tính tổng hai số' })
   @IsOptional()
   @IsString()

@@ -2,15 +2,19 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { CurrentUser, Public, Roles } from '../common';
+import { GenerateAiTestcaseDto } from '../ai-testcase/dto/generate-ai-testcase.dto';
+import { AiTestcaseService } from '../ai-testcase/ai-testcase.service';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
 import { ProblemsService } from './problems.service';
-import type { Role } from '@prisma/client';
 
 @ApiTags('problems')
 @Controller('problems')
 export class ProblemsController {
-  constructor(private readonly problemsService: ProblemsService) {}
+  constructor(
+    private readonly problemsService: ProblemsService,
+    private readonly aiTestcaseService: AiTestcaseService,
+  ) {}
 
   @Public()
   @ApiOperation({ summary: 'Danh sách problem public' })
@@ -36,15 +40,23 @@ export class ProblemsController {
 
   @ApiBearerAuth('JWT')
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin tạo problem mới' })
+  @ApiOperation({
+    summary: 'Admin: sinh bản nháp test case bằng AI (chưa lưu DB; dùng trước khi tạo problem)',
+  })
+  @Post('generate-test-cases-draft')
+  async generateTestCasesDraft(@Body() dto: GenerateAiTestcaseDto) {
+    return this.aiTestcaseService.generateDraft(dto);
+  }
+
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Owner tạo problem mới' })
   @Post()
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateProblemDto) {
     return this.problemsService.create(dto, user.userId);
   }
 
   @ApiBearerAuth('JWT')
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin cập nhật problem' })
+  @ApiOperation({ summary: 'Owner cập nhật problem' })
   @Patch(':id')
   async update(
     @Param('id') id: string,
@@ -55,10 +67,9 @@ export class ProblemsController {
   }
 
   @ApiBearerAuth('JWT')
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin xóa problem' })
+  @ApiOperation({ summary: 'Owner xóa problem' })
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    return this.problemsService.delete(id);
+  async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.problemsService.delete(id, user.userId);
   }
 }

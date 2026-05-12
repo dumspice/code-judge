@@ -25,6 +25,24 @@ export const EnvKeys = {
   GOOGLE_CLIENT_SECRET: 'GOOGLE_CLIENT_SECRET',
   /** Google OAuth Callback URL. */
   GOOGLE_CALLBACK_URL: 'GOOGLE_CALLBACK_URL',
+  /** API key provider OpenAI for AI testcase generation. */
+  OPENAI_API_KEY: 'OPENAI_API_KEY',
+  /** API key provider Google Generative AI for AI testcase generation. */
+  GOOGLE_GENERATIVE_AI_API_KEY: 'GOOGLE_GENERATIVE_AI_API_KEY',
+  /** Default AI provider (`openai` or `google`). */
+  AI_DEFAULT_PROVIDER: 'AI_DEFAULT_PROVIDER',
+  /** Default OpenAI model name. */
+  AI_DEFAULT_MODEL_OPENAI: 'AI_DEFAULT_MODEL_OPENAI',
+  /** Default Google model name. */
+  AI_DEFAULT_MODEL_GOOGLE: 'AI_DEFAULT_MODEL_GOOGLE',
+  /** Prompt version identifier for auditing/revision. */
+  AI_PROMPT_VERSION: 'AI_PROMPT_VERSION',
+  /** Enable fast mode for first-response latency optimization. */
+  AI_FAST_MODE: 'AI_FAST_MODE',
+  /** Max tokens sent to generation endpoint. */
+  AI_MAX_TOKENS: 'AI_MAX_TOKENS',
+  /** Sampling temperature for generation. */
+  AI_TEMPERATURE: 'AI_TEMPERATURE',
   /** MinIO/S3 endpoint host (không gồm protocol). */
   MINIO_ENDPOINT: 'MINIO_ENDPOINT',
   /** MinIO API port (mặc định 9000). */
