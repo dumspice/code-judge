@@ -29,6 +29,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { CreateProblemDto, problemsApi, UpdateProblemDto } from '@/services/problem.apis';
+import { toast } from 'sonner';
 
 export default function ClassProblemCreate({ classId }: { classId: string }) {
   console.log(classId);
@@ -85,7 +86,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
       });
     } catch (error) {
       console.error('Failed to load problem:', error);
-      alert('Failed to load problem data.');
+      toast.error('Failed to load problem data.', { position: 'top-center' });
     } finally {
       setInitialLoading(false);
     }
@@ -134,6 +135,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
 
   const handleSave = async () => {
     if (!validate()) {
+      toast.error('Please fix the errors in the form.', { position: 'top-center' });
       return;
     }
 
@@ -158,9 +160,12 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         } as CreateProblemDto);
       }
       router.push(`/dashboard/${classId}/classwork`);
+      toast.success(editId ? 'Problem updated successfully!' : 'Problem created successfully!', {
+        position: 'top-center',
+      });
     } catch (error) {
       console.error('Failed to save problem:', error);
-      alert('Failed to save problem. Please check your inputs.');
+      toast.error('Failed to save problem. Please check your inputs.', { position: 'top-center' });
     } finally {
       setLoading(false);
     }
