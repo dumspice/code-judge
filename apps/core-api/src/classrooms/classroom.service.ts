@@ -70,10 +70,8 @@ export class ClassroomService {
       orderBy: {
         joinedAt: 'desc',
       },
-
       select: {
         role: true,
-
         classRoom: {
           select: {
             id: true,
@@ -83,12 +81,17 @@ export class ClassroomService {
             classCode: true,
             isActive: true,
             createdAt: true,
-
             owner: {
               select: {
                 id: true,
                 name: true,
                 image: true,
+              },
+            },
+            assignments: {
+              include: {
+                problem: true,
+                contest: true,
               },
             },
           },
