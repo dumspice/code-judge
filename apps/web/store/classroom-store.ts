@@ -4,6 +4,7 @@ import { Classroom, getMyClassrooms } from '@/services/classroom.apis';
 interface ClassroomState {
     teaching: Classroom[];
     enrolled: Classroom[];
+    archived: Classroom[];
     loading: boolean;
 
     fetchClassrooms: () => Promise<void>;
@@ -14,6 +15,7 @@ interface ClassroomState {
 export const useClassroomStore = create<ClassroomState>((set, get) => ({
     teaching: [],
     enrolled: [],
+    archived: [],
     loading: false,
 
     fetchClassrooms: async () => {
@@ -24,11 +26,15 @@ export const useClassroomStore = create<ClassroomState>((set, get) => ({
 
             set({
                 teaching: data
-                    .filter((item) => item.role === 'OWNER')
+                    .filter((item) => item.role === 'OWNER' && item.classRoom.isActive)
                     .map((item) => item.classRoom),
 
                 enrolled: data
-                    .filter((item) => item.role === 'MEMBER')
+                    .filter((item) => item.role === 'MEMBER' && item.classRoom.isActive)
+                    .map((item) => item.classRoom),
+
+                archived: data
+                    .filter((item) => !item.classRoom.isActive)
                     .map((item) => item.classRoom),
 
                 loading: false,
@@ -57,6 +63,7 @@ export const useClassroomStore = create<ClassroomState>((set, get) => ({
         set({
             teaching: [],
             enrolled: [],
+            archived: [],
         });
     },
 }));

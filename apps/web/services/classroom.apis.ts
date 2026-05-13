@@ -62,6 +62,7 @@ export interface MyClassroomItem {
     name: string;
     academicYear?: string | null;
     classCode: string;
+    isActive: boolean;
 
     owner: {
       id: string;
@@ -118,10 +119,17 @@ export async function updateClassroom(id: string, dto: UpdateClassroomDto): Prom
   });
 }
 
-// DELETE CLASSROOM (SOFT DELETE)
-export async function deleteClassroom(id: string): Promise<void> {
-  return apiFetch<void>(`/classroom/${id}`, {
-    method: 'DELETE',
+// ARCHIVE CLASSROOM
+export async function archiveClassroom(id: string): Promise<void> {
+  return apiFetch<void>(`/classroom/${id}/archive`, {
+    method: 'POST',
+  });
+}
+
+// RESTORE CLASSROOM
+export async function restoreClassroom(id: string): Promise<void> {
+  return apiFetch<void>(`/classroom/${id}/restore`, {
+    method: 'POST',
   });
 }
 

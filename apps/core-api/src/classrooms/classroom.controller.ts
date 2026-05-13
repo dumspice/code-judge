@@ -38,10 +38,16 @@ export class ClassroomController {
     return this.service.update(id, dto, user.userId);
   }
 
-  // DELETE
-  @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.service.remove(id, user.userId);
+  // ARCHIVE
+  @Post(':id/archive')
+  archive(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.archive(id, user.userId);
+  }
+
+  // RESTORE
+  @Post(':id/restore')
+  restore(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.restore(id, user.userId);
   }
 
   // JOIN
