@@ -9,7 +9,7 @@
  */
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-const PROBLEM_ID = '95c4b03d-8913-44f8-873e-0fa265392ce1';
+const PROBLEM_ID = '3b7ffcfd-2d7f-4a6f-92ec-524bc0e3ef13';
 const TOTAL_SUBMISSIONS = 1000;
 const CONCURRENCY = 10; // Giảm từ 50 xuống 10 để tránh rate limiting
 const LANGUAGE = 'CPP';
@@ -104,7 +104,7 @@ async function run() {
 
   for (let i = 0; i < TOTAL_SUBMISSIONS; i += 1) {
     // const userId = getUserId(i);
-    const userId = 'e729209b-400f-4b3a-bb3c-81ca4787df00';
+    const userId = '4b17f4d4-1ffa-490a-8e67-7c331d9b9a5d';
     pending.push(submit(userId));
 
     if (pending.length >= CONCURRENCY) {

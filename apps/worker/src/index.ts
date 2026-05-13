@@ -308,35 +308,40 @@ async function processSubmission(job: any) {
         const sId = result.status?.id;
 
         if (sId === 3) caseStatus = 'Accepted';
-        else if (sId === 4) caseStatus = 'Wrong';
         else if (sId === 5) caseStatus = 'TimeLimitExceeded';
         else if (sId === 6) caseStatus = 'CompilationError';
         else if (sId >= 7 && sId <= 12) caseStatus = 'RuntimeError';
-        else if (sId === 13) {
-          // Internal error (usually 'Cleanup failed' on Windows)
-          // Heuristic:
-          // 1. Lỗi biên dịch: Không thấy file thực thi (exit 127)
-          // 2. Lỗi thực thi: Có tín hiệu lỗi (exit > 128 và không phải 124 timeout)
-          // 3. Qu quá thời gian: exit 124 HOẶC (đạt ngưỡng time + không output + không có exit signal)
+        else {
+          // Xử lý các trường hợp Status 4 (Wrong), 13 (Internal Error) hoặc các status khác
+          // bằng cách phân tích exit_code và stderr (Heuristic)
+          
           const isTimeLimitReached = result.time && (parseFloat(result.time) * 1000 >= problem.timeLimitMs - 50);
           const hasNoOutput = !result.stdout || result.stdout.length === 0;
-          const isBinaryMissing = result.exit_code === 127 || (stderr && stderr.includes('No such file or directory'));
+          
+          // Lỗi biên dịch: exit 127 hoặc có thông báo lỗi biên dịch
+          const isCompilationError = result.exit_code === 127 || 
+                                     (result.compile_output && result.compile_output.length > 0) ||
+                                     (stderr && stderr.includes('No such file or directory'));
+          
+          // Lỗi thực thi: exit code lớn (tín hiệu hệ thống) hoặc thông báo lỗi đặc trưng
           const isRuntimeSignal = (result.exit_code > 128 && result.exit_code !== 124) || 
                                   (stderr && (stderr.includes('Floating point exception') || 
                                              stderr.includes('Segmentation fault') || 
-                                             stderr.includes('Aborted')));
+                                             stderr.includes('Aborted') ||
+                                             stderr.includes('runtime error')));
 
-          if (isBinaryMissing) {
+          if (isCompilationError) {
             caseStatus = 'CompilationError';
           } else if (isRuntimeSignal) {
             caseStatus = 'RuntimeError';
           } else if (result.exit_code === 124 || (isTimeLimitReached && hasNoOutput)) {
             caseStatus = 'TimeLimitExceeded';
+          } else if (sId === 4) {
+            caseStatus = 'Wrong';
           } else {
-            caseStatus = isMatch ? 'Accepted' : 'Wrong';
+            caseStatus = 'RuntimeError'; // Fallback
           }
         }
-        else caseStatus = 'RuntimeError';
         
 
         // Override if output matches (Crucial for stubs/custom runs)
