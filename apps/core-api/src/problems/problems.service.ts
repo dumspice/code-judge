@@ -62,7 +62,7 @@ export class ProblemsService {
     });
   }
 
-  async findAll(query: { search?: string; page?: number; limit?: number }) {
+  async findAll(query: { search?: string; page?: number; limit?: number; classRoomId?: string }) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
@@ -70,6 +70,7 @@ export class ProblemsService {
     const where: Prisma.ProblemWhereInput = {
       isPublished: true,
       visibility: { not: 'PRIVATE' },
+      ...(query.classRoomId ? { assignments: { some: { classRoomId: query.classRoomId } } } : {}),
       ...(search
         ? {
             OR: [

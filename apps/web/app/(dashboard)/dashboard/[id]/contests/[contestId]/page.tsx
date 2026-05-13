@@ -159,7 +159,7 @@ export default function ContestDetailPage() {
                         <div className="space-y-2">
                           <h3 className="text-lg font-semibold">
                             <Link
-                              href={`/problems/${item.problemId}`}
+                              href={`/problem/${item.problemId}`}
                               className="hover:text-primary"
                             >
                               {item.problem?.title ?? item.problemId}

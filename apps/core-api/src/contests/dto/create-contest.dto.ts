@@ -55,10 +55,10 @@ export class CreateContestDto {
   @IsNotEmpty()
   classRoomId!: string;
 
-  @ApiPropertyOptional({ example: 'Contest public cho mọi người' })
-  @IsOptional()
+  @ApiProperty({ example: 'Contest public cho mọi người' })
   @IsString()
-  description?: string;
+  @IsNotEmpty()
+  description!: string;
 
   @ApiProperty({ example: '2026-05-10T08:00:00.000Z' })
   @IsString()
