@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { authApi, ApiRequestError } from '@/services/auth.apis';
 import { useAuthStore } from '@/store/auth-store';
@@ -11,6 +11,9 @@ const BG_IMAGE =
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl');
+
   const refreshUser = useAuthStore((state) => state.refreshUser);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,8 +34,10 @@ export default function LoginPage() {
       // Lấy state mới nhất từ Zustand
       const user = useAuthStore.getState().user;
 
-      // Bẻ lái dựa theo Role
-      if (user?.role === 'ADMIN') {
+      // Nếu có callbackUrl thì quay lại đó, nếu không thì theo Role
+      if (callbackUrl) {
+        router.push(callbackUrl);
+      } else if (user?.role === 'ADMIN') {
         router.push('/admin/users');
       } else {
         router.push('/dashboard');

@@ -235,4 +235,35 @@ export class ClassroomService {
       },
     });
   }
+
+  // REMOVE MEMBER
+  async removeMember(classRoomId: string, targetUserId: string, ownerId: string) {
+    const classroom = await this.prisma.classRoom.findUnique({
+      where: { id: classRoomId },
+    });
+
+    if (!classroom) {
+      throw new NotFoundException('Class not found');
+    }
+
+    if (classroom.ownerId !== ownerId) {
+      throw new ForbiddenException('Only owner can remove members');
+    }
+
+    if (targetUserId === ownerId) {
+      throw new ForbiddenException('Owner cannot remove themselves');
+    }
+
+    return this.prisma.classEnrollment.update({
+      where: {
+        classRoomId_userId: {
+          classRoomId,
+          userId: targetUserId,
+        },
+      },
+      data: {
+        status: 'REMOVED',
+      },
+    });
+  }
 }

@@ -49,4 +49,14 @@ export class ClassroomController {
   join(@Body() dto: JoinClassroomDto, @CurrentUser() user: any) {
     return this.service.join(dto, user.userId);
   }
+
+  // REMOVE MEMBER
+  @Delete(':id/members/:userId')
+  removeMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.service.removeMember(id, userId, user.userId);
+  }
 }
