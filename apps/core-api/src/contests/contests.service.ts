@@ -80,13 +80,14 @@ export class ContestsService {
     });
   }
 
-  async findAll(query: { search?: string; page?: number; limit?: number }) {
+  async findAll(query: { search?: string; page?: number; limit?: number; classRoomId?: string }) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
     const search = query.search?.trim();
     const where: Prisma.ContestWhereInput = {
       status: { not: 'DRAFT' },
+      ...(query.classRoomId ? { assignments: { some: { classRoomId: query.classRoomId } } } : {}),
       ...(search
         ? {
             OR: [

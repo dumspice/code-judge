@@ -41,8 +41,8 @@ export const authApi = {
     });
   },
 
-  async me(): Promise<UserProfile> {
-    return apiFetch<UserProfile>('/auth/me');
+  async me(options?: RequestInit): Promise<UserProfile> {
+    return apiFetch<UserProfile>('/auth/me', options);
   },
 
   async logout() {

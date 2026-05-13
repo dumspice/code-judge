@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { apiFetch } from '@/services/auth.apis';
+import { apiFetch, authApi } from '@/services/auth.apis';
 import { Button } from '@/components/ui/button';
 
 export default function AcceptInvitePage() {
@@ -42,10 +42,31 @@ export default function AcceptInvitePage() {
   }
 
   if (error) {
+    const isForbidden = error.toLowerCase().includes('forbidden') || error.toLowerCase().includes('invalid user');
+
     return (
-      <div className="h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-red-500">{error}</p>
-        <Button onClick={() => router.push('/')}>Go Home</Button>
+      <div className="h-screen flex flex-col items-center justify-center gap-6 px-4 text-center">
+        <div className="space-y-2">
+          <p className="text-2xl font-bold text-red-600">Invitation Error</p>
+          <p className="text-gray-600 max-w-md">
+            {isForbidden 
+              ? 'This invitation was sent to a different email address. Please log in with the correct account to join.'
+              : error}
+          </p>
+        </div>
+
+        <div className="flex gap-4">
+          {isForbidden ? (
+            <Button variant="destructive" onClick={async () => {
+              await authApi.logout();
+              router.push(`/login?callbackUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+            }}>
+              Log out and Try Again
+            </Button>
+          ) : (
+            <Button onClick={() => router.push('/')}>Go Home</Button>
+          )}
+        </div>
       </div>
     );
   }

@@ -71,12 +71,32 @@ export interface MyClassroomItem {
     name: string;
     academicYear?: string | null;
     classCode: string;
+    isActive: boolean;
 
     owner: {
       id: string;
       name: string;
       image?: string | null;
     };
+    assignments: Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      dueAt: string | null;
+      problemId: string | null;
+      contestId: string | null;
+      publishedAt: string;
+      problem?: {
+        id: string;
+        slug: string;
+      };
+      contest?: {
+        id: string;
+        slug: string;
+        startAt: string;
+        endAt: string;
+      };
+    }>;
   };
 }
 
@@ -141,10 +161,17 @@ export async function updateClassroom(id: string, dto: UpdateClassroomDto): Prom
   });
 }
 
-// DELETE CLASSROOM (SOFT DELETE)
-export async function deleteClassroom(id: string): Promise<void> {
-  return apiFetch<void>(`/classroom/${id}`, {
-    method: 'DELETE',
+// ARCHIVE CLASSROOM
+export async function archiveClassroom(id: string): Promise<void> {
+  return apiFetch<void>(`/classroom/${id}/archive`, {
+    method: 'POST',
+  });
+}
+
+// RESTORE CLASSROOM
+export async function restoreClassroom(id: string): Promise<void> {
+  return apiFetch<void>(`/classroom/${id}/restore`, {
+    method: 'POST',
   });
 }
 
@@ -160,5 +187,12 @@ export async function joinClassroom(dto: JoinClassroomDto): Promise<{
   return apiFetch(`/classroom/join`, {
     method: 'POST',
     body: dto,
+  });
+}
+
+// REMOVE MEMBER
+export async function removeMember(classRoomId: string, userId: string): Promise<void> {
+  return apiFetch<void>(`/classroom/${classRoomId}/members/${userId}`, {
+    method: 'DELETE',
   });
 }

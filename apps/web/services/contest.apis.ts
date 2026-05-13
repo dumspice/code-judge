@@ -62,7 +62,7 @@ export interface UpdateContestDto {
 
 export const contestsApi = {
   async findAll(
-    query?: { search?: string; page?: number; limit?: number },
+    query?: { search?: string; page?: number; limit?: number; classRoomId?: string },
     options?: RequestInit,
   ): Promise<{
     items: Contest[];
@@ -75,6 +75,7 @@ export const contestsApi = {
     if (query?.search) params.set('search', query.search);
     if (query?.page) params.set('page', query.page.toString());
     if (query?.limit) params.set('limit', query.limit.toString());
+    if (query?.classRoomId) params.set('classRoomId', query.classRoomId);
 
     const queryString = params.toString();
 

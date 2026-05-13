@@ -7,7 +7,7 @@ import InviteModal from '@/components/dashboard/class-detail/invite-modal';
 import PersonItem from '@/components/dashboard/class-detail/person-item';
 
 import { authApi } from '@/services/auth.apis';
-import { getClassroomPeople } from '@/services/classroom.apis';
+import { getClassroomPeople, removeMember } from '@/services/classroom.apis';
 
 export default function PeoplePage() {
   const params = useParams();
@@ -16,16 +16,28 @@ export default function PeoplePage() {
   const [data, setData] = useState<any>(null);
   const [me, setMe] = useState<any>(null);
 
+  const load = async () => {
+    const [people, user] = await Promise.all([getClassroomPeople(classRoomId), authApi.me()]);
+    setData(people);
+    setMe(user);
+  };
+
   useEffect(() => {
-    const load = async () => {
-      const [people, user] = await Promise.all([getClassroomPeople(classRoomId), authApi.me()]);
-
-      setData(people);
-      setMe(user);
-    };
-
     load();
   }, [classRoomId]);
+
+  const handleRemove = async (userId: string) => {
+    if (!confirm('Are you sure you want to remove this member?')) return;
+
+    try {
+      await removeMember(classRoomId, userId);
+      // reload data
+      await load();
+    } catch (error) {
+      console.error('Failed to remove member:', error);
+      alert('Failed to remove member');
+    }
+  };
 
   if (!data) return <div>Loading...</div>;
 
@@ -61,7 +73,13 @@ export default function PeoplePage() {
 
         <div className="divide-y">
           {data.students.map((s: any) => (
-            <PersonItem key={s.id} name={s.name} avatarUrl={s.image} />
+            <PersonItem
+              key={s.id}
+              name={s.name}
+              avatarUrl={s.image}
+              showRemove={isOwner && s.id !== me?.id}
+              onRemove={() => handleRemove(s.id)}
+            />
           ))}
         </div>
       </section>

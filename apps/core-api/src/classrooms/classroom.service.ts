@@ -35,6 +35,15 @@ export class ClassroomService {
         ownerId: userId,
         isActive: true,
       },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+          },
+        },
+      },
     });
 
     // auto enroll owner
@@ -93,23 +102,31 @@ export class ClassroomService {
         userId,
         status: 'ACTIVE',
       },
-
+      orderBy: {
+        joinedAt: 'desc',
+      },
       select: {
         role: true,
-
         classRoom: {
           select: {
             id: true,
+            ownerId: true,
             name: true,
             academicYear: true,
             classCode: true,
+            isActive: true,
             createdAt: true,
-
             owner: {
               select: {
                 id: true,
                 name: true,
                 image: true,
+              },
+            },
+            assignments: {
+              include: {
+                problem: true,
+                contest: true,
               },
             },
           },
@@ -215,8 +232,8 @@ export class ClassroomService {
     });
   }
 
-  // DELETE CLASSROOM (SOFT DELETE)
-  async remove(classRoomId: string, userId: string) {
+  // ARCHIVE CLASSROOM (OWNER ONLY)
+  async archive(classRoomId: string, userId: string) {
     const classroom = await this.prisma.classRoom.findUnique({
       where: { id: classRoomId },
     });
@@ -226,13 +243,35 @@ export class ClassroomService {
     }
 
     if (classroom.ownerId !== userId) {
-      throw new ForbiddenException('Only owner can delete');
+      throw new ForbiddenException('Only owner can archive');
     }
 
     return this.prisma.classRoom.update({
       where: { id: classRoomId },
       data: {
         isActive: false,
+      },
+    });
+  }
+
+  // RESTORE CLASSROOM (OWNER ONLY)
+  async restore(classRoomId: string, userId: string) {
+    const classroom = await this.prisma.classRoom.findUnique({
+      where: { id: classRoomId },
+    });
+
+    if (!classroom) {
+      throw new NotFoundException('Class not found');
+    }
+
+    if (classroom.ownerId !== userId) {
+      throw new ForbiddenException('Only owner can restore');
+    }
+
+    return this.prisma.classRoom.update({
+      where: { id: classRoomId },
+      data: {
+        isActive: true,
       },
     });
   }
@@ -267,6 +306,37 @@ export class ClassroomService {
         role: 'MEMBER',
         status: 'ACTIVE',
         joinedAt: new Date(),
+      },
+    });
+  }
+
+  // REMOVE MEMBER
+  async removeMember(classRoomId: string, targetUserId: string, ownerId: string) {
+    const classroom = await this.prisma.classRoom.findUnique({
+      where: { id: classRoomId },
+    });
+
+    if (!classroom) {
+      throw new NotFoundException('Class not found');
+    }
+
+    if (classroom.ownerId !== ownerId) {
+      throw new ForbiddenException('Only owner can remove members');
+    }
+
+    if (targetUserId === ownerId) {
+      throw new ForbiddenException('Owner cannot remove themselves');
+    }
+
+    return this.prisma.classEnrollment.update({
+      where: {
+        classRoomId_userId: {
+          classRoomId,
+          userId: targetUserId,
+        },
+      },
+      data: {
+        status: 'REMOVED',
       },
     });
   }

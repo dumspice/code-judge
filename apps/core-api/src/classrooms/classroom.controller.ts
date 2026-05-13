@@ -58,15 +58,31 @@ export class ClassroomController {
     return this.service.update(id, dto, user.userId);
   }
 
-  // DELETE
-  @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.service.remove(id, user.userId);
+  // ARCHIVE
+  @Post(':id/archive')
+  archive(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.archive(id, user.userId);
+  }
+
+  // RESTORE
+  @Post(':id/restore')
+  restore(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.service.restore(id, user.userId);
   }
 
   // JOIN
   @Post('join')
   join(@Body() dto: JoinClassroomDto, @CurrentUser() user: any) {
     return this.service.join(dto, user.userId);
+  }
+
+  // REMOVE MEMBER
+  @Delete(':id/members/:userId')
+  removeMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.service.removeMember(id, userId, user.userId);
   }
 }

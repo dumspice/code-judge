@@ -18,11 +18,13 @@ export class ContestsController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('classRoomId') classRoomId?: string,
   ) {
     return this.contestsService.findAll({
       search,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
+      classRoomId,
     });
   }
 

@@ -21,7 +21,10 @@ export default function WeekNavigation() {
   // 2. Hàm chuyển tuần bằng cách thay đổi URL
   const updateWeek = (newDate: Date) => {
     const dateStr = format(newDate, 'yyyy-MM-dd');
-    router.push(`?date=${dateStr}`); // Cập nhật URL mà không load lại trang
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('date', dateStr);
+
+    router.push(`?${params.toString()}`);
   };
 
   const formatRange = () => {

@@ -1,28 +1,24 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useShallow } from 'zustand/react/shallow';
+import { useState } from 'react';
 import ClassCard from '@/components/dashboard/ClassCard';
 import { getClassroomBannerColor } from '@/lib/classroom-banner';
-import { toast } from 'sonner';
-import { ConfirmDialog } from '@/components/shared/confirm-dialog';
-
 import { archiveClassroom, restoreClassroom } from '@/services/classroom.apis';
 import { useClassroomStore } from '@/store/classroom-store';
 import { useAuthStore } from '@/store/auth-store';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
-export default function StudentDashboardPage() {
-  const { teaching, enrolled, loading, fetchClassrooms } = useClassroomStore(
+import { useShallow } from 'zustand/react/shallow';
+
+export default function ArchivedDashboardPage() {
+  const { archived, loading, fetchClassrooms } = useClassroomStore(
     useShallow((s) => ({
-      teaching: s.teaching,
-      enrolled: s.enrolled,
+      archived: s.archived,
       loading: s.loading,
       fetchClassrooms: s.fetchClassrooms,
     })),
   );
-
-  const classrooms = useMemo(() => [...teaching, ...enrolled], [teaching, enrolled]);
-  const activeClasses = useMemo(() => classrooms.filter((c) => c.isActive), [classrooms]);
   const user = useAuthStore((s) => s.user);
 
   // DIALOG STATE
@@ -48,7 +44,7 @@ export default function StudentDashboardPage() {
     setConfirmConfig({
       isOpen: true,
       title: 'Archive Classroom?',
-      description: 'Are you sure you want to archive this class? You can restore it later.',
+      description: 'Are you sure you want to archive this class?',
       variant: 'destructive',
       loading: false,
       onConfirm: async () => {
@@ -71,7 +67,7 @@ export default function StudentDashboardPage() {
     setConfirmConfig({
       isOpen: true,
       title: 'Restore Classroom?',
-      description: 'This will bring the class back to your active list.',
+      description: 'Are you sure you want to restore this class?',
       variant: 'default',
       loading: false,
       onConfirm: async () => {
@@ -90,65 +86,43 @@ export default function StudentDashboardPage() {
     });
   };
 
-  const handleLeave = (id: string) => {
-    setConfirmConfig({
-      isOpen: true,
-      title: 'Archive (Leave) Class?',
-      description: 'Are you sure you want to archive this class from your list?',
-      variant: 'destructive',
-      loading: false,
-      onConfirm: async () => {
-        setConfirmConfig((p) => ({ ...p, loading: true }));
-        try {
-          // Logic for member to "Archive" could be unenroll or just hiding it
-          toast.info('Hành động Archive (Rời lớp) đang được xử lý...');
-          await fetchClassrooms();
-          closeDialog();
-        } catch (error) {
-          console.error(error);
-          toast.error('Failed to leave class');
-          setConfirmConfig((p) => ({ ...p, loading: false }));
-        }
-      },
-    });
-  };
-
-  if (loading && classrooms.length === 0) {
-    return <div>Loading classrooms...</div>;
+  if (loading && archived.length === 0) {
+    return <div>Loading archived classrooms...</div>;
   }
 
-  if (activeClasses.length === 0) {
+  if (archived.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-gray-500">
-        <p className="text-lg font-medium">No active classrooms yet.</p>
-        <p className="text-sm">Join a class or check your archived classes in the sidebar.</p>
+        <p className="text-lg font-medium">No archived classrooms.</p>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {activeClasses.map((item) => {
-        const bannerColors = getClassroomBannerColor(item.id);
-        const isOwner = item.ownerId === user?.id;
-
-        return (
-          <ClassCard
-            key={item.id}
-            id={item.id}
-            title={item.name}
-            subTitle={item.academicYear ?? ''}
-            teacher={item.owner?.name ?? 'Unknown'}
-            bannerBg={bannerColors}
-            avatar={item.owner?.image}
-            isActive={item.isActive}
-            isOwner={isOwner}
-            onArchive={() => handleArchive(item.id)}
-            onRestore={() => handleRestore(item.id)}
-            onLeave={() => handleLeave(item.id)}
-          />
-        );
-      })}
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">Archived classes</h1>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {archived.map((item) => {
+          const bannerColors = getClassroomBannerColor(item.id);
+          const isOwner = item.ownerId === user?.id;
+          
+          return (
+            <ClassCard
+              key={item.id}
+              id={item.id}
+              title={item.name}
+              subTitle={item.academicYear ?? ''}
+              teacher={item.owner?.name ?? 'Unknown'}
+              bannerBg={bannerColors}
+              avatar={item.owner?.image}
+              isActive={item.isActive}
+              isOwner={isOwner}
+              onArchive={() => handleArchive(item.id)}
+              onRestore={() => handleRestore(item.id)}
+            />
+          );
+        })}
+      </div>
 
       <ConfirmDialog
         isOpen={confirmConfig.isOpen}
