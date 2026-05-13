@@ -11,9 +11,11 @@ import { Problem, problemsApi } from '@/services/problem.apis';
 export default function ClassworkList({
   classId,
   initialProblems,
+  isOwner,
 }: {
   classId: string;
   initialProblems: Problem[];
+  isOwner: boolean;
 }) {
   const router = useRouter();
   const [problems, setProblems] = useState<Problem[]>(initialProblems);
@@ -23,7 +25,7 @@ export default function ClassworkList({
 
   const loadProblems = async () => {
     try {
-      const result = await problemsApi.findAll({ limit: 50 });
+      const result = await problemsApi.findAll({ limit: 50, classRoomId: classId });
       setProblems(result.items);
     } catch (error) {
       console.error('Failed to load problems:', error);
@@ -57,13 +59,16 @@ export default function ClassworkList({
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <Link
-          href={`/dashboard/${classId}/classwork/create`}
-          className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all hover:scale-105 active:scale-95"
-        >
-          <Plus className="w-5 h-5" />
-          Create Problem
-        </Link>
+        {/* Only Owner of the Class has the access to create new problem */}
+        {isOwner && (
+          <Link
+            href={`/dashboard/${classId}/classwork/create`}
+            className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all hover:scale-105 active:scale-95"
+          >
+            <Plus className="w-5 h-5" />
+            Create Problem
+          </Link>
+        )}
 
         <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-gray-200 shadow-sm w-full max-w-md">
           <Search className="w-4 h-4 text-gray-400" />
@@ -84,6 +89,7 @@ export default function ClassworkList({
               {...problem}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              showActions={isOwner}
             />
           ))
         ) : (
