@@ -122,7 +122,7 @@ export default function LoginPage() {
                 </label>
                 <button
                   type="button"
-                  className="text-sm font-medium text-slate-500 underline-offset-4 hover:text-slate-900 hover:underline"
+                  className="text-sm font-medium text-slate-500 underline-offset-4 hover:text-slate-900 hover:underline cursor-pointer"
                 >
                   Forgot your password?
                 </button>
@@ -141,7 +141,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800 active:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex w-full items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors cursor-pointer hover:bg-slate-800 active:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? (
                 <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -176,7 +176,7 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => authApi.googleLogin()}
-            className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100"
+            className="cursor-pointer flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path
@@ -224,10 +224,10 @@ export default function LoginPage() {
         {/* Bottom-left quote */}
         <div className="absolute bottom-12 left-12 right-12">
           <blockquote className="text-lg font-medium leading-relaxed text-white/90">
-            &ldquo;Code Judge giúp tôi luyện tập thuật toán hiệu quả hơn bao giờ hết. Hệ thống chấm
-            bài nhanh, chính xác và trực quan.&rdquo;
+            &ldquo;Code Judge helps me practice algorithms more effectively than ever before. The
+            grading system is fast, accurate, and intuitive..&rdquo;
           </blockquote>
-          <p className="mt-3 text-sm font-medium text-white/60">— Một lập trình viên</p>
+          <p className="mt-3 text-sm font-medium text-white/60">— A Programmer —</p>
         </div>
       </div>
     </div>
