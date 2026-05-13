@@ -76,18 +76,18 @@ export default function ClassCard({
         {isOwner && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
+              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full cursor-pointer">
                 <MoreVertical className="w-5 h-5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {isActive ? (
-                <DropdownMenuItem onClick={onArchive}>
+                <DropdownMenuItem className="cursor-pointer" onClick={onArchive}>
                   <Archive className="w-4 h-4 mr-2" />
                   Archive
                 </DropdownMenuItem>
               ) : (
-                <DropdownMenuItem onClick={onRestore}>
+                <DropdownMenuItem className="cursor-pointer" onClick={onRestore}>
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Restore
                 </DropdownMenuItem>
