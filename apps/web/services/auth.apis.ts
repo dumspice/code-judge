@@ -4,13 +4,7 @@
 
 import { apiFetch, getApiBaseUrl, tryRefresh } from './api-client';
 
-export {
-  apiFetch,
-  ApiRequestError,
-  getApiBaseUrl,
-  tryRefresh,
-  type ApiError,
-} from './api-client';
+export { apiFetch, ApiRequestError, getApiBaseUrl, tryRefresh, type ApiError } from './api-client';
 
 // ---------------------------------------------------------------------------
 // Auth-specific API calls (session = HttpOnly cookies, credentials: 'include')
@@ -75,15 +69,15 @@ export {
   type GenerateTestCasesDraftResult,
   type Problem,
   type UpdateProblemDto,
-} from './problems.api';
+} from './problem.apis';
 
 export {
   contestsApi,
   type Contest,
   type CreateContestDto,
   type UpdateContestDto,
-} from './contests.api';
+} from './contest.apis';
 
-export { submissionsApi, type CreateSubmissionDto, type Submission } from './submissions.api';
+export { submissionsApi, type CreateSubmissionDto, type Submission } from './submission.apis';
 
-export { storageApi, type PresignUploadResponse } from './storage.api';
+export { storageApi, type PresignUploadResponse } from './storage.apis';

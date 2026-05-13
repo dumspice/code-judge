@@ -65,7 +65,7 @@ export default function InviteModal({ classRoomId }: InviteModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
+      <DialogTrigger className="cursor-pointer text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-1">
         <UserPlus2 />
       </DialogTrigger>
 

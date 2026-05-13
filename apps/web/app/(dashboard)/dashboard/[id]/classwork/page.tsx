@@ -16,10 +16,16 @@ export default async function ClassworkPage({ params }: { params: Promise<{ id: 
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
 
-  const problemsResult = await problemsApi.findAll({ 
-    limit: 50,
-    headers: { Cookie: cookieHeader }
-  });
+  const problemsResult = await problemsApi.findAll(
+    {
+      limit: 50,
+    },
+    {
+      headers: {
+        Cookie: cookieHeader,
+      },
+    },
+  );
   const initialProblems = problemsResult.items as Problem[];
 
   return (

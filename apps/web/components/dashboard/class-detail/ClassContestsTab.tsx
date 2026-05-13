@@ -220,7 +220,7 @@ export default function ClassContestsTab({ classId }: { classId: string }) {
         </div>
         <Button
           onClick={handleShowCreate}
-          className="bg-black hover:bg-gray-800 text-white shadow-lg transition-all hover:scale-105 active:scale-95"
+          className="cursor-pointer bg-black hover:bg-gray-800 text-white shadow-lg transition-all hover:scale-105 active:scale-95"
         >
           <Plus className="w-4 h-4 mr-2" />
           New Contest
@@ -241,7 +241,7 @@ export default function ClassContestsTab({ classId }: { classId: string }) {
 
       {showCreateForm && (
         <Card className="border-2 border-black/5 shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-300">
-          <CardHeader className="bg-gray-50/50 border-b">
+          <CardHeader className="border-b">
             <CardTitle className="text-xl">
               {editingContestId ? 'Edit Contest' : 'Create New Contest'}
             </CardTitle>
@@ -427,7 +427,7 @@ export default function ClassContestsTab({ classId }: { classId: string }) {
       <Card className="border-none shadow-xl bg-white/50 backdrop-blur-sm overflow-hidden">
         <CardContent className="p-0">
           <Table>
-            <TableHeader className="bg-gray-50/80">
+            <TableHeader>
               <TableRow className="hover:bg-transparent border-b">
                 <TableHead className="py-4 font-bold text-black">Contest Title</TableHead>
                 <TableHead className="py-4 font-bold text-black">Status</TableHead>

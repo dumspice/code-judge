@@ -12,6 +12,7 @@
     "@aws-sdk/client-lambda": "^3.1044.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "axios": "^1.16.0",
     "bullmq": "^5.0.0",
     "dockerode": "^4.0.1",
     "dotenv": "^16.4.0",

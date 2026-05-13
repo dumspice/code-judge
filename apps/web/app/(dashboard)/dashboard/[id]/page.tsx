@@ -23,14 +23,20 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
 
-  const contests = (await contestsApi.findAll({ 
-    limit: 3, 
-    headers: { Cookie: cookieHeader } 
-  })).items as Contest[];
+  const contests = (
+    await contestsApi.findAll(
+      { limit: 3 },
+      {
+        headers: {
+          Cookie: cookieHeader,
+        },
+      },
+    )
+  ).items;
 
   // Fetch classroom details
   const classroom = await getClassroomDetail(id, {
-    headers: { Cookie: cookieHeader }
+    headers: { Cookie: cookieHeader },
   });
 
   return (

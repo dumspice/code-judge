@@ -1,5 +1,7 @@
-// import { Suspense } from 'react';
-// import { useSearchParams } from 'next/navigation';
+'use client';
+
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { startOfWeek, addDays, isSameDay, parseISO, format } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 
@@ -15,11 +17,11 @@ export default function SchedulePage() {
 }
 
 function SchedulePageContent() {
-  // const searchParams = useSearchParams();
+  const searchParams = useSearchParams();
 
   // // Đọc ngày từ URL tương tự như bên Navigation
-  // const dateParam = searchParams.get('date');
-  const currentDate = new Date(); // dateParam ? new Date(dateParam) : new Date();
+  const dateParam = searchParams.get('date');
+  const currentDate = dateParam ? new Date(dateParam) : new Date();
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
 
   const daysInWeek = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));

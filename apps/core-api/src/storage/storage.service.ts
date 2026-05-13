@@ -15,6 +15,7 @@ export class StorageService {
   private readonly logger = new Logger(StorageService.name);
   private readonly bucket: string;
   private readonly client: Client;
+  private readonly publicClient: Client;
   private readonly publicBaseUrl: string | null;
   private readonly fallbackPublicBaseUrl: string;
   private bucketReadPolicyEnsured = false;
@@ -39,6 +40,30 @@ export class StorageService {
       secretKey,
       region: this.config.get<string>(EnvKeys.MINIO_REGION) ?? STORAGE_DEFAULT_REGION,
     });
+
+    // Create a public client for signing URLs
+    if (this.publicBaseUrl) {
+      try {
+        const url = new URL(this.publicBaseUrl);
+        this.publicClient = new Client({
+          endPoint: url.hostname,
+          port: url.port ? Number(url.port) : (url.protocol === 'https:' ? 443 : 80),
+          useSSL: url.protocol === 'https:',
+          accessKey,
+          secretKey,
+          region: this.config.get<string>(EnvKeys.MINIO_REGION) ?? STORAGE_DEFAULT_REGION,
+        });
+      } catch (e) {
+        this.publicClient = this.client;
+      }
+    } else {
+      this.publicClient = this.client;
+    }
+
+    // Ensure bucket exists on startup
+    this.ensureBucketExists().catch(err => {
+      this.logger.error(`Failed to ensure bucket exists: ${err.message}`);
+    });
   }
 
   async ensureBucketExists(): Promise<void> {
@@ -52,14 +77,17 @@ export class StorageService {
   }
 
   async createPresignedUploadUrl(input: PresignedUploadInput): Promise<string> {
-    const { objectKey, expiresInSeconds = 900, contentType } = input;
+    const { objectKey, expiresInSeconds = 900 } = input;
     await this.ensureBucketExists();
-    return this.client.presignedPutObject(this.bucket, objectKey, expiresInSeconds);
+    // We must sign with the same headers the frontend uses (text/plain)
+    return this.publicClient.presignedUrl('PUT', this.bucket, objectKey, expiresInSeconds, {
+      'content-type': 'text/plain',
+    });
   }
 
   async createPresignedDownloadUrl(objectKey: string, expiresInSeconds = 900): Promise<string> {
     await this.ensureBucketExists();
-    return this.client.presignedGetObject(this.bucket, objectKey, expiresInSeconds);
+    return this.publicClient.presignedGetObject(this.bucket, objectKey, expiresInSeconds);
   }
 
   async putObject(

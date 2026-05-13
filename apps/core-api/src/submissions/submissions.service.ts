@@ -21,40 +21,16 @@ export class SubmissionsService {
       throw new BadRequestException('sourceCode or sourceCodeObjectKey is required');
     }
 
-    // Dev-friendly upsert: ensure User/Problem exist so the base flow runs immediately.
-    await this.prisma.user.upsert({
-      where: { id: dto.userId },
-      update: {},
-      create: {
-        id: dto.userId,
-        name: dto.userId,
-        email: `${dto.userId}@example.com`,
-        role: 'CLIENT',
-        emailVerified: false,
-        isActive: true,
-      },
-    });
+    // Optimization: Use findUnique instead of upsert to reduce DB load during high concurrency
+    const user = await this.prisma.user.findUnique({ where: { id: dto.userId } });
+    if (!user) {
+      throw new BadRequestException(`User ${dto.userId} not found. Please seed the database.`);
+    }
 
-    const problemSlug = devProblemSlug(dto.problemId);
-    await this.prisma.problem.upsert({
-      where: { id: dto.problemId },
-      update: { mode: dto.mode as any },
-      create: {
-        id: dto.problemId,
-        slug: problemSlug,
-        title: dto.problemId,
-        description: null,
-        statementMd: null,
-        difficulty: 'EASY',
-        mode: dto.mode as any,
-        timeLimitMs: 1000,
-        memoryLimitMb: 256,
-        isPublished: true,
-        visibility: 'PUBLIC',
-        supportedLanguages: [],
-        maxTestCases: 100,
-      },
-    });
+    const problem = await this.prisma.problem.findUnique({ where: { id: dto.problemId } });
+    if (!problem) {
+      throw new BadRequestException(`Problem ${dto.problemId} not found. Please seed the database.`);
+    }
 
     let contestId: string | undefined;
     let context: 'PRACTICE' | 'CONTEST' = 'PRACTICE';

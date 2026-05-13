@@ -38,6 +38,7 @@ enum SubmissionStatus {
   Running
   Accepted
   Wrong
+  RuntimeError
   Error
   CompilationError
   TimeLimitExceeded
