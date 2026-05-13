@@ -79,14 +79,14 @@ export default function Sidebar() {
   );
 
   // MAP DATA → UI
-  const teachingList = teaching.map((c) => ({
+  const teachingList = teaching.slice(0, 3).map((c) => ({
     avatar: c.name?.charAt(0)?.toUpperCase() ?? 'C',
     label: c.name,
     path: `/dashboard/${c.id}`,
     color: 'bg-teal-100 text-teal-700',
   }));
 
-  const enrolledList = enrolled.map((c) => ({
+  const enrolledList = enrolled.slice(0, 3).map((c) => ({
     avatar: c.name?.charAt(0)?.toUpperCase() ?? 'C',
     label: c.name,
     path: `/dashboard/${c.id}`,

@@ -67,6 +67,9 @@ export class ClassroomService {
         userId,
         status: 'ACTIVE',
       },
+      orderBy: {
+        joinedAt: 'desc',
+      },
 
       select: {
         role: true,

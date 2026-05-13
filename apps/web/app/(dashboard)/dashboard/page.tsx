@@ -1,9 +1,11 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import ClassCard from '@/components/dashboard/ClassCard';
 import { getClassroomBannerColor } from '@/lib/classroom-banner';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 import { archiveClassroom, restoreClassroom } from '@/services/classroom.apis';
 import { useClassroomStore } from '@/store/classroom-store';
@@ -23,38 +25,92 @@ export default function StudentDashboardPage() {
   const activeClasses = useMemo(() => classrooms.filter((c) => c.isActive), [classrooms]);
   const user = useAuthStore((s) => s.user);
 
-  const handleArchive = async (id: string) => {
-    if (!confirm('Are you sure you want to archive this class?')) return;
-    try {
-      await archiveClassroom(id);
-      await fetchClassrooms();
-    } catch (error) {
-      console.error(error);
-      alert('Failed to archive class');
-    }
+  // DIALOG STATE
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => Promise<void>;
+    loading: boolean;
+    variant: 'default' | 'destructive';
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: async () => {},
+    loading: false,
+    variant: 'destructive',
+  });
+
+  const closeDialog = () => setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+
+  const handleArchive = (id: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Archive Classroom?',
+      description: 'Are you sure you want to archive this class? You can restore it later.',
+      variant: 'destructive',
+      loading: false,
+      onConfirm: async () => {
+        setConfirmConfig((p) => ({ ...p, loading: true }));
+        try {
+          await archiveClassroom(id);
+          await fetchClassrooms();
+          toast.success('Classroom archived successfully');
+          closeDialog();
+        } catch (error) {
+          console.error(error);
+          toast.error('Failed to archive class');
+          setConfirmConfig((p) => ({ ...p, loading: false }));
+        }
+      },
+    });
   };
 
-  const handleRestore = async (id: string) => {
-    try {
-      await restoreClassroom(id);
-      await fetchClassrooms();
-    } catch (error) {
-      console.error(error);
-      alert('Failed to restore class');
-    }
+  const handleRestore = (id: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Restore Classroom?',
+      description: 'This will bring the class back to your active list.',
+      variant: 'default',
+      loading: false,
+      onConfirm: async () => {
+        setConfirmConfig((p) => ({ ...p, loading: true }));
+        try {
+          await restoreClassroom(id);
+          await fetchClassrooms();
+          toast.success('Classroom restored successfully');
+          closeDialog();
+        } catch (error) {
+          console.error(error);
+          toast.error('Failed to restore class');
+          setConfirmConfig((p) => ({ ...p, loading: false }));
+        }
+      },
+    });
   };
 
-  const handleLeave = async (id: string) => {
-    if (!confirm('Are you sure you want to archive (leave) this class?')) return;
-    try {
-      // Vì bạn muốn đổi tên thành Archive cho cả Member, nên hành động này 
-      // sẽ tương đương với việc Unenroll đối với họ.
-      // Bạn có thể bổ sung API unenroll ở đây nếu cần.
-      alert('Hành động Archive (Rời lớp) đang được xử lý...');
-      await fetchClassrooms();
-    } catch (error) {
-      console.error(error);
-    }
+  const handleLeave = (id: string) => {
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Archive (Leave) Class?',
+      description: 'Are you sure you want to archive this class from your list?',
+      variant: 'destructive',
+      loading: false,
+      onConfirm: async () => {
+        setConfirmConfig((p) => ({ ...p, loading: true }));
+        try {
+          // Logic for member to "Archive" could be unenroll or just hiding it
+          toast.info('Hành động Archive (Rời lớp) đang được xử lý...');
+          await fetchClassrooms();
+          closeDialog();
+        } catch (error) {
+          console.error(error);
+          toast.error('Failed to leave class');
+          setConfirmConfig((p) => ({ ...p, loading: false }));
+        }
+      },
+    });
   };
 
   if (loading && classrooms.length === 0) {
@@ -93,6 +149,16 @@ export default function StudentDashboardPage() {
           />
         );
       })}
+
+      <ConfirmDialog
+        isOpen={confirmConfig.isOpen}
+        onClose={closeDialog}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        description={confirmConfig.description}
+        loading={confirmConfig.loading}
+        variant={confirmConfig.variant}
+      />
     </div>
   );
 }
