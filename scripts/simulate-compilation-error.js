@@ -2,7 +2,7 @@ const axios = require('axios');
 
 async function simulateCompilationError() {
   const submissionData = {
-    problemId: "95c4b03d-8913-44f8-873e-0fa265392ce1", // ID bài toán tổng 2 số
+    problemId: "3b7ffcfd-2d7f-4a6f-92ec-524bc0e3ef13", // ID bài toán tổng 2 số
     language: "CPP",
     mode: "ALGO",
     // Code gây lỗi Compilation Error: viết sai câu lệnh
@@ -14,7 +14,7 @@ int main() {
     cout << a + b << endl;
     return 0;
 }`,
-    userId: "e729209b-400f-4b3a-bb3c-81ca4787df00"
+    userId: "4b17f4d4-1ffa-490a-8e67-7c331d9b9a5d"
   };
 
   try {

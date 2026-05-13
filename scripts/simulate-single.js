@@ -1,8 +1,8 @@
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const API_URL = 'http://localhost:3000/submissions';
-const USER_ID = 'e729209b-400f-4b3a-bb3c-81ca4787df00';
-const PROBLEM_ID = '95c4b03d-8913-44f8-873e-0fa265392ce1';
+const USER_ID = '4b17f4d4-1ffa-490a-8e67-7c331d9b9a5d';
+const PROBLEM_ID = '3b7ffcfd-2d7f-4a6f-92ec-524bc0e3ef13';
 const LANGUAGE = 'CPP';
 
 // Sử dụng iostream để biên dịch nhanh hơn và tránh quá tải sandbox

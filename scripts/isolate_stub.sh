@@ -16,6 +16,9 @@ fi
 
 # 2. Xử lý Cleanup
 if [[ "$ARGS" == *"--cleanup"* ]]; then
+    BOX_ID=0
+    if [[ "$ARGS" =~ "-b "([0-9]+) ]]; then BOX_ID="${BASH_REMATCH[1]}"; fi
+    rm -rf "/tmp/isolate/$BOX_ID"
     exit 0
 fi
 
