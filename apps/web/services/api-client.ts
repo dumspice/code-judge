@@ -9,17 +9,6 @@ const BASE_URL = getPublicCoreUrl();
 
 let refreshPromise: Promise<boolean> | null = null;
 
-/**
- * Callback được gọi khi request thất bại với 401 và refresh cũng thất bại.
- * Được đăng ký bởi auth-store để xử lý logout toàn cục.
- */
-let onUnauthorizedHandler: (() => void) | null = null;
-
-/** Đăng ký handler xử lý khi session hết hạn hoàn toàn (refresh fail). */
-export function setOnUnauthorizedHandler(handler: () => void) {
-  onUnauthorizedHandler = handler;
-}
-
 /** Exchange refresh cookie for a new pair (sets cookies on success). Used after 401 and OAuth callback. */
 export async function tryRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
@@ -90,9 +79,6 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
     const refreshed = await tryRefresh();
     if (refreshed) {
       res = await doFetch();
-    } else {
-      // Refresh thất bại → session hoàn toàn hết hạn, trigger logout toàn cục
-      onUnauthorizedHandler?.();
     }
   }
 
