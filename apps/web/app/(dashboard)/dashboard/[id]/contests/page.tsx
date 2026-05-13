@@ -1,5 +1,8 @@
 import { Metadata } from 'next';
 import ClassContestsTab from '@/components/dashboard/class-detail/ClassContestsTab';
+import { getClassroomDetail } from '@/services/classroom.apis';
+import { authApi } from '@/services/auth.apis';
+import { cookies } from 'next/headers';
 
 export const metadata: Metadata = {
   title: 'Manage Contests | CodeJudge',
@@ -8,10 +11,27 @@ export const metadata: Metadata = {
 
 export default async function ClassContestsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore.toString();
+
+  const [classroom, user] = await Promise.all([
+    getClassroomDetail(id, {
+      headers: {
+        Cookie: cookieHeader,
+      },
+    }),
+    authApi.me({
+      headers: {
+        Cookie: cookieHeader,
+      },
+    }),
+  ]);
+
+  const isOwner = classroom.ownerId === user.id;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <ClassContestsTab classId={id} />
+      <ClassContestsTab classId={id} isOwner={isOwner} />
     </div>
   );
 }

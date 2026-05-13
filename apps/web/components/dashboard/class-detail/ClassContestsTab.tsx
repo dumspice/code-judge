@@ -34,7 +34,7 @@ import { format } from 'date-fns';
 import { Contest, contestsApi, CreateContestDto, UpdateContestDto } from '@/services/contest.apis';
 import { Problem, problemsApi } from '@/services/problem.apis';
 
-export default function ClassContestsTab({ classId }: { classId: string }) {
+export default function ClassContestsTab({ classId, isOwner }: { classId: string; isOwner: boolean }) {
   const [contests, setContests] = useState<Contest[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,8 +80,8 @@ export default function ClassContestsTab({ classId }: { classId: string }) {
     setLoading(true);
     try {
       const [contestsResult, problemsResult] = await Promise.all([
-        contestsApi.findAll({ limit: 50 }),
-        problemsApi.findAll({ limit: 100 }),
+        contestsApi.findAll({ limit: 50, classRoomId: classId }),
+        problemsApi.findAll({ limit: 100, classRoomId: classId }),
       ]);
       setContests(contestsResult.items);
       setProblems(problemsResult.items);
@@ -218,13 +218,15 @@ export default function ClassContestsTab({ classId }: { classId: string }) {
           <h2 className="text-2xl font-bold tracking-tight">Class Contests</h2>
           <p className="text-muted-foreground">Manage and track contests for your students.</p>
         </div>
-        <Button
-          onClick={handleShowCreate}
-          className="cursor-pointer bg-black hover:bg-gray-800 text-white shadow-lg transition-all hover:scale-105 active:scale-95"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          New Contest
-        </Button>
+        {isOwner && (
+          <Button
+            onClick={handleShowCreate}
+            className="cursor-pointer bg-black hover:bg-gray-800 text-white shadow-lg transition-all hover:scale-105 active:scale-95"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New Contest
+          </Button>
+        )}
       </div>
 
       <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-gray-100 shadow-sm w-full max-w-md">
@@ -433,7 +435,9 @@ export default function ClassContestsTab({ classId }: { classId: string }) {
                 <TableHead className="py-4 font-bold text-black">Status</TableHead>
                 <TableHead className="py-4 font-bold text-black">Timeline</TableHead>
                 <TableHead className="py-4 font-bold text-black">Problems</TableHead>
-                <TableHead className="py-4 font-bold text-black text-right pr-6">Actions</TableHead>
+                <TableHead className="py-4 font-bold text-black text-right pr-6">
+                  {isOwner ? 'Actions' : ''}
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -482,34 +486,36 @@ export default function ClassContestsTab({ classId }: { classId: string }) {
                       </div>
                     </TableCell>
                     <TableCell className="py-4 text-right pr-6">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-full hover:bg-black/5"
+                      {isOwner && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="rounded-full hover:bg-black/5"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="w-48 p-1 rounded-xl shadow-xl border-gray-100"
                           >
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="w-48 p-1 rounded-xl shadow-xl border-gray-100"
-                        >
-                          <DropdownMenuItem
-                            onClick={() => handleEdit(contest)}
-                            className="rounded-lg gap-2 cursor-pointer py-2"
-                          >
-                            <Edit2 className="w-4 h-4" /> Edit Contest
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(contest.id)}
-                            className="rounded-lg gap-2 cursor-pointer py-2 text-red-600 focus:text-red-600 focus:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" /> Delete Contest
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                            <DropdownMenuItem
+                              onClick={() => handleEdit(contest)}
+                              className="rounded-lg gap-2 cursor-pointer py-2"
+                            >
+                              <Edit2 className="w-4 h-4" /> Edit Contest
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(contest.id)}
+                              className="rounded-lg gap-2 cursor-pointer py-2 text-red-600 focus:text-red-600 focus:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" /> Delete Contest
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

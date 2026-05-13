@@ -4,11 +4,10 @@ import { Button } from '@/components/ui/button';
 import { getClassroomDetail } from '@/services/classroom.apis';
 import { getPublicCoreUrl } from '@/lib/public-config';
 import { Copy } from 'lucide-react';
-import StreamPost from '@/components/dashboard/class-detail/stream-post';
+import { AssignmentPost } from '@/components/dashboard/class-detail/assignment-post';
 import Link from 'next/link';
 import Image from 'next/image';
 import { getClassroomBannerColor } from '@/lib/classroom-banner';
-import { Contest, contestsApi } from '@/services/contest.apis';
 
 export const metadata: Metadata = {
   title: 'Class Stream | CodeJudge',
@@ -23,21 +22,14 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
 
-  const contests = (
-    await contestsApi.findAll(
-      { limit: 3 },
-      {
-        headers: {
-          Cookie: cookieHeader,
-        },
-      },
-    )
-  ).items;
-
   // Fetch classroom details
   const classroom = await getClassroomDetail(id, {
     headers: { Cookie: cookieHeader },
   });
+
+  const sortedAssignments = [...(classroom.assignments || [])].sort(
+    (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+  );
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -105,9 +97,18 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
 
           {/* Posts List */}
           <div className="space-y-4">
-            {contests.map((post) => (
-              <div key={post.id}>{StreamPost(post, id)}</div>
-            ))}
+            {sortedAssignments.length > 0 ? (
+              sortedAssignments.map((assignment) => (
+                <AssignmentPost key={assignment.id} assignment={assignment} classId={id} />
+              ))
+            ) : (
+              <div className="bg-white border border-gray-200 rounded-lg p-10 text-center space-y-3">
+                <p className="text-gray-500 font-medium">No posts yet.</p>
+                <p className="text-sm text-gray-400">
+                  When the teacher creates an assignment or contest, it will appear here.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
