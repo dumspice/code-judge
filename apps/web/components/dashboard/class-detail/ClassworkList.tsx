@@ -7,6 +7,7 @@ import { Plus, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import AssignmentItem from '@/components/dashboard/class-detail/assignment-item';
 import { Problem, problemsApi } from '@/services/problem.apis';
+import { useDebounce } from '@/hooks/use-debounce';
 
 export default function ClassworkList({
   classId,
@@ -22,6 +23,7 @@ export default function ClassworkList({
   const [search, setSearch] = useState('');
   const [editingProblem, setEditingProblem] = useState<Problem | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const debouncedSearch = useDebounce(search, 300);
 
   const loadProblems = async () => {
     try {
@@ -53,7 +55,7 @@ export default function ClassworkList({
   };
 
   const filteredProblems = problems.filter((p) =>
-    p.title.toLowerCase().includes(search.toLowerCase()),
+    p.title.toLowerCase().includes(debouncedSearch.toLowerCase()),
   );
 
   return (
