@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import AssignmentItem from '@/components/dashboard/class-detail/assignment-item';
 import { Problem, problemsApi } from '@/services/problem.apis';
 import { useDebounce } from '@/hooks/use-debounce';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 
 export default function ClassworkList({
   classId,
@@ -23,6 +25,9 @@ export default function ClassworkList({
   const [search, setSearch] = useState('');
   const [editingProblem, setEditingProblem] = useState<Problem | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [problemToDelete, setProblemToDelete] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const debouncedSearch = useDebounce(search, 300);
 
   const loadProblems = async () => {
@@ -41,16 +46,29 @@ export default function ClassworkList({
       router.push(`/dashboard/${classId}/classwork/create?edit=${id}`);
     } catch (error) {
       console.error('Failed to fetch problem for edit:', error);
+      toast.error('Failed to load problem for editing.', { position: 'top-center' });
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this problem?')) return;
+  const handleDelete = (id: string) => {
+    setProblemToDelete(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!problemToDelete) return;
+    setDeleteLoading(true);
     try {
-      await problemsApi.delete(id);
+      await problemsApi.delete(problemToDelete);
       loadProblems();
+      toast.success('Problem deleted successfully.', { position: 'top-center' });
+      setDeleteConfirmOpen(false);
     } catch (error) {
       console.error('Failed to delete problem:', error);
+      toast.error('Failed to delete problem.', { position: 'top-center' });
+    } finally {
+      setDeleteLoading(false);
+      setProblemToDelete(null);
     }
   };
 
@@ -101,6 +119,15 @@ export default function ClassworkList({
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={confirmDelete}
+        title="Delete Problem"
+        description="Are you sure you want to delete this problem? This action cannot be undone."
+        loading={deleteLoading}
+      />
     </div>
   );
 }
