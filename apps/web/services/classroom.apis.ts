@@ -139,3 +139,10 @@ export async function joinClassroom(dto: JoinClassroomDto): Promise<{
     body: dto,
   });
 }
+
+// REMOVE MEMBER
+export async function removeMember(classRoomId: string, userId: string): Promise<void> {
+  return apiFetch<void>(`/classroom/${classRoomId}/members/${userId}`, {
+    method: 'DELETE',
+  });
+}
