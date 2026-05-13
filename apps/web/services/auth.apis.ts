@@ -4,7 +4,7 @@
 
 import { apiFetch, getApiBaseUrl, tryRefresh } from './api-client';
 
-export { apiFetch, ApiRequestError, getApiBaseUrl, tryRefresh, type ApiError } from './api-client';
+export { apiFetch, ApiRequestError, getApiBaseUrl, tryRefresh, setOnUnauthorizedHandler, type ApiError } from './api-client';
 
 // ---------------------------------------------------------------------------
 // Auth-specific API calls (session = HttpOnly cookies, credentials: 'include')

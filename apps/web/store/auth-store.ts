@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { authApi, type UserProfile } from '@/services/auth.apis';
+import { setOnUnauthorizedHandler } from '@/services/api-client';
 
 interface AuthState {
   user: UserProfile | null;
@@ -10,7 +11,7 @@ interface AuthState {
   logout: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   loading: true,
   setUser: (user) => set({ user }),
@@ -34,3 +35,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 }));
+
+// Đăng ký handler với api-client: khi refresh thất bại (session hết hoàn toàn),
+// tự động logout và đưa về trang login.
+setOnUnauthorizedHandler(() => {
+  const { user, logout } = useAuthStore.getState();
+  // Chỉ trigger nếu đang có user (tránh lặp khi chưa login)
+  if (user) {
+    logout();
+  } else {
+    // User chưa có trong store nhưng có cookie → xóa state và redirect
+    useAuthStore.setState({ user: null, loading: false });
+    window.location.replace('/login');
+  }
+});
