@@ -30,15 +30,15 @@ export class CreateProblemDto {
   @IsNotEmpty()
   title!: string;
 
-  @ApiPropertyOptional({ example: 'Cho hai số a, b ...' })
-  @IsOptional()
+  @ApiProperty({ example: 'Cho hai số a, b ...' })
   @IsString()
-  description?: string;
+  @IsNotEmpty()
+  description!: string;
 
-  @ApiPropertyOptional({ example: 'print(i+j)' })
-  @IsOptional()
+  @ApiProperty({ example: 'print(i+j)' })
   @IsString()
-  statementMd?: string;
+  @IsNotEmpty()
+  statementMd!: string;
 
   @ApiPropertyOptional({ enum: ['EASY', 'MEDIUM', 'HARD'], default: 'EASY' })
   @IsOptional()

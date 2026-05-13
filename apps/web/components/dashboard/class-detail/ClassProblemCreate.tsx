@@ -55,6 +55,8 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
     dueAt: undefined,
   });
 
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   useEffect(() => {
     if (editId) {
       loadProblem(editId);
@@ -106,19 +108,32 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
     });
   };
 
-  const updateTestCase = (index: number, field: string, value: any) => {
-    const updatedTestCases = (formData.testCases || []).map((tc, i) =>
-      i === index ? { ...tc, [field]: value } : tc,
-    );
-    setFormData({
-      ...formData,
-      testCases: updatedTestCases,
-    });
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.title.trim()) newErrors.title = 'Title is required';
+    if (!formData.description?.trim()) newErrors.description = 'Description is required';
+    if (!formData.statementMd?.trim()) newErrors.statementMd = 'Statement is required';
+
+    if (!formData.testCases || formData.testCases.length === 0) {
+      newErrors.testCases = 'At least one test case is required';
+    } else {
+      formData.testCases.forEach((tc, index) => {
+        if (!tc.input.trim()) newErrors[`testCase_${index}_input`] = 'Input is required';
+        if (!tc.expectedOutput.trim()) newErrors[`testCase_${index}_output`] = 'Output is required';
+      });
+    }
+
+    if (formData.dueAt && new Date(formData.dueAt) < new Date()) {
+      newErrors.dueAt = 'Due date cannot be in the past';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSave = async () => {
-    if (!formData.title) {
-      alert('Please enter a title for the problem.');
+    if (!validate()) {
       return;
     }
 
@@ -158,6 +173,16 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         <p className="text-gray-500 font-medium">Loading problem data...</p>
       </div>
     );
+  }
+
+  function updateTestCase(index: number, field: string, value: any): void {
+    setFormData((prev) => {
+      const newTestCases = [...(prev.testCases || [])];
+      if (newTestCases[index]) {
+        newTestCases[index] = { ...newTestCases[index], [field]: value };
+      }
+      return { ...prev, testCases: newTestCases };
+    });
   }
 
   return (
@@ -216,10 +241,16 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                 <Input
                   id="title"
                   value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, title: e.target.value });
+                    if (errors.title) setErrors({ ...errors, title: '' });
+                  }}
                   placeholder="e.g. Find the Maximum Sum Subarray"
-                  className="text-lg font-medium h-12 rounded-xl border-gray-200 focus:border-black transition-all"
+                  className={`text-lg font-medium h-12 rounded-xl border-gray-200 focus:border-black transition-all ${errors.title ? 'border-red-500 bg-red-50' : ''}`}
                 />
+                {errors.title && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.title}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -229,10 +260,16 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, description: e.target.value });
+                    if (errors.description) setErrors({ ...errors, description: '' });
+                  }}
                   placeholder="A short summary of what the problem is about..."
-                  className="min-h-[80px] rounded-xl border-gray-200 focus:border-black transition-all resize-none"
+                  className={`min-h-[80px] rounded-xl border-gray-200 focus:border-black transition-all resize-none ${errors.description ? 'border-red-500 bg-red-50' : ''}`}
                 />
+                {errors.description && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.description}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -242,10 +279,16 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                 <Textarea
                   id="statementMd"
                   value={formData.statementMd}
-                  onChange={(e) => setFormData({ ...formData, statementMd: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, statementMd: e.target.value });
+                    if (errors.statementMd) setErrors({ ...errors, statementMd: '' });
+                  }}
                   placeholder="Describe the problem, input format, output format, and constraints in detail..."
-                  className="min-h-[300px] rounded-xl border-gray-200 focus:border-black transition-all font-mono text-sm leading-relaxed"
+                  className={`min-h-[300px] rounded-xl border-gray-200 focus:border-black transition-all font-mono text-sm leading-relaxed ${errors.statementMd ? 'border-red-500 bg-red-50' : ''}`}
                 />
+                {errors.statementMd && (
+                  <p className="text-xs text-red-500 mt-1 font-medium">{errors.statementMd}</p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -271,8 +314,15 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
             </CardHeader>
             <CardContent className="p-6">
               <div className="space-y-4">
+                {errors.testCases && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm font-medium flex items-center gap-2">
+                    <Trash2 className="w-4 h-4" /> {errors.testCases}
+                  </div>
+                )}
                 {formData.testCases?.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-2xl bg-gray-50/50 text-gray-400">
+                  <div
+                    className={`flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-2xl bg-gray-50/50 text-gray-400 ${errors.testCases ? 'border-red-300' : ''}`}
+                  >
                     <Beaker className="w-12 h-12 mb-3 opacity-20" />
                     <p className="font-medium">No test cases added yet.</p>
                     <p className="text-sm">Click "Add Case" to begin defining tests.</p>
@@ -290,10 +340,22 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                           </Label>
                           <Textarea
                             value={tc.input}
-                            onChange={(e) => updateTestCase(index, 'input', e.target.value)}
+                            onChange={(e) => {
+                              updateTestCase(index, 'input', e.target.value);
+                              if (errors[`testCase_${index}_input`]) {
+                                const next = { ...errors };
+                                delete next[`testCase_${index}_input`];
+                                setErrors(next);
+                              }
+                            }}
                             placeholder="Input for this case"
-                            className="min-h-[100px] rounded-xl border-gray-200 focus:border-black bg-white font-mono text-xs"
+                            className={`min-h-[100px] rounded-xl border-gray-200 focus:border-black bg-white font-mono text-xs ${errors[`testCase_${index}_input`] ? 'border-red-500 bg-red-50' : ''}`}
                           />
+                          {errors[`testCase_${index}_input`] && (
+                            <p className="text-[10px] text-red-500 font-medium">
+                              {errors[`testCase_${index}_input`]}
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-2">
                           <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">
@@ -301,12 +363,22 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                           </Label>
                           <Textarea
                             value={tc.expectedOutput}
-                            onChange={(e) =>
-                              updateTestCase(index, 'expectedOutput', e.target.value)
-                            }
+                            onChange={(e) => {
+                              updateTestCase(index, 'expectedOutput', e.target.value);
+                              if (errors[`testCase_${index}_output`]) {
+                                const next = { ...errors };
+                                delete next[`testCase_${index}_output`];
+                                setErrors(next);
+                              }
+                            }}
                             placeholder="Expected output"
-                            className="min-h-[100px] rounded-xl border-gray-200 focus:border-black bg-white font-mono text-xs"
+                            className={`min-h-[100px] rounded-xl border-gray-200 focus:border-black bg-white font-mono text-xs ${errors[`testCase_${index}_output`] ? 'border-red-500 bg-red-50' : ''}`}
                           />
+                          {errors[`testCase_${index}_output`] && (
+                            <p className="text-[10px] text-red-500 font-medium">
+                              {errors[`testCase_${index}_output`]}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -456,6 +528,9 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                   </Label>
                   <Input
                     type="datetime-local"
+                    min={new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000)
+                      .toISOString()
+                      .slice(0, 16)}
                     value={
                       formData.dueAt
                         ? new Date(
@@ -472,9 +547,13 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                         ...formData,
                         dueAt: date ? new Date(date).toISOString() : undefined,
                       });
+                      if (errors.dueAt) setErrors({ ...errors, dueAt: '' });
                     }}
-                    className="rounded-xl border-gray-200 h-10"
+                    className={`rounded-xl border-gray-200 h-10 ${errors.dueAt ? 'border-red-500 bg-red-50' : ''}`}
                   />
+                  {errors.dueAt && (
+                    <p className="text-[10px] text-red-500 font-medium">{errors.dueAt}</p>
+                  )}
                   <p className="text-[10px] text-muted-foreground italic">
                     Students will see this as the deadline.
                   </p>

@@ -33,6 +33,7 @@ import {
 import { format } from 'date-fns';
 import { Contest, contestsApi, CreateContestDto, UpdateContestDto } from '@/services/contest.apis';
 import { Problem, problemsApi } from '@/services/problem.apis';
+import { useDebounce } from '@/hooks/use-debounce';
 
 export default function ClassContestsTab({ classId, isOwner }: { classId: string; isOwner: boolean }) {
   const [contests, setContests] = useState<Contest[]>([]);
@@ -41,6 +42,7 @@ export default function ClassContestsTab({ classId, isOwner }: { classId: string
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingContestId, setEditingContestId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
 
   const [formData, setFormData] = useState<CreateContestDto>({
     title: '',
@@ -52,6 +54,8 @@ export default function ClassContestsTab({ classId, isOwner }: { classId: string
     password: '',
     problems: [],
   });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const resetForm = () => {
     setEditingContestId(null);
@@ -65,6 +69,7 @@ export default function ClassContestsTab({ classId, isOwner }: { classId: string
       password: '',
       problems: [],
     });
+    setErrors({});
   };
 
   const handleShowCreate = () => {
@@ -92,7 +97,32 @@ export default function ClassContestsTab({ classId, isOwner }: { classId: string
     }
   };
 
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.title.trim()) newErrors.title = 'Title is required';
+    if (!formData.startAt) newErrors.startAt = 'Start time is required';
+    else if (new Date(formData.startAt) < new Date()) newErrors.startAt = 'Start time cannot be in the past';
+    
+    if (!formData.endAt) newErrors.endAt = 'End time is required';
+    else if (new Date(formData.endAt) < new Date()) newErrors.endAt = 'End time cannot be in the past';
+
+    if (formData.startAt && formData.endAt) {
+      if (new Date(formData.endAt) <= new Date(formData.startAt)) {
+        newErrors.endAt = 'End time must be after start time';
+      }
+    }
+
+    if (!formData.problems || formData.problems.length === 0) {
+      newErrors.problems = 'At least one problem is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSave = async () => {
+    if (!validate()) return;
     try {
       const payload = {
         ...formData,
@@ -181,8 +211,8 @@ export default function ClassContestsTab({ classId, isOwner }: { classId: string
 
   const filteredContests = contests.filter(
     (contest) =>
-      contest.title.toLowerCase().includes(search.toLowerCase()) ||
-      contest.description?.toLowerCase().includes(search.toLowerCase()),
+      contest.title.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      contest.description?.toLowerCase().includes(debouncedSearch.toLowerCase()),
   );
 
   const getStatusBadge = (status: string) => {
@@ -258,10 +288,14 @@ export default function ClassContestsTab({ classId, isOwner }: { classId: string
                 <Input
                   id="title"
                   value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, title: e.target.value });
+                    if (errors.title) setErrors({ ...errors, title: '' });
+                  }}
                   placeholder="e.g. Midterm Programming Contest"
-                  className="rounded-lg border-gray-200 focus:border-black transition-colors"
+                  className={`rounded-lg border-gray-200 focus:border-black transition-colors ${errors.title ? 'border-red-500 bg-red-50' : ''}`}
                 />
+                {errors.title && <p className="text-xs text-red-500 mt-1 font-medium">{errors.title}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-semibold">
@@ -299,10 +333,15 @@ export default function ClassContestsTab({ classId, isOwner }: { classId: string
                 <Input
                   id="startAt"
                   type="datetime-local"
+                  min={new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
                   value={formData.startAt}
-                  onChange={(e) => setFormData({ ...formData, startAt: e.target.value })}
-                  className="rounded-lg border-gray-200 focus:border-black transition-colors"
+                  onChange={(e) => {
+                    setFormData({ ...formData, startAt: e.target.value });
+                    if (errors.startAt) setErrors({ ...errors, startAt: '' });
+                  }}
+                  className={`rounded-lg border-gray-200 focus:border-black transition-colors ${errors.startAt ? 'border-red-500 bg-red-50' : ''}`}
                 />
+                {errors.startAt && <p className="text-xs text-red-500 mt-1 font-medium">{errors.startAt}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="endAt" className="text-sm font-semibold flex items-center gap-2">
@@ -311,10 +350,15 @@ export default function ClassContestsTab({ classId, isOwner }: { classId: string
                 <Input
                   id="endAt"
                   type="datetime-local"
+                  min={new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}
                   value={formData.endAt}
-                  onChange={(e) => setFormData({ ...formData, endAt: e.target.value })}
-                  className="rounded-lg border-gray-200 focus:border-black transition-colors"
+                  onChange={(e) => {
+                    setFormData({ ...formData, endAt: e.target.value });
+                    if (errors.endAt) setErrors({ ...errors, endAt: '' });
+                  }}
+                  className={`rounded-lg border-gray-200 focus:border-black transition-colors ${errors.endAt ? 'border-red-500 bg-red-50' : ''}`}
                 />
+                {errors.endAt && <p className="text-xs text-red-500 mt-1 font-medium">{errors.endAt}</p>}
               </div>
             </div>
 
@@ -359,10 +403,11 @@ export default function ClassContestsTab({ classId, isOwner }: { classId: string
             </div>
 
             <div className="space-y-3">
-              <Label className="text-sm font-semibold flex items-center gap-2">
+               <Label className="text-sm font-semibold flex items-center gap-2">
                 <Trophy className="w-4 h-4 text-gray-400" /> Problems Included
               </Label>
-              <div className="border border-dashed border-gray-300 rounded-xl p-4 space-y-4 bg-gray-50/30">
+              <div className={`border border-dashed rounded-xl p-4 space-y-4 bg-gray-50/30 ${errors.problems ? 'border-red-300 bg-red-50/30' : 'border-gray-300'}`}>
+                {errors.problems && <p className="text-xs text-red-500 font-medium">{errors.problems}</p>}
                 <div className="flex flex-wrap gap-2">
                   {formData.problems?.length === 0 && (
                     <p className="text-sm text-gray-400 italic">No problems added yet.</p>
