@@ -3,6 +3,7 @@ import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubmissionGateway } from '../realtime/submission.gateway';
 import { JUDGE_QUEUE } from '../queues/tokens';
+import { JUDGE_JOB_MAX_ATTEMPTS } from '../common/constants/queue.constants';
 import { CreateSubmissionDto } from './dto/create-submission.dto';
 import { buildSubmissionSourceObjectKey } from '../storage/storage-key.builder';
 import { StorageService } from '../storage/storage.service';
@@ -90,6 +91,7 @@ export class SubmissionsService {
       { submissionId: submission.id },
       {
         jobId: submission.id,
+        attempts: JUDGE_JOB_MAX_ATTEMPTS,
         removeOnComplete: false,
         removeOnFail: false,
       },

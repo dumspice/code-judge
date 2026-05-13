@@ -25,19 +25,49 @@ import {
   Save,
   Trash2,
   Languages,
+  Sparkles,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { CreateProblemDto, problemsApi, UpdateProblemDto } from '@/services/problem.apis';
+import { ApiRequestError } from '@/services/api-client';
 
-export default function ClassProblemCreate({ classId }: { classId: string }) {
-  console.log(classId);
+export default function ClassProblemCreate({
+  classId,
+  adminPortal,
+  adminClassRoomOptions,
+}: {
+  classId?: string;
+  adminPortal?: boolean;
+  adminClassRoomOptions?: Array<{ id: string; name: string; classCode: string }>;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams?.get('edit');
 
+  const isAdminPortal = adminPortal === true;
+  const showClassPicker =
+    isAdminPortal && !editId && (adminClassRoomOptions?.length ?? 0) > 0;
+
+  const [adminClassId, setAdminClassId] = useState(adminClassRoomOptions?.[0]?.id ?? '');
+
+  useEffect(() => {
+    if (adminClassRoomOptions?.length) {
+      setAdminClassId((prev) =>
+        prev && adminClassRoomOptions.some((c) => c.id === prev)
+          ? prev
+          : adminClassRoomOptions[0].id,
+      );
+    }
+  }, [adminClassRoomOptions]);
+
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(!!editId);
+
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiNotes, setAiNotes] = useState<string | null>(null);
+  const [aiIoSpec, setAiIoSpec] = useState('');
+  const [aiSupplementary, setAiSupplementary] = useState('');
 
   const [formData, setFormData] = useState<Omit<CreateProblemDto, 'classRoomId'>>({
     title: '',
@@ -79,8 +109,11 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         testCases: (data.testCases ?? []).map(
           ({ id, problemId, orderIndex, createdAt, updatedAt, ...rest }: any) => rest,
         ),
-        dueAt: data.assignments?.find((a) => a.classRoomId === classId)?.dueAt ?? undefined,
+        dueAt: isAdminPortal
+          ? (data.assignments?.[0]?.dueAt ?? undefined)
+          : (data.assignments?.find((a) => a.classRoomId === classId)?.dueAt ?? undefined),
       });
+      setAiNotes(null);
     } catch (error) {
       console.error('Failed to load problem:', error);
       alert('Failed to load problem data.');
@@ -116,10 +149,90 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
     });
   };
 
+  const handleAiGenerateTestCases = async () => {
+    if (formData.mode !== 'ALGO') return;
+    const title = formData.title?.trim();
+    const statement = [formData.statementMd?.trim(), formData.description?.trim()]
+      .filter(Boolean)
+      .join('\n\n');
+    if (!title) {
+      alert('Vui lòng nhập tiêu đề bài trước khi gọi AI.');
+      return;
+    }
+    if (!statement) {
+      alert('Vui lòng nhập đề bài (Statement Markdown hoặc mô tả ngắn) để AI sinh testcase.');
+      return;
+    }
+    if ((formData.testCases?.length ?? 0) > 0) {
+      const ok = confirm(
+        'Đã có testcase thủ công. Thay thế toàn bộ bằng kết quả AI? (Hành động không hoàn tác)',
+      );
+      if (!ok) return;
+    }
+
+    setAiGenerating(true);
+    setAiNotes(null);
+    try {
+      const maxTc = Math.min(Math.max(formData.maxTestCases ?? 10, 1), 100);
+      const res = await problemsApi.generateTestCasesDraft({
+        title,
+        statement,
+        difficulty: formData.difficulty,
+        timeLimitMs: formData.timeLimitMs,
+        memoryLimitMb: formData.memoryLimitMb,
+        supportedLanguages: formData.supportedLanguages,
+        maxTestCases: maxTc,
+        ioSpec: aiIoSpec.trim() || undefined,
+        supplementaryText: aiSupplementary.trim() || undefined,
+      });
+
+      const cases = res.parsed?.testCases ?? [];
+      if (cases.length === 0) {
+        const hint = res.parseError ? ` Chi tiết: ${res.parseError}` : '';
+        alert(`AI không trả về testcase hợp lệ.${hint}`);
+        return;
+      }
+
+      setFormData({
+        ...formData,
+        testCases: cases.map((c) => ({
+          input: c.input,
+          expectedOutput: c.expectedOutput,
+          isHidden: c.isHidden ?? false,
+          weight: Math.min(100, Math.max(1, c.weight ?? 1)),
+        })),
+      });
+      setAiNotes(res.parsed?.notes ?? null);
+    } catch (err) {
+      const msg =
+        err instanceof ApiRequestError ? err.body.message : 'Không gọi được AI. Thử lại sau.';
+      alert(msg);
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!formData.title) {
       alert('Please enter a title for the problem.');
       return;
+    }
+
+    if (!editId) {
+      if (!isAdminPortal && !classId) {
+        alert('Thiếu mã lớp.');
+        return;
+      }
+      if (isAdminPortal) {
+        if (!adminClassRoomOptions?.length) {
+          alert('Chưa có lớp nào trong hệ thống. Hãy tạo lớp trước khi tạo problem.');
+          return;
+        }
+        if (!adminClassId) {
+          alert('Vui lòng chọn lớp để gán bài tập.');
+          return;
+        }
+      }
     }
 
     setLoading(true);
@@ -139,10 +252,14 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
       } else {
         await problemsApi.create({
           ...payload,
-          classRoomId: classId,
+          classRoomId: isAdminPortal ? adminClassId : classId!,
         } as CreateProblemDto);
       }
-      router.push(`/dashboard/${classId}/classwork`);
+      if (isAdminPortal) {
+        router.push('/admin/problems');
+      } else {
+        router.push(`/dashboard/${classId}/classwork`);
+      }
     } catch (error) {
       console.error('Failed to save problem:', error);
       alert('Failed to save problem. Please check your inputs.');
@@ -178,7 +295,13 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
-            onClick={() => router.back()}
+            onClick={() => {
+              if (isAdminPortal) {
+                router.push('/admin/problems');
+              } else {
+                router.back();
+              }
+            }}
             disabled={loading}
             className="cursor-pointer"
           >
@@ -200,6 +323,47 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
           </Button>
         </div>
       </div>
+
+      {isAdminPortal && !editId && !adminClassRoomOptions?.length ? (
+        <Card className="border-amber-200 bg-amber-50/80">
+          <CardContent className="py-4 text-sm text-amber-900">
+            Chưa có lớp hoạt động nào. Tạo lớp trong hệ thống trước khi tạo problem mới từ trang
+            admin.
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {showClassPicker ? (
+        <Card className="border-none shadow-md bg-white/80 backdrop-blur-sm">
+          <CardHeader className="border-b pb-4">
+            <CardTitle className="text-lg">Gán vào lớp</CardTitle>
+            <CardDescription>Problem mới sẽ được thêm vào bài tập của lớp đã chọn.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="max-w-md space-y-2">
+              <Label>Lớp</Label>
+              <Select
+                value={adminClassId}
+                onValueChange={(v) => {
+                  if (v) setAdminClassId(v);
+                }}
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="Chọn lớp" />
+                </SelectTrigger>
+                <SelectContent>
+                  {adminClassRoomOptions!.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}{' '}
+                      <span className="text-muted-foreground">({c.classCode})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column - Main Details */}
@@ -251,25 +415,82 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
           </Card>
 
           <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
-            <CardHeader className="border-b flex flex-row items-center justify-between">
-              <div>
+            <CardHeader className="border-b flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
                 <CardTitle className="text-xl">Test Cases</CardTitle>
                 <CardDescription>
                   Add examples and hidden test cases for evaluation.
+                  {formData.mode === 'ALGO'
+                    ? ' Bạn có thể dùng AI sinh bản nháp từ tiêu đề và đề bài, rồi chỉnh sửa trước khi lưu.'
+                    : ' Sinh testcase bằng AI chỉ khả dụng khi chế độ bài là Algorithmic (ALGO).'}
                 </CardDescription>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addTestCase}
-                className="rounded-lg cursor-pointer"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Case
-              </Button>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={formData.mode !== 'ALGO' || aiGenerating || loading}
+                  onClick={handleAiGenerateTestCases}
+                  className="rounded-lg cursor-pointer gap-2"
+                >
+                  {aiGenerating ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  AI sinh testcase
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addTestCase}
+                  className="rounded-lg cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Case
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-6">
+              {formData.mode === 'ALGO' ? (
+                <details className="mb-6 rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3 text-sm">
+                  <summary className="cursor-pointer font-medium text-gray-700">
+                    Tùy chọn cho AI (IO spec, tài liệu bổ sung)
+                  </summary>
+                  <div className="mt-4 space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-io-spec">Định dạng vào/ra (tùy chọn)</Label>
+                      <Textarea
+                        id="ai-io-spec"
+                        value={aiIoSpec}
+                        onChange={(e) => setAiIoSpec(e.target.value)}
+                        placeholder="Ví dụ: Dòng 1: n. Dòng 2..n+1: a[i]. In ra một số duy nhất..."
+                        className="min-h-[72px] rounded-xl border-gray-200 text-xs font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-supplementary">Bổ sung / ràng buộc thêm (tùy chọn)</Label>
+                      <Textarea
+                        id="ai-supplementary"
+                        value={aiSupplementary}
+                        onChange={(e) => setAiSupplementary(e.target.value)}
+                        placeholder="Ghi chú thêm cho AI: biên dữ liệu, mod, v.v."
+                        className="min-h-[72px] rounded-xl border-gray-200 text-xs"
+                      />
+                    </div>
+                  </div>
+                </details>
+              ) : null}
+
+              {aiNotes ? (
+                <p className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs text-indigo-900">
+                  <span className="font-semibold">Ghi chú từ AI: </span>
+                  {aiNotes}
+                </p>
+              ) : null}
+
               <div className="space-y-4">
                 {formData.testCases?.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-2xl bg-gray-50/50 text-gray-400">

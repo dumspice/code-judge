@@ -54,6 +54,15 @@ export interface JoinClassroomDto {
   classCode: string;
 }
 
+export interface AdminClassroomListItem {
+  id: string;
+  name: string;
+  classCode: string;
+  academicYear?: string | null;
+  ownerId: string;
+  owner: { id: string; name: string; email: string };
+}
+
 export interface MyClassroomItem {
   role: 'OWNER' | 'MEMBER';
 
@@ -98,6 +107,20 @@ export async function createClassroom(dto: CreateClassroomDto): Promise<Classroo
 // GET MY CLASSROOMS
 export async function getMyClassrooms(): Promise<MyClassroomItem[]> {
   return apiFetch<MyClassroomItem[]>('/classroom/me');
+}
+
+/** Admin: danh sách lớp (phân trang, tìm kiếm). */
+export async function listClassroomsForAdmin(query?: {
+  search?: string;
+  page?: number;
+  limit?: number;
+}): Promise<{ items: AdminClassroomListItem[]; total: number; page: number; limit: number }> {
+  const params = new URLSearchParams();
+  if (query?.search) params.set('search', query.search);
+  if (query?.page) params.set('page', query.page.toString());
+  if (query?.limit) params.set('limit', query.limit.toString());
+  const qs = params.toString();
+  return apiFetch(`/classroom/admin/all${qs ? `?${qs}` : ''}`);
 }
 
 // GET CLASSROOM DETAIL

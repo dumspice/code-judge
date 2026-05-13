@@ -134,8 +134,33 @@ export const problemsApi = {
     return apiFetch(`/problems${queryString ? `?${queryString}` : ''}`, options);
   },
 
+  /** Admin: mọi problem (kèm private / unpublished). Cần JWT role ADMIN. */
+  async findAllAdmin(
+    query?: { search?: string; page?: number; limit?: number },
+    options?: RequestInit,
+  ): Promise<{
+    items: Problem[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams();
+    if (query?.search) params.set('search', query.search);
+    if (query?.page) params.set('page', query.page.toString());
+    if (query?.limit) params.set('limit', query.limit.toString());
+    const queryString = params.toString();
+    return apiFetch(`/problems/admin/all${queryString ? `?${queryString}` : ''}`, options);
+  },
+
   async findById(id: string): Promise<Problem> {
     return apiFetch(`/problems/${id}`);
+  },
+
+  async generateTestCasesDraft(dto: GenerateTestCasesDraftDto): Promise<GenerateTestCasesDraftResult> {
+    return apiFetch('/problems/generate-test-cases-draft', {
+      method: 'POST',
+      body: dto,
+    });
   },
 
   async create(dto: CreateProblemDto): Promise<Problem> {

@@ -21,7 +21,7 @@ import { useAuthStore } from '@/store/auth-store';
 import { io, Socket } from 'socket.io-client';
 import { Problem, problemsApi } from '@/services/problem.apis';
 import { Submission, submissionsApi } from '@/services/submission.apis';
-import { storageApi } from '@/services/storage.apis';
+import { diagnoseApiError, logApiErrorDiagnostics } from '@/lib/api-error-diagnostics';
 
 const languageOptions = [
   { value: 'PYTHON', label: 'Python', extension: 'py' },
@@ -29,13 +29,6 @@ const languageOptions = [
   { value: 'JAVA', label: 'Java', extension: 'java' },
   { value: 'CPP', label: 'C++', extension: 'cpp' },
 ];
-
-function getSubmissionId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return (crypto as any).randomUUID();
-  }
-  return `sub-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
-}
 
 export default function ProblemDetailPage() {
   const params = useParams();
@@ -73,7 +66,9 @@ export default function ProblemDetailPage() {
       setSubmissionHistory(items);
     } catch (error) {
       console.error('Không thể tải lịch sử submission:', error);
-      setHistoryError('Không thể tải lịch sử nộp bài. Vui lòng thử lại sau.');
+      const d = diagnoseApiError(error, { operation: 'loadSubmissionHistory' });
+      logApiErrorDiagnostics(d);
+      setHistoryError(`${d.title}: ${d.userMessage}`);
     } finally {
       setHistoryLoading(false);
     }
@@ -230,28 +225,15 @@ export default function ProblemDetailPage() {
     }
 
     setSubmitting(true);
-    const submissionId = getSubmissionId();
 
     try {
-      const presign = await storageApi.presignUpload({
-        resourceKind: 'submission-source',
-        submissionId,
-        fileName,
-        expiresInSeconds: 900,
-      });
-
-      await fetch(presign.uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'text/plain' },
-        body: sourceCode,
-      });
-
+      /** Core API tự upload MinIO khi mã > 8192 ký tự — không cần presign + UUID client. */
       const created = await submissionsApi.create({
         userId: user.id,
         problemId,
         mode: problem?.mode ?? 'ALGO',
         language,
-        sourceCodeObjectKey: presign.objectKey,
+        sourceCode,
       });
 
       setSubmissionInfo({
@@ -274,8 +256,13 @@ export default function ProblemDetailPage() {
       setSourceCode('');
       setSelectedFile(null);
     } catch (error) {
+      const d = diagnoseApiError(error, { operation: 'submitProblem' });
+      logApiErrorDiagnostics(d, { problemId });
       console.error(error);
-      setFeedback({ type: 'error', message: 'Nộp bài thất bại. Vui lòng thử lại.' });
+      setFeedback({
+        type: 'error',
+        message: `${d.title}: ${d.userMessage}`,
+      });
     } finally {
       setSubmitting(false);
     }

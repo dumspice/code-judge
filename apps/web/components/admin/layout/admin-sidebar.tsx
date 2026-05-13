@@ -8,8 +8,8 @@ import {
   LayoutDashboard, 
   Settings, 
   LogOut, 
-  BookOpen,
-  Code2
+  Code2,
+  FileQuestion,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 const navItems = [
   { title: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { title: 'Users', href: '/admin/users', icon: Users },
+  { title: 'Problems', href: '/admin/problems', icon: FileQuestion },
   { title: 'Setting', href: '/admin/setting', icon: Settings },
 ];
 

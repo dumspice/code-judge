@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { Difficulty, ProblemMode, ProblemVisibility, Prisma, Problem } from '@prisma/client';
+import { Difficulty, ProblemMode, ProblemVisibility, Prisma, Problem, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
@@ -9,8 +9,8 @@ import { UpdateProblemDto } from './dto/update-problem.dto';
 export class ProblemsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateProblemDto, creatorId: string): Promise<Problem> {
-    await this.ensureClassOwner(dto.classRoomId, creatorId);
+  async create(dto: CreateProblemDto, creatorId: string, role?: Role): Promise<Problem> {
+    await this.ensureUserCanCreateProblemInClass(dto.classRoomId, creatorId, role);
     const slug = await this.buildUniqueSlug(dto.title);
     const supportedLanguages = dto.supportedLanguages ?? [];
 
@@ -87,6 +87,33 @@ export class ProblemsService {
     return { items, total, page, limit };
   }
 
+  async findAllAdmin(query: { search?: string; page?: number; limit?: number }) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+    const search = query.search?.trim();
+    const where: Prisma.ProblemWhereInput = search
+      ? {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' as const } },
+            { description: { contains: search, mode: 'insensitive' as const } },
+            { slug: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
+
+    const [items, total] = await Promise.all([
+      this.prisma.problem.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.problem.count({ where }),
+    ]);
+    return { items, total, page, limit };
+  }
+
   async findById(problemId: string) {
     const problem = await this.prisma.problem.findUnique({
       where: { id: problemId },
@@ -101,7 +128,7 @@ export class ProblemsService {
     return problem;
   }
 
-  async update(problemId: string, dto: UpdateProblemDto, updaterId: string) {
+  async update(problemId: string, dto: UpdateProblemDto, updaterId: string, role?: Role) {
     const existing = await this.prisma.problem.findUnique({
       where: { id: problemId },
       select: {
@@ -109,6 +136,7 @@ export class ProblemsService {
         title: true,
         slug: true,
         creatorId: true,
+        assignments: { select: { classRoomId: true } },
       },
     });
 
@@ -116,8 +144,8 @@ export class ProblemsService {
       throw new NotFoundException('Problem not found');
     }
 
-    if (existing.creatorId !== updaterId) {
-      throw new ForbiddenException('Only Creator can update this problem');
+    if (!(await this.canManageProblem(existing, updaterId, role))) {
+      throw new ForbiddenException('Only creator, class owner, or admin can update this problem');
     }
 
     const slug =
@@ -180,7 +208,7 @@ export class ProblemsService {
     });
   }
 
-  async delete(problemId: string, userId: string) {
+  async delete(problemId: string, userId: string, role?: Role) {
     const existing = await this.prisma.problem.findUnique({
       where: { id: problemId },
       select: {
@@ -188,6 +216,7 @@ export class ProblemsService {
         title: true,
         slug: true,
         creatorId: true,
+        assignments: { select: { classRoomId: true } },
       },
     });
 
@@ -195,8 +224,8 @@ export class ProblemsService {
       throw new NotFoundException('Problem not found');
     }
 
-    if (existing.creatorId !== userId) {
-      throw new ForbiddenException('Only class owner can delete this problem');
+    if (!(await this.canManageProblem(existing, userId, role))) {
+      throw new ForbiddenException('Only creator, class owner, or admin can delete this problem');
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -204,6 +233,88 @@ export class ProblemsService {
       await tx.classAssignment.deleteMany({ where: { problemId } });
       return tx.problem.delete({ where: { id: problemId } });
     });
+  }
+
+  private async ensureUserCanCreateProblemInClass(
+    classRoomId: string,
+    userId: string,
+    role?: Role,
+  ): Promise<void> {
+    if (role === Role.ADMIN) {
+      await this.ensureClassExists(classRoomId);
+      return;
+    }
+
+    const classRoom = await this.prisma.classRoom.findUnique({
+      where: { id: classRoomId },
+      select: { id: true, ownerId: true },
+    });
+
+    if (!classRoom) {
+      throw new NotFoundException('Class not found');
+    }
+
+    if (classRoom.ownerId === userId) {
+      return;
+    }
+
+    const asOwnerEnrollment = await this.prisma.classEnrollment.findFirst({
+      where: {
+        classRoomId,
+        userId,
+        role: 'OWNER',
+        status: 'ACTIVE',
+      },
+    });
+
+    if (!asOwnerEnrollment) {
+      throw new ForbiddenException('Only the class owner can create problems for this class');
+    }
+  }
+
+  /** Admin, creator, hoặc chủ lớp (ownerId / enrollment OWNER) của một lớp đang gán bài. */
+  private async canManageProblem(
+    existing: {
+      creatorId: string | null;
+      assignments: { classRoomId: string }[];
+    },
+    userId: string,
+    role?: Role,
+  ): Promise<boolean> {
+    if (role === Role.ADMIN) {
+      return true;
+    }
+    if (existing.creatorId === userId) {
+      return true;
+    }
+    for (const a of existing.assignments) {
+      if (await this.userIsClassOwnerForRoom(a.classRoomId, userId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private async userIsClassOwnerForRoom(classRoomId: string, userId: string): Promise<boolean> {
+    const classRoom = await this.prisma.classRoom.findUnique({
+      where: { id: classRoomId },
+      select: { ownerId: true },
+    });
+    if (!classRoom) {
+      return false;
+    }
+    if (classRoom.ownerId === userId) {
+      return true;
+    }
+    const enrollment = await this.prisma.classEnrollment.findFirst({
+      where: {
+        classRoomId,
+        userId,
+        role: 'OWNER',
+        status: 'ACTIVE',
+      },
+    });
+    return Boolean(enrollment);
   }
 
   private async buildUniqueSlug(title: string): Promise<string> {
@@ -216,18 +327,14 @@ export class ProblemsService {
     return slug;
   }
 
-  private async ensureClassOwner(classRoomId: string, userId: string) {
+  private async ensureClassExists(classRoomId: string) {
     const classRoom = await this.prisma.classRoom.findUnique({
       where: { id: classRoomId },
-      select: { ownerId: true },
+      select: { id: true },
     });
 
     if (!classRoom) {
       throw new NotFoundException('Class not found');
-    }
-
-    if (classRoom.ownerId !== userId) {
-      throw new ForbiddenException('Only owner can do this action');
     }
 
     return classRoom;

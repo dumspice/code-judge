@@ -1,10 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Role } from '@prisma/client';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ClassroomService } from './classroom.service';
 import { CreateClassroomDto } from './dto/create-classroom.dto';
 import { UpdateClassroomDto } from './dto/update-classroom.dto';
 import { JoinClassroomDto } from './dto/join-classroom.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 
+@ApiTags('classroom')
+@ApiBearerAuth('JWT')
 @Controller('classroom')
 export class ClassroomController {
   constructor(private readonly service: ClassroomService) {}
@@ -19,6 +24,21 @@ export class ClassroomController {
   @Get('me')
   getMyClasses(@CurrentUser() user: any) {
     return this.service.getMyClasses(user.userId);
+  }
+
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Admin: danh sách lớp (chọn lớp khi tạo problem)' })
+  @Get('admin/all')
+  listAllForAdmin(
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.listAllForAdmin({
+      search,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   // GET DETAIL
