@@ -49,10 +49,12 @@ export const useClassroomStore = create<ClassroomState>((set, get) => ({
         const state = get();
 
         if (role === 'OWNER') {
+            if (state.teaching.some((c) => c.id === classroom.id)) return;
             set({
                 teaching: [classroom, ...state.teaching],
             });
         } else {
+            if (state.enrolled.some((c) => c.id === classroom.id)) return;
             set({
                 enrolled: [classroom, ...state.enrolled],
             });

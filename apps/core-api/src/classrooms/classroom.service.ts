@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateClassroomDto } from './dto/create-classroom.dto';
 import { UpdateClassroomDto } from './dto/update-classroom.dto';
@@ -296,7 +296,23 @@ export class ClassroomService {
     });
 
     if (existing) {
-      return existing;
+      if (existing.status === 'ACTIVE') {
+        throw new BadRequestException('You have already enrolled in this class.');
+      }
+
+      // If they were removed or left, reactivate them? Or throw error?
+      // For now, let's just reactivate if they were removed/left, or throw if blocked
+      if (existing.status === 'BLOCKED') {
+        throw new ForbiddenException('You have been blocked from this class.');
+      }
+
+      return this.prisma.classEnrollment.update({
+        where: { id: existing.id },
+        data: {
+          status: 'ACTIVE',
+          joinedAt: new Date(),
+        },
+      });
     }
 
     return this.prisma.classEnrollment.create({

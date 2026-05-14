@@ -55,7 +55,10 @@ export function JoinClassroomModal({ open, onClose }: JoinClassroomModalProps) {
 
       router.push(`/dashboard/${classroom.id}`);
     } catch (err: any) {
-      console.error(err);
+      // Don't log expected business errors to console
+      if (err?.status !== 400 && err?.status !== 403) {
+        console.error('Join classroom error:', err);
+      }
       setError(err?.message || 'Failed to join classroom');
     } finally {
       setIsSubmitting(false);
