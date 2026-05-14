@@ -257,7 +257,7 @@ async function runWithLocalPython(
         stderr: run.stderr || undefined,
         verdict: 'TIME_LIMIT',
       });
-      continue;
+      break; // Tối ưu: Dừng ngay khi TLE
     }
 
     if (run.exitCode !== 0) {
@@ -269,7 +269,7 @@ async function runWithLocalPython(
         stderr: run.stderr || undefined,
         verdict: 'RUNTIME_ERROR',
       });
-      continue;
+      continue; 
     }
 
     const actualNorm = normalizeJudgeOutput(run.stdout);
