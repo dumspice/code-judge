@@ -60,7 +60,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
     timeLimitMs: 1000,
     memoryLimitMb: 256,
     isPublished: true,
-    visibility: 'PUBLIC',
+    visibility: 'PRIVATE',
     supportedLanguages: ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'],
     maxTestCases: 100,
     testCases: [],
@@ -230,7 +230,9 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
       return;
     }
     if (!formData.statementMd?.trim()) {
-      toast.error('Enter the full statement (markdown) before running AI.', { position: 'top-center' });
+      toast.error('Enter the full statement (markdown) before running AI.', {
+        position: 'top-center',
+      });
       return;
     }
     const previousDraft = aiDraftResult;
@@ -254,9 +256,12 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
       setAiSheetOpen(true);
       const mapped = mapAiDraftToFormTestCases(res.parsed);
       if (res.parseError && mapped.length === 0) {
-        toast.warning('AI responded but test cases could not be parsed. See the panel for details.', {
-          position: 'top-center',
-        });
+        toast.warning(
+          'AI responded but test cases could not be parsed. See the panel for details.',
+          {
+            position: 'top-center',
+          },
+        );
       } else if (mapped.length === 0) {
         toast.warning('No valid test cases in the AI response.', { position: 'top-center' });
       }
@@ -406,8 +411,8 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
               <div>
                 <CardTitle className="text-xl">Test Cases</CardTitle>
                 <CardDescription>
-                  Add cases manually or use AI to draft from title and statement (always preview before
-                  applying; nothing is saved until you submit).
+                  Add cases manually or use AI to draft from title and statement (always preview
+                  before applying; nothing is saved until you submit).
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
@@ -694,20 +699,12 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                   </p>
                 </div>
 
-                <div className="space-y-3 pt-4 border-t">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label className="text-sm font-semibold">Status</Label>
-                      <p className="text-xs text-muted-foreground">Publish to students</p>
-                    </div>
-                    <Switch
-                      checked={formData.isPublished}
-                      onCheckedChange={(checked) =>
-                        setFormData({ ...formData, isPublished: checked })
-                      }
-                      className="cursor-pointer"
-                    />
-                  </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+                  <p className="text-xs text-blue-700">
+                    <strong>ℹ️ Class Problems Are Private:</strong> Problems created in this class
+                    are automatically kept private to this class only. They won't appear in the
+                    public problem bank.
+                  </p>
                 </div>
 
                 <div className="space-y-3 pt-4 border-t">

@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
 import { buildUniqueProblemSlug } from './problem-slug.util';
+import { ProblemVisibilityService } from './problem-visibility.service';
 
 import { MailerService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
@@ -29,6 +30,7 @@ export class ProblemsService {
     private readonly prisma: PrismaService,
     private readonly mailerService: MailerService,
     private readonly configService: ConfigService,
+    private readonly visibilityService: ProblemVisibilityService,
   ) {}
 
   async create(dto: CreateProblemDto, creatorId: string, role?: Role): Promise<Problem> {
@@ -52,7 +54,7 @@ export class ProblemsService {
           timeLimitMs: dto.timeLimitMs ?? 1000,
           memoryLimitMb: dto.memoryLimitMb ?? 256,
           isPublished: dto.isPublished ?? true,
-          visibility: dto.visibility ?? ProblemVisibility.PUBLIC,
+          visibility: this.visibilityService.getVisibilityForCreate(dto, classRoomId),
           supportedLanguages: supportedLanguages.length > 0 ? supportedLanguages : undefined,
           maxTestCases: dto.maxTestCases ?? 100,
           creatorId,
@@ -133,12 +135,17 @@ export class ProblemsService {
         ? { difficulty: query.difficulty as Difficulty }
         : {};
     const modeFilter =
-      query.mode === 'ALGO' || query.mode === 'PROJECT'
-        ? { mode: query.mode as ProblemMode }
-        : {};
+      query.mode === 'ALGO' || query.mode === 'PROJECT' ? { mode: query.mode as ProblemMode } : {};
+
+    // If classRoomId is provided (class context), show all problems including PRIVATE
+    // Otherwise (public bank), only show PUBLIC problems
+    const visibilityFilter = query.classRoomId
+      ? {} // No visibility filter for class context
+      : this.visibilityService.getPublicProblemBankVisibilityFilter(); // visibility: PUBLIC for public bank
+
     const where: Prisma.ProblemWhereInput = {
       isPublished: true,
-      visibility: { not: 'PRIVATE' },
+      ...visibilityFilter,
       ...difficultyFilter,
       ...modeFilter,
       ...(query.classRoomId ? { assignments: { some: { classRoomId: query.classRoomId } } } : {}),
@@ -211,6 +218,7 @@ export class ProblemsService {
         title: true,
         slug: true,
         creatorId: true,
+        visibility: true,
         assignments: { select: { classRoomId: true } },
       },
     });
@@ -228,6 +236,15 @@ export class ProblemsService {
         ? await buildUniqueProblemSlug(this.prisma.problem, dto.title)
         : existing.slug;
 
+    // Enforce visibility rules for class problems
+    const classRoomIds = existing.assignments.map((a) => a.classRoomId);
+    const enforcedVisibility = this.visibilityService.getVisibilityForUpdate(
+      existing.visibility as ProblemVisibility,
+      dto.visibility as ProblemVisibility | undefined,
+      classRoomIds,
+      role,
+    );
+
     return this.prisma.$transaction(async (tx) => {
       const data: any = {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
@@ -238,7 +255,7 @@ export class ProblemsService {
         ...(dto.timeLimitMs !== undefined ? { timeLimitMs: dto.timeLimitMs } : {}),
         ...(dto.memoryLimitMb !== undefined ? { memoryLimitMb: dto.memoryLimitMb } : {}),
         ...(dto.isPublished !== undefined ? { isPublished: dto.isPublished } : {}),
-        ...(dto.visibility !== undefined ? { visibility: dto.visibility } : {}),
+        ...(dto.visibility !== undefined ? { visibility: enforcedVisibility } : {}),
         ...(dto.supportedLanguages !== undefined
           ? { supportedLanguages: dto.supportedLanguages }
           : {}),
@@ -418,8 +435,7 @@ export class ProblemsService {
   /** page ≥ 1, limit trong [1, maxLimit], mặc định page=1, limit=20. */
   private normalizeListPagination(page?: number, limit?: number, maxLimit = 100) {
     const p = Number.isFinite(page) && (page as number) > 0 ? Math.floor(page as number) : 1;
-    const rawL =
-      Number.isFinite(limit) && (limit as number) > 0 ? Math.floor(limit as number) : 20;
+    const rawL = Number.isFinite(limit) && (limit as number) > 0 ? Math.floor(limit as number) : 20;
     const l = Math.min(Math.max(1, rawL), maxLimit);
     return { page: p, limit: l, skip: (p - 1) * l };
   }
