@@ -322,11 +322,15 @@ export class ProblemsService {
 
     const classRoom = await this.prisma.classRoom.findUnique({
       where: { id: classRoomId },
-      select: { id: true, ownerId: true },
+      select: { id: true, ownerId: true, isActive: true },
     });
 
     if (!classRoom) {
       throw new NotFoundException('Class not found');
+    }
+
+    if (!classRoom.isActive) {
+      throw new ForbiddenException('Classroom is archived and new assignments cannot be added.');
     }
 
     if (classRoom.ownerId === userId) {
@@ -373,11 +377,17 @@ export class ProblemsService {
   private async userIsClassOwnerForRoom(classRoomId: string, userId: string): Promise<boolean> {
     const classRoom = await this.prisma.classRoom.findUnique({
       where: { id: classRoomId },
-      select: { ownerId: true },
+      select: { ownerId: true, isActive: true },
     });
     if (!classRoom) {
       return false;
     }
+
+    // Nếu lớp học đã bị lưu trữ, không cho phép owner chỉnh sửa nữa
+    if (!classRoom.isActive) {
+      return false;
+    }
+
     if (classRoom.ownerId === userId) {
       return true;
     }

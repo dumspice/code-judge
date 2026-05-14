@@ -163,7 +163,12 @@ export class ContestsService {
   ) {
     const contest = await this.prisma.contest.findUnique({
       where: { id: contestId },
-      include: { problems: true },
+      include: { 
+        problems: true,
+        assignments: {
+          include: { classRoom: { select: { isActive: true } } }
+        }
+      },
     });
     if (!contest) {
       throw new NotFoundException('Contest không tồn tại');
@@ -171,6 +176,12 @@ export class ContestsService {
 
     if (contest.createdById !== updaterId && !isAdmin) {
       throw new ForbiddenException('Bạn không có quyền cập nhật cuộc thi này');
+    }
+
+    // Check if any associated classroom is archived
+    const hasArchivedClass = contest.assignments.some(a => !a.classRoom.isActive);
+    if (hasArchivedClass && !isAdmin) {
+      throw new ForbiddenException('This contest belongs to an archived classroom and cannot be edited.');
     }
 
     if (dto.problems && dto.problems.length > 0) {
@@ -250,13 +261,23 @@ export class ContestsService {
   async delete(contestId: string, userId: string, isAdmin = false) {
     const contest = await this.prisma.contest.findUnique({
       where: { id: contestId },
-      select: { createdById: true },
+      select: { 
+        createdById: true,
+        assignments: {
+          include: { classRoom: { select: { isActive: true } } }
+        }
+      },
     });
     if (!contest) {
       throw new NotFoundException('Contest không tồn tại');
     }
     if (contest.createdById !== userId && !isAdmin) {
       throw new ForbiddenException('Bạn không có quyền xóa cuộc thi này');
+    }
+
+    const hasArchivedClass = contest.assignments.some(a => !a.classRoom.isActive);
+    if (hasArchivedClass && !isAdmin) {
+      throw new ForbiddenException('This contest belongs to an archived classroom and cannot be deleted.');
     }
     return this.prisma.$transaction(async (tx) => {
       await tx.classAssignment.deleteMany({ where: { contestId } });
@@ -375,7 +396,7 @@ export class ContestsService {
   private async ensureClassOwner(classRoomId: string, userId: string) {
     const classRoom = await this.prisma.classRoom.findUnique({
       where: { id: classRoomId },
-      select: { ownerId: true },
+      select: { ownerId: true, isActive: true },
     });
 
     if (!classRoom) {
@@ -384,6 +405,10 @@ export class ContestsService {
 
     if (classRoom.ownerId !== userId) {
       throw new ForbiddenException('Only owner can do this action');
+    }
+
+    if (!classRoom.isActive) {
+      throw new ForbiddenException('Classroom is archived and this action is not allowed.');
     }
 
     return classRoom;

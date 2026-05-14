@@ -98,6 +98,10 @@ export class InvitesService {
       throw new BadRequestException('Invite already used');
     }
 
+    if (!invite.classRoom.isActive) {
+      throw new ForbiddenException('This classroom is archived and cannot be joined.');
+    }
+
     if (invite.expiresAt < new Date()) {
       throw new BadRequestException('Invite expired');
     }

@@ -181,9 +181,12 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
       toast.success(editId ? 'Problem updated successfully!' : 'Problem created successfully!', {
         position: 'top-center',
       });
-    } catch (error) {
-      console.error('Failed to save problem:', error);
-      toast.error('Failed to save problem. Please check your inputs.', { position: 'top-center' });
+    } catch (error: any) {
+      if (error?.status !== 400 && error?.status !== 403) {
+        console.error('Failed to save problem:', error);
+      }
+      const msg = error?.message || 'Failed to save problem. Please check your inputs.';
+      toast.error(msg, { position: 'top-center' });
     } finally {
       setLoading(false);
     }

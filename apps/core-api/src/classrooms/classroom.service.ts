@@ -226,6 +226,10 @@ export class ClassroomService {
       throw new ForbiddenException('Only owner can update');
     }
 
+    if (!classroom.isActive) {
+      throw new ForbiddenException('Classroom is archived and cannot be edited.');
+    }
+
     return this.prisma.classRoom.update({
       where: { id: classRoomId },
       data: dto,
@@ -338,6 +342,10 @@ export class ClassroomService {
 
     if (classroom.ownerId !== ownerId) {
       throw new ForbiddenException('Only owner can remove members');
+    }
+
+    if (!classroom.isActive) {
+      throw new ForbiddenException('Classroom is archived and members cannot be removed.');
     }
 
     if (targetUserId === ownerId) {

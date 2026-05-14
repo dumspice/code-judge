@@ -33,9 +33,11 @@ export default function PeoplePage() {
       await removeMember(classRoomId, userId);
       // reload data
       await load();
-    } catch (error) {
-      console.error('Failed to remove member:', error);
-      alert('Failed to remove member');
+    } catch (error: any) {
+      if (error?.status !== 400 && error?.status !== 403) {
+        console.error('Failed to remove member:', error);
+      }
+      alert(error?.message || 'Failed to remove member');
     }
   };
 
