@@ -14,7 +14,7 @@ CREATE TYPE "Difficulty" AS ENUM ('EASY', 'MEDIUM', 'HARD');
 CREATE TYPE "ProblemVisibility" AS ENUM ('PRIVATE', 'PUBLIC', 'CONTEST_ONLY');
 
 -- CreateEnum
-CREATE TYPE "SubmissionStatus" AS ENUM ('Pending', 'Running', 'Accepted', 'Wrong', 'Error', 'CompilationError', 'TimeLimitExceeded', 'MemoryLimitExceeded');
+CREATE TYPE "SubmissionStatus" AS ENUM ('Pending', 'Running', 'Accepted', 'Wrong', 'RuntimeError', 'Error', 'CompilationError', 'TimeLimitExceeded', 'MemoryLimitExceeded');
 
 -- CreateEnum
 CREATE TYPE "SubmissionContext" AS ENUM ('PRACTICE', 'CONTEST', 'CLASS_ASSIGNMENT');
@@ -189,7 +189,7 @@ CREATE TABLE "GoldenSolution" (
     "id" TEXT NOT NULL,
     "problemId" TEXT NOT NULL,
     "language" TEXT NOT NULL,
-    "sourceCode" TEXT,
+    "sourceCode" TEXT NOT NULL,
     "sourceCodeObjectKey" TEXT,
     "isPrimary" BOOLEAN NOT NULL,
     "createdById" TEXT NOT NULL,
@@ -207,6 +207,9 @@ CREATE TABLE "AiGenerationJob" (
     "status" "AiJobStatus" NOT NULL,
     "inputDocObjectKey" TEXT,
     "inputDocUrl" TEXT,
+    "inputDocFileName" TEXT,
+    "inputDocContentType" TEXT,
+    "inputDocSizeBytes" INTEGER,
     "promptVersion" TEXT,
     "structuredOutput" JSONB,
     "errorMessage" TEXT,
@@ -282,8 +285,8 @@ CREATE TABLE "Submission" (
     "testsPassed" INTEGER,
     "testsTotal" INTEGER,
     "caseResults" JSONB,
-    "sourceCodeObjectKey" TEXT,
     "sourceCode" TEXT,
+    "sourceCodeObjectKey" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

@@ -1,3 +1,5 @@
+'use client';
+
 import { useSearchParams } from 'next/navigation';
 import { startOfWeek, addDays, isSameDay, format } from 'date-fns';
 import { enUS } from 'date-fns/locale';
@@ -16,7 +18,7 @@ interface ScheduleEvent {
   href?: string;
 }
 
-export default function SchedulePageContent() {
+export default function SchedulePageContent({ filter }: { filter?: string }) {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
@@ -77,10 +79,15 @@ export default function SchedulePageContent() {
 
   const daysInWeek = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
 
-  const filteredEvents = selectedClassId
-    ? events.filter((e) => e.classId === selectedClassId)
-    : events;
+  const filteredEvents = events.filter((event) => {
+    // filter class
+    const matchClass = selectedClassId ? event.classId === selectedClassId : true;
 
+    // filter type
+    const matchType = filter ? event.type.toLowerCase() === filter.toLowerCase() : true;
+
+    return matchClass && matchType;
+  });
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">

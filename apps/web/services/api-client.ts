@@ -11,6 +11,10 @@ let refreshPromise: Promise<boolean> | null = null;
 
 /** Exchange refresh cookie for a new pair (sets cookies on success). Used after 401 and OAuth callback. */
 export async function tryRefresh(): Promise<boolean> {
+  // Nếu đang ở server và không có window, việc fetch này thường sẽ không có cookies trừ khi được truyền vào
+  // Tuy nhiên, middleware đã xử lý refresh cho Server Components, nên ta chủ yếu chạy ở client.
+  if (typeof window === 'undefined') return false;
+
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
@@ -78,8 +82,17 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
   let res = await doFetch();
 
   if (res.status === 401) {
+    // Nếu đang ở client, chúng ta có thể thử refresh
+    // Nếu đang ở server, tryRefresh thường sẽ thất bại trừ khi ta truyền headers thủ công (đã xử lý ở middleware)
     const refreshed = await tryRefresh();
     if (refreshed) {
+      // Quan trọng: Khi retry trên client, chúng ta không được gửi header Cookie cũ
+      // Browser sẽ tự động đính kèm cookies mới từ Set-Cookie của tryRefresh
+      if (typeof window !== 'undefined' && options.headers) {
+        const newHeaders = new Headers(options.headers);
+        newHeaders.delete('Cookie');
+        options.headers = Object.fromEntries(newHeaders.entries());
+      }
       res = await doFetch();
     }
   }

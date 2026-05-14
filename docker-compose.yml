@@ -48,7 +48,7 @@ services:
     image: judge0/judge0:latest
     container_name: judge0-server
     privileged: true
-    # user: root # Quay lại user mặc định để tránh xung đột sudo
+    user: root # Quay lại user mặc định để tránh xung đột sudo
     environment:
       - RAILS_ENV=production
       - DATABASE_URL=postgres://judge0:judge0@db:5432/judge0
@@ -65,6 +65,7 @@ services:
     volumes:
       - judge0_box:/box
       - ./scripts/isolate_stub.sh:/usr/local/bin/isolate:ro
+      - ./scripts/sudo_stub.sh:/usr/bin/sudo:ro
     depends_on:
       db:
         condition: service_healthy
@@ -76,7 +77,7 @@ services:
     container_name: judge0-worker
     command: ["./scripts/workers"]
     privileged: true
-    # user: root # Quay lại user mặc định
+    user: root # Quay lại user mặc định
     environment:
       - RAILS_ENV=production
       - DATABASE_URL=postgres://judge0:judge0@db:5432/judge0
@@ -91,6 +92,7 @@ services:
     volumes:
       - judge0_box:/box
       - ./scripts/isolate_stub.sh:/usr/local/bin/isolate:ro
+      - ./scripts/sudo_stub.sh:/usr/bin/sudo:ro
     depends_on:
       db:
         condition: service_healthy
@@ -100,6 +102,8 @@ services:
   db:
     image: postgres:16-alpine
     container_name: db
+    ports:
+      - "5433:5432"
     environment:
       - POSTGRES_USER=judge0
       - POSTGRES_PASSWORD=judge0

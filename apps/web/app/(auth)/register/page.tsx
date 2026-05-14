@@ -32,7 +32,7 @@ export default function RegisterPage() {
 
     try {
       await authApi.register(name, email, password);
-      
+
       // Đợi lấy thông tin user xong
       await refreshUser();
 
@@ -176,7 +176,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="flex w-full items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800 active:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+              className="cursor-pointer flex w-full items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800 active:bg-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? (
                 <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -211,7 +211,7 @@ export default function RegisterPage() {
           <button
             type="button"
             onClick={() => authApi.googleLogin()}
-            className="flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100"
+            className="cursor-pointer flex w-full items-center justify-center gap-3 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 active:bg-slate-100"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24">
               <path
@@ -259,10 +259,10 @@ export default function RegisterPage() {
         {/* Bottom-left quote */}
         <div className="absolute bottom-12 left-12 right-12">
           <blockquote className="text-lg font-medium leading-relaxed text-white/90">
-            &ldquo;Tham gia Code Judge ngay hôm nay để bắt đầu hành trình chinh phục thuật toán và
-            nâng cao kỹ năng lập trình của bạn.&rdquo;
+            &ldquo;Join Code Judge today to begin your journey of mastering algorithms and improving
+            your programming skills.&rdquo;
           </blockquote>
-          <p className="mt-3 text-sm font-medium text-white/60">— Code Judge Team</p>
+          <p className="mt-3 text-sm font-medium text-white/60">— Code Judge Team —</p>
         </div>
       </div>
     </div>

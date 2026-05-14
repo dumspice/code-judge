@@ -1,85 +1,134 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { Play, Send, Maximize2, Moon, Sun } from 'lucide-react';
-import type { ProblemType } from './ProblemWorkspace';
+import { Play, Send, Maximize2, Moon, Sun, Settings, ChevronDown } from 'lucide-react';
+import { Problem } from '@/services/problem.apis';
+import { cn } from '@/lib/utils';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
 type CodeEditorPanelProps = {
-  problem: ProblemType;
+  problem: Problem;
   code: string;
   setCode: (val: string) => void;
   isRunning: boolean;
-  onRun: () => void;
-  onSubmit: () => void;
+  onSubmit: (language: string) => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
 };
 
 export default function CodeEditorPanel({ 
-  problem, code, setCode, isRunning, onRun, onSubmit, isDarkMode, toggleDarkMode 
+  problem, code, setCode, isRunning, onSubmit, isDarkMode, toggleDarkMode 
 }: CodeEditorPanelProps) {
   
-  // Khởi tạo ngôn ngữ mặc định là ngôn ngữ đầu tiên trong mảng
-  const [language, setLanguage] = useState(problem.supportedLanguages[0] || 'javascript');
+  const [language, setLanguage] = useState('PYTHON');
+  const [isEditorReady, setIsEditorReady] = useState(false);
+
+  const supportedLanguages = problem.supportedLanguages || ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'];
+
+  useEffect(() => {
+    if (supportedLanguages.length > 0) {
+      setLanguage(supportedLanguages[0]);
+    }
+  }, [supportedLanguages]);
 
   const handleEditorWillMount = (monacoInstance: any) => {
-    monacoInstance.editor.defineTheme('custom-dark', {
+    monacoInstance.editor.defineTheme('premium-dark', {
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: 'comment', foreground: '5c6370', fontStyle: 'italic' },
-        { token: 'keyword', foreground: 'c678dd' },
+        { token: 'comment', foreground: '5d6d7e', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '569cd6' },
+        { token: 'string', foreground: 'ce9178' },
+        { token: 'number', foreground: 'b5cea8' },
       ],
-      colors: { 'editor.background': '#131316' },
+      colors: {
+        'editor.background': '#0a0a0c',
+        'editor.foreground': '#d4d4d4',
+        'editorLineNumber.foreground': '#3a3a3c',
+        'editorLineNumber.activeForeground': '#808080',
+        'editor.lineHighlightBackground': '#1a1a1c',
+        'editor.selectionBackground': '#264f78',
+      },
     });
   };
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3 transition-colors">
-        <div className="flex items-center gap-3">
-          
-          {/* MAP TỪ SUPPORTED LANGUAGES CHUẨN XÁC VỚI BÀI TẬP */}
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring capitalize"
-          >
-            {problem.supportedLanguages.map((lang) => (
-              <option key={lang} value={lang}>{lang}</option>
-            ))}
-          </select>
+    <div className="flex flex-1 flex-col overflow-hidden bg-background">
+      {/* Editor Header */}
+      <div className="flex items-center justify-between border-b border-border/50 bg-muted/20 px-6 py-3">
+        <div className="flex items-center gap-4">
+          <div className="relative group">
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="appearance-none rounded-lg border border-border/50 bg-background pl-3 pr-9 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground outline-none transition-all hover:bg-muted focus:ring-1 focus:ring-blue-500/50 cursor-pointer"
+            >
+              {supportedLanguages.map((lang) => (
+                <option key={lang} value={lang}>{lang}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none group-hover:text-foreground transition-colors" />
+          </div>
 
-          <button onClick={toggleDarkMode} className="rounded-lg border border-border bg-background p-2 hover:bg-muted transition-colors flex items-center justify-center w-9 h-9">
-            {isDarkMode ? <Sun size={16} className="text-yellow-500" /> : <Moon size={16} className="text-foreground" />}
+          <div className="h-4 w-[1px] bg-border/50 mx-1" />
+
+          <button 
+            onClick={toggleDarkMode} 
+            className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+            title="Toggle Theme"
+          >
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <button className="rounded-lg border border-border bg-background p-2 hover:bg-muted transition-colors flex items-center justify-center w-9 h-9">
-            <Maximize2 size={16} className="text-foreground" />
+          
+          <button 
+            className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+            title="Settings"
+          >
+            <Settings size={18} />
           </button>
         </div>
 
         <div className="flex items-center gap-3">
-          <button onClick={onRun} disabled={isRunning} className="flex items-center gap-2 rounded-lg border border-border bg-secondary hover:bg-secondary/80 px-4 py-2 text-sm font-medium transition disabled:opacity-50 text-secondary-foreground">
-            <Play size={16} /> Run
-          </button>
-          <button onClick={onSubmit} disabled={isRunning} className="flex items-center gap-2 rounded-lg bg-green-600 hover:bg-green-700 px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-50">
-            <Send size={16} /> Submit
+          <button 
+            onClick={() => onSubmit(language)} 
+            disabled={isRunning} 
+            className="flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-500 px-5 py-2 text-sm font-bold text-white transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 shadow-[0_0_15px_rgba(37,99,235,0.2)]"
+          >
+            <Send size={16} />
+            {isRunning ? 'Submitting...' : 'Submit'}
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      {/* Editor Content */}
+      <div className="flex-1 relative">
+        {!isEditorReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background z-10">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+          </div>
+        )}
         <MonacoEditor
           height="100%"
-          language={language}
+          language={language.toLowerCase()}
           value={code}
           onChange={(value) => setCode(value || '')}
-          theme={isDarkMode ? 'custom-dark' : 'light'}
+          theme={isDarkMode ? 'premium-dark' : 'light'}
           beforeMount={handleEditorWillMount}
-          options={{ fontSize: 15, minimap: { enabled: false }, padding: { top: 16 } }}
+          onMount={() => setIsEditorReady(true)}
+          options={{
+            fontSize: 14,
+            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            minimap: { enabled: false },
+            padding: { top: 20 },
+            smoothScrolling: true,
+            cursorBlinking: 'smooth',
+            cursorSmoothCaretAnimation: 'on',
+            lineNumbersMinChars: 4,
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+          }}
         />
       </div>
     </div>
