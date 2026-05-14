@@ -1,9 +1,9 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { randomBytes } from 'crypto';
 import { Difficulty, ProblemMode, ProblemVisibility, Prisma, Problem, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
+import { buildUniqueProblemSlug } from './problem-slug.util';
 
 @Injectable()
 export class ProblemsService {
@@ -11,7 +11,7 @@ export class ProblemsService {
 
   async create(dto: CreateProblemDto, creatorId: string, role?: Role): Promise<Problem> {
     await this.ensureUserCanCreateProblemInClass(dto.classRoomId, creatorId, role);
-    const slug = await this.buildUniqueSlug(dto.title);
+    const slug = await buildUniqueProblemSlug(this.prisma.problem, dto.title);
     const supportedLanguages = dto.supportedLanguages ?? [];
 
     return this.prisma.$transaction(async (tx) => {
@@ -62,20 +62,38 @@ export class ProblemsService {
     });
   }
 
-  async findAll(query: { search?: string; page?: number; limit?: number; classRoomId?: string }) {
+  async findAll(query: {
+    search?: string;
+    page?: number;
+    limit?: number;
+    classRoomId?: string;
+    difficulty?: string;
+    mode?: string;
+  }) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
     const search = query.search?.trim();
+    const difficultyFilter =
+      query.difficulty === 'EASY' || query.difficulty === 'MEDIUM' || query.difficulty === 'HARD'
+        ? { difficulty: query.difficulty as Difficulty }
+        : {};
+    const modeFilter =
+      query.mode === 'ALGO' || query.mode === 'PROJECT'
+        ? { mode: query.mode as ProblemMode }
+        : {};
     const where: Prisma.ProblemWhereInput = {
       isPublished: true,
       visibility: { not: 'PRIVATE' },
+      ...difficultyFilter,
+      ...modeFilter,
       ...(query.classRoomId ? { assignments: { some: { classRoomId: query.classRoomId } } } : {}),
       ...(search
         ? {
             OR: [
               { title: { contains: search, mode: 'insensitive' as const } },
               { description: { contains: search, mode: 'insensitive' as const } },
+              { slug: { contains: search, mode: 'insensitive' as const } },
             ],
           }
         : {}),
@@ -151,7 +169,7 @@ export class ProblemsService {
 
     const slug =
       dto.title && dto.title !== existing.title
-        ? await this.buildUniqueSlug(dto.title)
+        ? await buildUniqueProblemSlug(this.prisma.problem, dto.title)
         : existing.slug;
 
     return this.prisma.$transaction(async (tx) => {
@@ -318,16 +336,6 @@ export class ProblemsService {
     return Boolean(enrollment);
   }
 
-  private async buildUniqueSlug(title: string): Promise<string> {
-    const baseSlug = slugify(title);
-    let slug = baseSlug;
-    let counter = 1;
-    while (await this.prisma.problem.findUnique({ where: { slug } })) {
-      slug = `${baseSlug}-${counter++}`;
-    }
-    return slug;
-  }
-
   private async ensureClassExists(classRoomId: string) {
     const classRoom = await this.prisma.classRoom.findUnique({
       where: { id: classRoomId },
@@ -340,13 +348,4 @@ export class ProblemsService {
 
     return classRoom;
   }
-}
-
-function slugify(value: string): string {
-  const raw = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return raw.length > 0 ? raw : `problem-${randomBytes(4).toString('hex')}`;
 }

@@ -32,7 +32,6 @@ import { CreateProblemDto, problemsApi, UpdateProblemDto } from '@/services/prob
 import { toast } from 'sonner';
 
 export default function ClassProblemCreate({ classId }: { classId: string }) {
-  console.log(classId);
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams?.get('edit');

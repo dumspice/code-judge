@@ -67,8 +67,12 @@ export class AiTestcaseService {
     const primaryProvider = input.provider ?? this.getDefaultProvider();
     const primaryModel = input.model ?? this.getDefaultModel(primaryProvider);
     const promptVersion = this.config.get<string>(EnvKeys.AI_PROMPT_VERSION) ?? 'ai-testcase-v1';
-    const configuredMaxTokens = Number(this.config.get<string>(EnvKeys.AI_MAX_TOKENS) ?? 2000);
-    const maxTokens = fastMode ? Math.min(configuredMaxTokens, 2500) : configuredMaxTokens;
+    const requestedCases = Math.min(Math.max(input.maxTestCases ?? 10, 1), 25);
+    const configuredMaxTokens = Number(this.config.get<string>(EnvKeys.AI_MAX_TOKENS) ?? 4096);
+    /** Floor scales with testcase count so Gemini/OpenAI JSON is not cut mid-object. */
+    const tokenFloor = 1100 + requestedCases * 320;
+    const outputCap = fastMode ? 8192 : 16384;
+    const maxTokens = Math.min(Math.max(configuredMaxTokens, tokenFloor), outputCap);
     const configuredTemperature = Number(this.config.get<string>(EnvKeys.AI_TEMPERATURE) ?? 0.2);
     const temperature = fastMode ? 0 : configuredTemperature;
 
@@ -85,15 +89,16 @@ export class AiTestcaseService {
         ];
 
     // Try provider/model plans in order (primary -> fallback).
-    // We keep lastError to expose a useful failure reason if all plans fail.
+    // Track per-plan failures: HTTP errors throw, but 200 + empty body does not — treat empty as failure
+    // so we can fall back and so the final error lists every attempt (not only the last catch).
     let text = '';
     let usedProvider = primaryProvider;
     let usedModel = primaryModel;
-    let lastError: unknown;
+    const planFailures: string[] = [];
 
     for (const plan of plans) {
       try {
-        text = await this.generateWithRetry(
+        const chunk = await this.generateWithRetry(
           plan.provider,
           plan.model,
           effectiveMessages,
@@ -101,20 +106,23 @@ export class AiTestcaseService {
           maxTokens,
           fastMode ? 1 : 3,
         );
+        if (!chunk.trim()) {
+          planFailures.push(`${plan.provider}/${plan.model}: empty model response`);
+          continue;
+        }
+        text = chunk;
         usedProvider = plan.provider;
         usedModel = plan.model;
         break;
       } catch (error) {
-        lastError = error;
+        const msg = error instanceof Error ? error.message : String(error);
+        planFailures.push(`${plan.provider}/${plan.model}: ${msg}`);
       }
     }
 
-    if (!text) {
-      throw new Error(
-        `All AI providers failed. Last error: ${
-          lastError instanceof Error ? lastError.message : 'unknown error'
-        }`,
-      );
+    if (!text.trim()) {
+      const detail = planFailures.length ? planFailures.join(' | ') : 'no attempts recorded';
+      throw new Error(`All AI providers failed. ${detail}`);
     }
 
     let parsed: GeneratedTestcaseOutput | null = null;
@@ -125,17 +133,18 @@ export class AiTestcaseService {
         throw new Error('AI output exceeds maxTestCases');
       }
     } catch (error) {
-      // If output looks truncated, try once with compact instruction
-      // to nudge model to return shorter but valid JSON.
-      if (!fastMode && this.isLikelyTruncatedOutput(text)) {
+      // If output looks truncated (usually maxOutputTokens), retry with a higher
+      // token budget and compact JSON instructions — even in AI_FAST_MODE.
+      if (this.isLikelyTruncatedOutput(text)) {
         const compactMessages = this.buildCompactRetryMessages(messages);
+        const retryBudget = Math.min(outputCap, Math.max(maxTokens * 2, 5000));
         try {
           const retryText = await this.generateWithRetry(
             usedProvider,
             usedModel,
             compactMessages,
             0,
-            maxTokens,
+            retryBudget,
             1,
           );
           text = retryText;

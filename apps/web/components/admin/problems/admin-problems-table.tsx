@@ -23,6 +23,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Search, MoreHorizontal, Pencil, Trash2, Loader2, RefreshCw, Plus } from 'lucide-react';
+import { toast } from 'sonner';
+import { ApiRequestError } from '@/services/api-client';
 
 export default function AdminProblemsTable() {
   const [items, setItems] = useState<Problem[]>([]);
@@ -30,6 +32,7 @@ export default function AdminProblemsTable() {
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -43,6 +46,7 @@ export default function AdminProblemsTable() {
 
   const fetchProblems = useCallback(async () => {
     setLoading(true);
+    setListError(null);
     try {
       const res = await problemsApi.findAllAdmin({
         search: debouncedSearch || undefined,
@@ -53,6 +57,12 @@ export default function AdminProblemsTable() {
       setTotal(res.total);
     } catch (e) {
       console.error(e);
+      const msg =
+        e instanceof ApiRequestError ? e.body.message : 'Không tải được danh sách problem.';
+      setListError(msg);
+      setItems([]);
+      setTotal(0);
+      toast.error(msg, { position: 'top-center' });
     } finally {
       setLoading(false);
     }
@@ -68,15 +78,27 @@ export default function AdminProblemsTable() {
     if (!confirm(`Xóa problem "${p.title}"? Hành động không hoàn tác.`)) return;
     try {
       await problemsApi.delete(p.id);
+      toast.success('Đã xóa problem.', { position: 'top-center' });
       fetchProblems();
     } catch (e) {
       console.error(e);
-      alert('Không xóa được problem.');
+      const msg =
+        e instanceof ApiRequestError ? e.body.message : 'Không xóa được problem. Thử lại sau.';
+      toast.error(msg, { position: 'top-center' });
     }
   };
 
   return (
     <div className="space-y-4">
+      {listError ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          {listError}
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -88,6 +110,11 @@ export default function AdminProblemsTable() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {!loading && total > 0 ? (
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              {items.length} / {total} đề
+            </span>
+          ) : null}
           <Button variant="outline" size="icon" onClick={fetchProblems} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
@@ -121,7 +148,7 @@ export default function AdminProblemsTable() {
             ) : items.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                  Không có problem nào.
+                  {listError ? 'Không có dữ liệu. Thử làm mới hoặc kiểm tra kết nối.' : 'Không có problem nào.'}
                 </TableCell>
               </TableRow>
             ) : (

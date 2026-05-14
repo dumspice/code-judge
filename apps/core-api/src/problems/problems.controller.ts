@@ -5,8 +5,10 @@ import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { CurrentUser, Public, Roles } from '../common';
 import { GenerateAiTestcaseDto } from '../ai-testcase/dto/generate-ai-testcase.dto';
 import { AiTestcaseService } from '../ai-testcase/ai-testcase.service';
+import { CreateAdminProblemDto } from './dto/create-admin-problem.dto';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
+import { AdminProblemsService } from './admin-problems.service';
 import { ProblemsService } from './problems.service';
 
 @ApiTags('problems')
@@ -14,6 +16,7 @@ import { ProblemsService } from './problems.service';
 export class ProblemsController {
   constructor(
     private readonly problemsService: ProblemsService,
+    private readonly adminProblemsService: AdminProblemsService,
     private readonly aiTestcaseService: AiTestcaseService,
   ) {}
 
@@ -25,12 +28,16 @@ export class ProblemsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('classRoomId') classRoomId?: string,
+    @Query('difficulty') difficulty?: string,
+    @Query('mode') mode?: string,
   ) {
     return this.problemsService.findAll({
       search,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
       classRoomId,
+      difficulty,
+      mode,
     });
   }
 
@@ -48,6 +55,14 @@ export class ProblemsController {
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
     });
+  }
+
+  @ApiBearerAuth('JWT')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Admin: tạo problem không gán lớp (không ClassAssignment)' })
+  @Post('admin')
+  async createAdmin(@CurrentUser() user: RequestUser, @Body() dto: CreateAdminProblemDto) {
+    return this.adminProblemsService.create(dto, user.userId);
   }
 
   @Public()

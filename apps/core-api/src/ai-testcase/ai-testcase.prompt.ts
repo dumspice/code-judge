@@ -33,7 +33,7 @@ Quality requirements:
 - Include diverse tests: boundary, typical, edge/failure-prone.
 - Avoid duplicate tests that add no value.
 - Ensure testcase count <= maxTestCases.
-- Use concise explanations if provided.
+- Use concise explanations if provided; omit the explanation field entirely when max_test_cases > 6 to avoid oversized JSON.
 - If spec is ambiguous, keep assumptions minimal in notes.
 `;
 
