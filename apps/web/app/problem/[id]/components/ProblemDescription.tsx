@@ -1,69 +1,155 @@
+'use client';
+
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Clock, HardDrive } from 'lucide-react';
-import type { ProblemType } from './ProblemWorkspace';
+import { Clock, HardDrive, BookOpen, History, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Problem } from '@/services/problem.apis';
+import { Submission } from '@/services/submission.apis';
+import { cn } from '@/lib/utils';
 
-export default function ProblemDescription({ problem }: { problem: ProblemType }) {
-  // Map màu theo difficulty
+interface ProblemDescriptionProps {
+  problem: Problem;
+  activeTab: 'description' | 'submissions';
+  setActiveTab: (tab: 'description' | 'submissions') => void;
+  submissions: Submission[];
+  isDarkMode: boolean;
+}
+
+export default function ProblemDescription({ 
+  problem, activeTab, setActiveTab, submissions, isDarkMode 
+}: ProblemDescriptionProps) {
+  
   const difficultyColor = 
-    problem.difficulty === 'EASY' ? 'text-green-600 dark:text-green-400 bg-green-500/10' :
-    problem.difficulty === 'MEDIUM' ? 'text-yellow-600 dark:text-yellow-400 bg-yellow-500/10' :
-    'text-red-600 dark:text-red-400 bg-red-500/10';
+    problem.difficulty === 'EASY' ? 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' :
+    problem.difficulty === 'MEDIUM' ? 'text-amber-500 bg-amber-500/10 border-amber-500/20' :
+    'text-rose-500 bg-rose-500/10 border-rose-500/20';
 
   return (
-    <div className="w-1/2 border-r border-border overflow-y-auto">
-      <div className="sticky top-0 z-20 border-b border-border bg-background/95 backdrop-blur px-6 py-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">{problem.title}</h1>
-          <span className={`rounded-full px-3 py-1 text-sm font-medium ${difficultyColor}`}>
-            {problem.difficulty}
-          </span>
-        </div>
-
-        {/* CÁC THÔNG SỐ GIỚI HẠN LẤY TỪ SCHEMA */}
-        <div className="mt-3 flex items-center gap-4 text-xs font-medium text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <Clock size={14} />
-            <span>{problem.timeLimitMs} ms</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <HardDrive size={14} />
-            <span>{problem.memoryLimitMb} MB</span>
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          {problem.tags.map((tag) => (
-            <span key={tag} className="rounded-md bg-muted px-3 py-1 text-xs text-muted-foreground font-medium">
-              {tag}
-            </span>
-          ))}
-        </div>
+    <div className="w-[45%] flex flex-col border-r border-border/50 bg-card/30 backdrop-blur-sm overflow-hidden">
+      {/* Tab Switcher */}
+      <div className="flex items-center border-b border-border/50 bg-muted/20 px-4">
+        <button
+          onClick={() => setActiveTab('description')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2",
+            activeTab === 'description' 
+              ? "border-blue-500 text-blue-500" 
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <BookOpen size={16} />
+          Description
+        </button>
+        <button
+          onClick={() => setActiveTab('submissions')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2",
+            activeTab === 'submissions' 
+              ? "border-blue-500 text-blue-500" 
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <History size={16} />
+          Submissions
+        </button>
       </div>
 
-      <div className="space-y-8 px-6 py-6">
-        {/* RENDER MARKDOWN THAY VÌ STRING THƯỜNG */}
-        <section className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {problem.statementMd}
-          </ReactMarkdown>
-        </section>
-
-        <section>
-          <h2 className="mb-4 text-lg font-semibold">Examples</h2>
-          {/* LẤY DỮ LIỆU TỪ TESTCASE PUBLIC */}
-          {problem.publicTestCases.map((tc, index) => (
-            <div key={tc.id} className="rounded-xl border border-border bg-card p-4 mb-4">
-              <p className="mb-2 text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">Input:</span> {tc.input}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                <span className="font-semibold text-foreground">Output:</span> {tc.expectedOutput}
-              </p>
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        {activeTab === 'description' ? (
+          <div className="p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-3xl font-bold tracking-tight">{problem.title}</h1>
+              <span className={cn("rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider", difficultyColor)}>
+                {problem.difficulty}
+              </span>
             </div>
-          ))}
-        </section>
+
+            <div className="flex items-center gap-6 mb-8 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-lg border border-border/50">
+                <Clock size={14} className="text-blue-500" />
+                <span className="font-medium">{problem.timeLimitMs}ms</span>
+              </div>
+              <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-lg border border-border/50">
+                <HardDrive size={14} className="text-purple-500" />
+                <span className="font-medium">{problem.memoryLimitMb}MB</span>
+              </div>
+            </div>
+
+            <div className={cn("prose prose-blue max-w-none mb-12", isDarkMode && "prose-invert")}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {problem.statementMd || problem.description || "No description provided."}
+              </ReactMarkdown>
+            </div>
+
+            {/* Constraints & Tags */}
+            <div className="space-y-6 pt-6 border-t border-border/50">
+              <div>
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Tags</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(problem as any).tags?.map((tag: any) => (
+                    <span key={typeof tag === 'string' ? tag : tag.name} className="rounded-full bg-blue-500/10 border border-blue-500/20 px-3 py-1 text-xs text-blue-400 font-medium">
+                      {typeof tag === 'string' ? tag : tag.name}
+                    </span>
+                  )) || <span className="text-xs text-muted-foreground">No tags</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-6 space-y-4">
+            <h2 className="text-xl font-bold mb-4 px-2">Submission History</h2>
+            {submissions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
+                <div className="p-4 rounded-full bg-muted/20 border border-border/50 text-muted-foreground">
+                  <History size={32} />
+                </div>
+                <div>
+                  <p className="text-lg font-medium">No submissions yet</p>
+                  <p className="text-sm text-muted-foreground">Submit your code to see your progress.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {submissions.map((sub) => (
+                  <div key={sub.id} className="group relative overflow-hidden rounded-xl border border-border/50 bg-card/50 p-4 transition-all hover:bg-muted/30 hover:shadow-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        {sub.status === 'Accepted' ? (
+                          <CheckCircle2 size={20} className="text-emerald-500" />
+                        ) : sub.status === 'Wrong' ? (
+                          <XCircle size={20} className="text-rose-500" />
+                        ) : (
+                          <AlertCircle size={20} className="text-amber-500" />
+                        )}
+                        <span className={cn(
+                          "font-bold text-sm",
+                          sub.status === 'Accepted' ? "text-emerald-500" : 
+                          sub.status === 'Wrong' ? "text-rose-500" : "text-amber-500"
+                        )}>
+                          {sub.status}
+                        </span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(sub.createdAt).toLocaleDateString()} {new Date(sub.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Score</span>
+                        <span className="text-sm font-mono">{sub.score ?? '--'}</span>
+                      </div>
+                      <div className="flex flex-col text-right">
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Language</span>
+                        <span className="text-sm font-mono text-blue-400">{(sub as any).language || 'Unknown'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
