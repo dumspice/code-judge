@@ -48,6 +48,8 @@ export class ApiRequestError extends Error {
   constructor(
     public readonly status: number,
     public readonly body: ApiError,
+    /** Đường dẫn API (không gồm BASE_URL), ví dụ `/storage/presign/upload` */
+    public readonly path?: string,
   ) {
     super(body.message);
     this.name = 'ApiRequestError';
@@ -98,10 +100,14 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
   const data = await res.json().catch(() => null);
 
   if (!res.ok) {
-    throw new ApiRequestError(res.status, {
-      code: res.status,
-      message: data?.message ?? res.statusText,
-    });
+    throw new ApiRequestError(
+      res.status,
+      {
+        code: res.status,
+        message: data?.message ?? res.statusText,
+      },
+      path,
+    );
   }
 
   return (data?.result ?? data) as T;

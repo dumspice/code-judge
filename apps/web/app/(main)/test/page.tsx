@@ -24,6 +24,8 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2Icon } from 'lucide-react';
 import { getPublicCoreUrl } from '@/lib/public-config';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { apiFetch, getApiBaseUrl } from '@/services/api-client';
 
 function coreApiHeaders(jsonBody = false): HeadersInit {
   const headers: Record<string, string> = {};
@@ -98,6 +100,368 @@ function guessExtensionFromName(fileName: string): string | undefined {
 function buildDefaultFileName(file?: File | null): string {
   if (file?.name) return file.name;
   return `upload-${new Date().toISOString().replaceAll(':', '-')}.bin`;
+}
+
+type AiParsedCase = {
+  input: string;
+  expectedOutput: string;
+  isHidden?: boolean;
+  weight?: number;
+};
+
+type QuickGenerateResult = {
+  provider: string;
+  model: string;
+  promptVersion: string;
+  raw: string;
+  parsed: { testCases: AiParsedCase[] } | null;
+  parseError?: string;
+};
+
+type VerifyGoldenResult = {
+  language: string;
+  goldenSource: 'inline' | 'database';
+  goldenSolutionId?: string;
+  summary: { total: number; passed: number; failed: number };
+  results: Array<{
+    index: number;
+    passed: boolean;
+    expectedOutput: string;
+    actualOutput?: string;
+    stderr?: string;
+    verdict: string;
+  }>;
+};
+
+function AiGoldenVerifyTab() {
+  const coreUrl = useMemo(() => getApiBaseUrl().replace(/\/+$/, ''), []);
+
+  const [title, setTitle] = useState('Tính tổng hai số');
+  const [statement, setStatement] = useState(
+    'Cho hai số nguyên a, b trên một dòng, cách nhau bởi khoảng trắng. In ra tổng a+b.',
+  );
+  const [ioSpec, setIoSpec] = useState('Input: một dòng "a b". Output: một số nguyên.');
+  const [provider, setProvider] = useState<'openai' | 'google'>('google');
+  const [goldenCode, setGoldenCode] = useState('a, b = map(int, input().split())\nprint(a + b)');
+  const [problemIdOpt, setProblemIdOpt] = useState('');
+
+  const [aiBusy, setAiBusy] = useState(false);
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  const [aiResult, setAiResult] = useState<QuickGenerateResult | null>(null);
+  const [verifyResult, setVerifyResult] = useState<VerifyGoldenResult | null>(null);
+  const [tabLog, setTabLog] = useState('');
+  /** Bản có thể sửa — verify luôn dùng mảng này (không đọc trực tiếp từ aiResult). */
+  const [editableTestCases, setEditableTestCases] = useState<
+    Array<{ input: string; expectedOutput: string }>
+  >([]);
+
+  function restoreTestCasesFromAi() {
+    const parsed = aiResult?.parsed?.testCases;
+    if (!parsed?.length) return;
+    setEditableTestCases(
+      parsed.map((c) => ({
+        input: c.input,
+        expectedOutput: c.expectedOutput,
+      })),
+    );
+    setTabLog((s) => `${s}\nĐã khôi phục ${parsed.length} test từ bản AI.`);
+  }
+
+  async function onGenerateAi() {
+    setAiBusy(true);
+    setAiResult(null);
+    setVerifyResult(null);
+    setEditableTestCases([]);
+    setTabLog('');
+    try {
+      const res = await apiFetch<QuickGenerateResult>('/ai-testcase/quick-generate', {
+        method: 'POST',
+        body: {
+          title: title.trim(),
+          statement: statement.trim(),
+          ioSpec: ioSpec.trim() || undefined,
+          provider,
+        },
+      });
+      setAiResult(res);
+      if (res.parseError) {
+        setTabLog(`Parse AI lỗi: ${res.parseError}`);
+      } else if (!res.parsed?.testCases?.length) {
+        setTabLog('AI không trả testCases hợp lệ.');
+      } else {
+        setEditableTestCases(
+          res.parsed.testCases.map((c) => ({
+            input: c.input,
+            expectedOutput: c.expectedOutput,
+          })),
+        );
+        setTabLog(`Sinh được ${res.parsed.testCases.length} test case (${res.provider}/${res.model}). Có thể chỉnh sửa bên dưới.`);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTabLog(`Lỗi quick-generate: ${msg}`);
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function onVerifyGolden() {
+    const cases = editableTestCases.filter(
+      (c) => c.input.trim() !== '' && c.expectedOutput.trim() !== '',
+    );
+    if (!cases.length) {
+      setTabLog((s) => s + '\nCần ít nhất một test case có input và expected không rỗng (thêm hoặc sinh từ AI).');
+      return;
+    }
+    if (!goldenCode.trim()) {
+      setTabLog((s) => s + '\nNhập mã golden (Python).');
+      return;
+    }
+
+    setVerifyBusy(true);
+    setVerifyResult(null);
+    try {
+      const pid = problemIdOpt.trim();
+      const body: Record<string, unknown> = {
+        goldenSourceCode: goldenCode,
+        testCases: cases.map((c) => ({
+          input: c.input.trimEnd(),
+          expectedOutput: c.expectedOutput.trimEnd(),
+        })),
+        language: 'python',
+      };
+      if (pid) body.problemId = pid;
+
+      const res = await apiFetch<VerifyGoldenResult>('/ai-testcase/verify-testcases-with-golden', {
+        method: 'POST',
+        body,
+      });
+      setVerifyResult(res);
+      setTabLog(
+        (s) =>
+          `${s}\nVerify: ${res.summary.passed}/${res.summary.total} đúng (golden: ${res.goldenSource}).`,
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTabLog((s) => `${s}\nLỗi verify: ${msg}`);
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
+
+  return (
+    <div className={cn('space-y-8')}>
+      <p className={cn('text-sm text-muted-foreground')}>
+        Luồng: <strong>Sinh testcase (AI)</strong> cần role <code className={cn('rounded bg-muted px-1')}>ADMIN</code>
+        . Bước verify gọi API enqueue job — cần <strong>worker</strong> chạy (queue{' '}
+        <code className={cn('rounded bg-muted px-1')}>golden-verify</code>, Lambda hoặc Python trên máy worker). Core API:{' '}
+        <code className={cn('rounded bg-muted px-1')}>{coreUrl}</code>
+      </p>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Đề & AI</CardTitle>
+          <CardDescription>Nội dung gửi tới quick-generate (giống tài liệu AI testcase).</CardDescription>
+        </CardHeader>
+        <CardContent className={cn('space-y-4')}>
+          <div className={cn('grid gap-2')}>
+            <Label>Tiêu đề</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div className={cn('grid gap-2')}>
+            <Label>Statement</Label>
+            <Textarea
+              value={statement}
+              onChange={(e) => setStatement(e.target.value)}
+              className={cn('min-h-[100px] font-mono text-sm')}
+            />
+          </div>
+          <div className={cn('grid gap-2')}>
+            <Label>IO spec (tuỳ chọn)</Label>
+            <Textarea
+              value={ioSpec}
+              onChange={(e) => setIoSpec(e.target.value)}
+              className={cn('min-h-[72px] text-sm')}
+            />
+          </div>
+          <div className={cn('grid gap-2 md:max-w-xs')}>
+            <Label>Provider</Label>
+            <Select
+              value={provider}
+              onValueChange={(v) => {
+                if (v === 'openai' || v === 'google') setProvider(v);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="google">google</SelectItem>
+                <SelectItem value="openai">openai</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={onGenerateAi} disabled={aiBusy}>
+            {aiBusy ? <Loader2Icon className={cn('mr-2 h-4 w-4 animate-spin')} /> : null}
+            Sinh testcase (AI)
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className={cn('flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between')}>
+          <div>
+            <CardTitle>Test case — chỉnh sửa</CardTitle>
+            <CardDescription>
+              Verify luôn dùng nội dung ở đây. Sinh từ AI, thêm tay, sửa input/expected, hoặc khôi phục bản AI.
+            </CardDescription>
+          </div>
+          <div className={cn('flex flex-wrap gap-2')}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setEditableTestCases((prev) => [...prev, { input: '', expectedOutput: '' }])
+              }
+            >
+              Thêm test case
+            </Button>
+            {aiResult?.parsed?.testCases?.length ? (
+              <Button type="button" variant="secondary" size="sm" onClick={restoreTestCasesFromAi}>
+                Khôi phục từ AI
+              </Button>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className={cn('space-y-4')}>
+          {editableTestCases.length === 0 ? (
+            <p className={cn('text-sm text-muted-foreground')}>
+              Chưa có test. Bấm <strong>Sinh testcase (AI)</strong> hoặc <strong>Thêm test case</strong> để bắt đầu.
+            </p>
+          ) : (
+            <div className={cn('max-h-[min(70vh,720px)] space-y-4 overflow-y-auto pr-1')}>
+              {editableTestCases.map((tc, i) => (
+                <div key={i} className={cn('rounded-lg border bg-muted/20 p-3')}>
+                  <div className={cn('mb-2 flex items-center justify-between gap-2')}>
+                    <span className={cn('text-xs font-semibold text-muted-foreground')}>Test #{i + 1}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className={cn('h-7 text-xs text-destructive hover:text-destructive')}
+                      onClick={() => setEditableTestCases((prev) => prev.filter((_, j) => j !== i))}
+                    >
+                      Xoá
+                    </Button>
+                  </div>
+                  <div className={cn('grid gap-2')}>
+                    <Label className={cn('text-xs')}>Input (stdin)</Label>
+                    <Textarea
+                      value={tc.input}
+                      onChange={(e) =>
+                        setEditableTestCases((prev) =>
+                          prev.map((row, j) => (j === i ? { ...row, input: e.target.value } : row)),
+                        )
+                      }
+                      className={cn('min-h-[72px] font-mono text-xs')}
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className={cn('mt-3 grid gap-2')}>
+                    <Label className={cn('text-xs')}>Expected output</Label>
+                    <Textarea
+                      value={tc.expectedOutput}
+                      onChange={(e) =>
+                        setEditableTestCases((prev) =>
+                          prev.map((row, j) =>
+                            j === i ? { ...row, expectedOutput: e.target.value } : row,
+                          ),
+                        )
+                      }
+                      className={cn('min-h-[72px] font-mono text-xs')}
+                      spellCheck={false}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Golden solution (Python)</CardTitle>
+          <CardDescription>
+            Mã đọc stdin / ghi stdout. Nếu bạn không phải ADMIN, điền <strong>problemId</strong> của đề bạn tạo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className={cn('space-y-4')}>
+          <div className={cn('grid gap-2')}>
+            <Label>problemId (tuỳ chọn)</Label>
+            <Input
+              value={problemIdOpt}
+              onChange={(e) => setProblemIdOpt(e.target.value)}
+              placeholder="Để trống nếu ADMIN thuần lab"
+            />
+          </div>
+          <div className={cn('grid gap-2')}>
+            <Label>Source Python</Label>
+            <Textarea
+              value={goldenCode}
+              onChange={(e) => setGoldenCode(e.target.value)}
+              className={cn('min-h-[160px] font-mono text-sm')}
+            />
+          </div>
+          <Button onClick={onVerifyGolden} disabled={verifyBusy || aiBusy}>
+            {verifyBusy ? <Loader2Icon className={cn('mr-2 h-4 w-4 animate-spin')} /> : null}
+            Chạy golden & kiểm tra test
+          </Button>
+        </CardContent>
+      </Card>
+
+      {verifyResult ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Kết quả verify{' '}
+              <Badge variant={verifyResult.summary.failed === 0 ? 'default' : 'destructive'}>
+                {verifyResult.summary.passed}/{verifyResult.summary.total} OK
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className={cn('space-y-2 text-sm')}>
+            {verifyResult.results.map((r) => (
+              <div
+                key={r.index}
+                className={cn(
+                  'rounded border p-3',
+                  r.passed ? 'border-green-600/40 bg-green-500/5' : 'border-destructive/40 bg-destructive/5',
+                )}
+              >
+                <div className={cn('flex flex-wrap items-center gap-2')}>
+                  <span className={cn('font-medium')}>Case {r.index + 1}</span>
+                  <Badge variant={r.passed ? 'secondary' : 'destructive'}>{r.verdict}</Badge>
+                </div>
+                {r.actualOutput !== undefined ? (
+                  <pre className={cn('mt-2 max-h-32 overflow-auto text-xs')}>{r.actualOutput}</pre>
+                ) : null}
+                {r.stderr ? (
+                  <pre className={cn('mt-1 text-xs text-destructive')}>{r.stderr}</pre>
+                ) : null}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <div className={cn('grid gap-2')}>
+        <Label>Log tab</Label>
+        <Textarea value={tabLog} readOnly className={cn('min-h-[120px] font-mono text-xs')} />
+      </div>
+    </div>
+  );
 }
 
 export default function TestPage() {
@@ -342,11 +706,9 @@ export default function TestPage() {
       <div className={cn('mx-auto max-w-4xl space-y-10')}>
         <header className={cn('space-y-2 border-b border-border pb-6')}>
           <p className={cn('text-xs font-medium uppercase tracking-wider text-muted-foreground')}>Test</p>
-          <h1 className={cn('text-3xl font-semibold tracking-tight')}>Upload tài liệu → MinIO (/test)</h1>
+          <h1 className={cn('text-3xl font-semibold tracking-tight')}>Lab tích hợp (/test)</h1>
           <p className={cn('max-w-2xl text-sm text-muted-foreground')}>
-            UI này gọi Core API để xin <code className={cn('rounded bg-muted px-1 py-0.5 text-xs')}>presigned URL</code>{' '}
-            rồi upload trực tiếp lên MinIO. Hỗ trợ ảnh, file bất kỳ, và <code className={cn('rounded bg-muted px-1 py-0.5 text-xs')}>.zip</code>{' '}
-            (để upload cả folder, hãy zip folder lại trước). Cần đăng nhập web (có access token) để gọi API storage.
+            Hai chế độ: upload MinIO (presign) và thử AI sinh testcase + chạy golden Python để đối chiếu đáp án.
           </p>
           <p className={cn('text-xs text-muted-foreground')}>
             Core API URL hiện tại: <code className={cn('rounded bg-muted px-1')}>{coreUrl}</code> (từ{' '}
@@ -354,6 +716,17 @@ export default function TestPage() {
           </p>
         </header>
 
+        <Tabs defaultValue="upload" className={cn('w-full')}>
+          <TabsList className={cn('mb-6')}>
+            <TabsTrigger value="upload">Upload MinIO</TabsTrigger>
+            <TabsTrigger value="ai-golden">AI + golden verify</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="ai-golden" className={cn('space-y-6')}>
+            <AiGoldenVerifyTab />
+          </TabsContent>
+
+          <TabsContent value="upload" className={cn('space-y-10')}>
         <Section
           title="1) Chọn file"
           description="Chọn ảnh / file / zip để upload. Ảnh sẽ có preview."
@@ -714,6 +1087,8 @@ export default function TestPage() {
             </CardContent>
           </Card>
         </Section>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

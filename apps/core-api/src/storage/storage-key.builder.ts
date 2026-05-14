@@ -27,12 +27,20 @@ export function buildSubmissionArtifactObjectKey(
   return `submissions/${sanitizeSegment(submissionId)}/artifacts/${sanitizeSegment(artifactName)}`;
 }
 
+/** Prefix thư mục object cho một golden solution (dùng validate sau upload). */
+export function buildGoldenSolutionObjectKeyPrefix(
+  problemId: string,
+  goldenSolutionId: string,
+): string {
+  return `golden-solutions/${sanitizeSegment(problemId)}/${sanitizeSegment(goldenSolutionId)}/`;
+}
+
 export function buildGoldenSolutionObjectKey(
   problemId: string,
   goldenSolutionId: string,
   fileName: string,
 ): string {
-  return `golden-solutions/${sanitizeSegment(problemId)}/${sanitizeSegment(goldenSolutionId)}/${sanitizeSegment(fileName)}`;
+  return `${buildGoldenSolutionObjectKeyPrefix(problemId, goldenSolutionId)}${sanitizeSegment(fileName)}`;
 }
 
 export function buildAiInputObjectKey(jobId: string, fileName: string): string {

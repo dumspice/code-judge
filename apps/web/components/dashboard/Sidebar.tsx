@@ -10,6 +10,7 @@ import {
   ChevronUp,
   Settings,
   Archive,
+  Library,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePathname } from 'next/navigation';
@@ -21,6 +22,7 @@ import Link from 'next/link';
 const menuItems = [
   { icon: Home, label: 'Classroom', path: '/dashboard' },
   { icon: Calendar, label: 'Schedule', path: '/dashboard/schedule' },
+  { icon: Library, label: 'Problems', path: '/dashboard/problems' },
 ];
 
 const adminMenuItems = [{ icon: Settings, label: 'Admin Panel', path: '/dashboard/admin' }];

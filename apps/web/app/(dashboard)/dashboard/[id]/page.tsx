@@ -8,6 +8,8 @@ import { AssignmentPost } from '@/components/dashboard/class-detail/assignment-p
 import Link from 'next/link';
 import Image from 'next/image';
 import { getClassroomBannerColor } from '@/lib/classroom-banner';
+import { Contest, contestsApi } from '@/services/contest.apis';
+
 
 export const metadata: Metadata = {
   title: 'Class Stream | CodeJudge',
@@ -21,6 +23,17 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
 
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
+
+  const contests = (
+    await contestsApi.findAll(
+      { limit: 10, classRoomId: id },
+      {
+        headers: {
+          Cookie: cookieHeader,
+        },
+      },
+    )
+  ).items;
 
   // Fetch classroom details
   const classroom = await getClassroomDetail(id, {

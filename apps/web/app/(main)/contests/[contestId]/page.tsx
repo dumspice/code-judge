@@ -84,9 +84,17 @@ export default function ContestDetailPage() {
             {contest.description || 'Không có mô tả contest.'}
           </p>
         </div>
-        <Button variant="secondary" size="lg" asChild>
-          <Link href="/">Trở về trang chủ</Link>
-        </Button>
+        <div className="flex flex-wrap gap-4">
+          <Button variant="outline" size="lg" asChild className="border-2">
+            <Link href={`/contests/${contestId}/leaderboard`} className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-blue-600" />
+              Xem bảng xếp hạng
+            </Link>
+          </Button>
+          <Button variant="secondary" size="lg" asChild>
+            <Link href="/">Trở về trang chủ</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[1.5fr_1fr]">
@@ -161,7 +169,7 @@ export default function ContestDetailPage() {
                         <div className="space-y-2">
                           <h3 className="text-lg font-semibold">
                             <Link
-                              href={`/problems/${item.problemId}`}
+                              href={`/problems/${item.problemId}?contestId=${contestId}`}
                               className="hover:text-primary"
                             >
                               {item.problem?.title ?? item.problemId}

@@ -25,14 +25,25 @@ import {
   Save,
   Trash2,
   Languages,
+  Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { CreateProblemDto, problemsApi, UpdateProblemDto } from '@/services/problem.apis';
+import type { GenerateTestCasesDraftResult } from '@/services/problem.apis';
+import { ApiRequestError } from '@/services/api-client';
 import { toast } from 'sonner';
+import { AiTestCaseAdvancedOptions } from '@/components/problems/AiTestCaseAdvancedOptions';
+import { AiTestCaseDraftSheet } from '@/components/problems/AiTestCaseDraftSheet';
+import {
+  AiGenOptionsState,
+  buildGenerateTestCasesDraftDto,
+  defaultAiGenOptions,
+  mapAiDraftToFormTestCases,
+} from '@/components/problems/ai-testcase-draft.shared';
 
 export default function ClassProblemCreate({ classId }: { classId: string }) {
-  console.log(classId);
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams?.get('edit');
@@ -57,6 +68,11 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [aiSheetOpen, setAiSheetOpen] = useState(false);
+  const [aiDraftLoading, setAiDraftLoading] = useState(false);
+  const [aiDraftResult, setAiDraftResult] = useState<GenerateTestCasesDraftResult | null>(null);
+  const [aiGenOptions, setAiGenOptions] = useState<AiGenOptionsState>(defaultAiGenOptions);
 
   useEffect(() => {
     if (editId) {
@@ -86,7 +102,9 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
       });
     } catch (error) {
       console.error('Failed to load problem:', error);
-      toast.error('Failed to load problem data.', { position: 'top-center' });
+      const msg =
+        error instanceof ApiRequestError ? error.body.message : 'Failed to load problem data.';
+      toast.error(msg, { position: 'top-center' });
     } finally {
       setInitialLoading(false);
     }
@@ -189,6 +207,88 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
       return { ...prev, testCases: newTestCases };
     });
   }
+
+  const clearTestCaseFieldErrors = () => {
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.testCases;
+      for (const k of Object.keys(next)) {
+        if (k.startsWith('testCase_')) delete next[k];
+      }
+      return next;
+    });
+  };
+
+  const previewMappedCases = aiDraftResult ? mapAiDraftToFormTestCases(aiDraftResult.parsed) : [];
+
+  const handleGenerateAiDraft = async () => {
+    if (!formData.title.trim()) {
+      toast.error('Enter a problem title before running AI.', { position: 'top-center' });
+      return;
+    }
+    if (!formData.statementMd?.trim()) {
+      toast.error('Enter the full statement (markdown) before running AI.', { position: 'top-center' });
+      return;
+    }
+    const previousDraft = aiDraftResult;
+    setAiDraftLoading(true);
+    setAiDraftResult(null);
+    try {
+      const dto = buildGenerateTestCasesDraftDto({
+        title: formData.title.trim(),
+        description: formData.description,
+        statementMd: formData.statementMd ?? '',
+        difficulty: formData.difficulty ?? 'EASY',
+        timeLimitMs: formData.timeLimitMs,
+        memoryLimitMb: formData.memoryLimitMb,
+        supportedLanguages: formData.supportedLanguages,
+        maxTestCasesForProblem: formData.maxTestCases ?? 100,
+        aiGenOptions,
+        previousDraft,
+      });
+      const res = await problemsApi.generateTestCasesDraft(dto);
+      setAiDraftResult(res);
+      setAiSheetOpen(true);
+      const mapped = mapAiDraftToFormTestCases(res.parsed);
+      if (res.parseError && mapped.length === 0) {
+        toast.warning('AI responded but test cases could not be parsed. See the panel for details.', {
+          position: 'top-center',
+        });
+      } else if (mapped.length === 0) {
+        toast.warning('No valid test cases in the AI response.', { position: 'top-center' });
+      }
+    } catch (error) {
+      console.error(error);
+      const msg =
+        error instanceof ApiRequestError
+          ? error.body.message
+          : 'Could not reach AI. Check login and server configuration.';
+      toast.error(msg, { position: 'top-center' });
+    } finally {
+      setAiDraftLoading(false);
+    }
+  };
+
+  const applyAiTestCases = (mode: 'replace' | 'append') => {
+    if (!aiDraftResult) return;
+    const mapped = mapAiDraftToFormTestCases(aiDraftResult.parsed);
+    if (mapped.length === 0) {
+      toast.error('No test cases to apply.', { position: 'top-center' });
+      return;
+    }
+    clearTestCaseFieldErrors();
+    setFormData((prev) => ({
+      ...prev,
+      testCases: mode === 'replace' ? mapped : [...(prev.testCases ?? []), ...mapped],
+    }));
+    setAiSheetOpen(false);
+    toast.success(
+      mode === 'replace'
+        ? `Replaced with ${mapped.length} AI test case(s).`
+        : `Appended ${mapped.length} AI test case(s).`,
+      { position: 'top-center' },
+    );
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
@@ -299,25 +399,52 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
           </Card>
 
           <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
-            <CardHeader className="border-b flex flex-row items-center justify-between">
+            <CardHeader className="border-b flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <CardTitle className="text-xl">Test Cases</CardTitle>
                 <CardDescription>
-                  Add examples and hidden test cases for evaluation.
+                  Add cases manually or use AI to draft from title and statement (always preview before
+                  applying; nothing is saved until you submit).
                 </CardDescription>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addTestCase}
-                className="rounded-lg cursor-pointer"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Case
-              </Button>
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="rounded-lg cursor-pointer"
+                  disabled={aiDraftLoading || loading}
+                  aria-busy={aiDraftLoading}
+                  onClick={() => void handleGenerateAiDraft()}
+                >
+                  {aiDraftLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 mr-2" />
+                  )}
+                  Suggest with AI
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addTestCase}
+                  className="rounded-lg cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Case
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-6">
+              <AiTestCaseAdvancedOptions
+                aiGenOptions={aiGenOptions}
+                setAiGenOptions={setAiGenOptions}
+                maxTestCasesForProblem={formData.maxTestCases ?? 100}
+                locale="en"
+                idPrefix="class-"
+              />
+
               <div className="space-y-4">
                 {errors.testCases && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm font-medium flex items-center gap-2">
@@ -611,6 +738,16 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
           </Card>
         </div>
       </div>
+
+      <AiTestCaseDraftSheet
+        open={aiSheetOpen}
+        onOpenChange={setAiSheetOpen}
+        draftResult={aiDraftResult}
+        previewCases={previewMappedCases}
+        onApplyReplace={() => applyAiTestCases('replace')}
+        onApplyAppend={() => applyAiTestCases('append')}
+        locale="en"
+      />
     </div>
   );
 }

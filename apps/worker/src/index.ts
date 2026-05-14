@@ -4,7 +4,8 @@ import { Worker } from 'bullmq';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, SubmissionStatus } from '@prisma/client';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
-import { JUDGE_SUBMISSIONS_QUEUE_NAME } from './lib/constants';
+import { processGoldenVerifyJob } from './golden-verify-job';
+import { GOLDEN_VERIFY_QUEUE_NAME, JUDGE_SUBMISSIONS_QUEUE_NAME } from './lib/constants';
 import { getOptionalEnv, getRequiredEnv } from './lib/env';
 import { createWorkerLogger } from './lib/logger';
 import { sleep } from './lib/sleep';
@@ -30,12 +31,20 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 });
 
-const lambdaFunctionName = process.env.AWS_LAMBDA_FUNCTION_NAME;
+const lambdaFunctionName = process.env.AWS_LAMBDA_FUNCTION_NAME?.trim() ?? '';
+/** Lambda dùng cho chấm submission (có thể khác golden). Mặc định trùng AWS_LAMBDA_FUNCTION_NAME. */
+const judgeLambdaFunctionName =
+  (process.env.JUDGE_LAMBDA_FUNCTION_NAME?.trim() || lambdaFunctionName || '').trim();
+/** `lambda` = chấm submission qua Lambda (để test). `judge0` = Judge0 HTTP (mặc định). */
+const judgeEngine = getOptionalEnv(process.env.JUDGE_ENGINE, 'judge0').toLowerCase();
+
 const awsRegion = getOptionalEnv(
   process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION,
   'us-east-1',
 );
-const lambdaClient = lambdaFunctionName
+const needsLambdaClient =
+  Boolean(lambdaFunctionName) || (judgeEngine === 'lambda' && Boolean(judgeLambdaFunctionName));
+const lambdaClient = needsLambdaClient
   ? new LambdaClient({
       region: awsRegion,
       credentials: {
@@ -44,7 +53,16 @@ const lambdaClient = lambdaFunctionName
       },
     })
   : null;
+
+const useLambdaForJudge =
+  judgeEngine === 'lambda' && Boolean(judgeLambdaFunctionName) && Boolean(lambdaClient);
 const judge0Url = getOptionalEnv(process.env.JUDGE0_URL, 'http://localhost:2358');
+
+if (judgeEngine === 'lambda' && !useLambdaForJudge) {
+  log.warn(
+    'JUDGE_ENGINE=lambda nhưng không invoke được Lambda (thiếu tên hàm hoặc AWS credentials). Sẽ fallback Judge0/stub.',
+  );
+}
 
 // Cache for compiled binaries: hash(lang + code) -> { binary: Buffer, fileName: string }
 const compilationCache = new Map<string, { binary: Buffer; fileName: string }>();
@@ -226,8 +244,8 @@ async function processSubmission(job: any) {
     throw new Error(errorMessage);
   }
 
-  // --- Judge0 Engine ---
-  if (judge0Url) {
+  // --- Chấm bài: Lambda (JUDGE_ENGINE=lambda) hoặc Judge0 ---
+  if (!useLambdaForJudge && judge0Url) {
     const testCaseResults = [];
     let totalScore = 0;
     let totalWeight = 0;
@@ -451,7 +469,10 @@ async function processSubmission(job: any) {
       });
       throw error;
     }
-  } else if (lambdaClient && lambdaFunctionName) {
+  } else if (useLambdaForJudge) {
+    if (!lambdaClient) {
+      throw new Error('Lambda client missing while useLambdaForJudge');
+    }
     try {
       const testCaseResults = [];
       let totalScore = 0;
@@ -486,7 +507,7 @@ async function processSubmission(job: any) {
       console.log('Lambda request payload:', payloadObj);
 
       const command = new InvokeCommand({
-        FunctionName: lambdaFunctionName,
+        FunctionName: judgeLambdaFunctionName,
         InvocationType: 'RequestResponse',
         Payload: Buffer.from(payload),
       });
@@ -600,8 +621,8 @@ async function processSubmission(job: any) {
     }
   }
 
-  // Fallback: stub implementation khi không có Lambda
-  job.updateProgress({ pct: 50, log: 'Running tests (stub - no Lambda configured).' });
+  // Fallback: stub khi không Lambda và không Judge0
+  job.updateProgress({ pct: 50, log: 'Running tests (stub — không cấu hình Judge0/Lambda).' });
   await sleep(800);
 
   const logObjectKey = `submissions/${submissionId}/artifacts/judge.log`;
@@ -630,20 +651,41 @@ async function processSubmission(job: any) {
 }
 
 async function main() {
-  const worker = new Worker(JUDGE_SUBMISSIONS_QUEUE_NAME, processSubmission, {
+  const judgeWorker = new Worker(JUDGE_SUBMISSIONS_QUEUE_NAME, processSubmission, {
     connection,
     concurrency: 10,
   });
 
-  worker.on('completed', (job) => {
-    log.info(`completed job=${job?.id}`);
+  judgeWorker.on('completed', (job) => {
+    log.info(`judge completed job=${job?.id}`);
   });
 
-  worker.on('failed', (job, err) => {
-    log.error(`failed job=${job?.id} err=${err?.message}`);
+  judgeWorker.on('failed', (job, err) => {
+    log.error(`judge failed job=${job?.id} err=${err?.message}`);
   });
 
-  log.info(`listening queue=${JUDGE_SUBMISSIONS_QUEUE_NAME} redis=${redisUrl}`);
+  const goldenWorker = new Worker(
+    GOLDEN_VERIFY_QUEUE_NAME,
+    (job) => processGoldenVerifyJob(job, { lambdaClient, lambdaFunctionName }),
+    {
+      connection,
+      concurrency: 5,
+    },
+  );
+
+  goldenWorker.on('completed', (job) => {
+    log.info(`golden-verify completed job=${job?.id}`);
+  });
+
+  goldenWorker.on('failed', (job, err) => {
+    log.error(`golden-verify failed job=${job?.id} err=${err?.message}`);
+  });
+
+  log.info(
+    `listening queues=${JUDGE_SUBMISSIONS_QUEUE_NAME},${GOLDEN_VERIFY_QUEUE_NAME} redis=${redisUrl} ` +
+      `submissionJudge=${useLambdaForJudge ? 'lambda' : judge0Url ? 'judge0' : 'stub'} ` +
+      `(JUDGE_ENGINE=${judgeEngine})`,
+  );
 }
 
 main().catch((err) => {

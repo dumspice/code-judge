@@ -1,12 +1,27 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { randomBytes } from 'crypto';
-import { Difficulty, ProblemMode, ProblemVisibility, Prisma, Problem } from '@prisma/client';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Difficulty, ProblemMode, ProblemVisibility, Prisma, Problem, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
+import { buildUniqueProblemSlug } from './problem-slug.util';
 
 import { MailerService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
+
+const PROBLEM_LIST_INCLUDE = {
+  tags: { include: { tag: true } },
+} as const;
+
+const PROBLEM_DETAIL_INCLUDE = {
+  testCases: { orderBy: { orderIndex: 'asc' as const } },
+  assignments: true,
+  tags: { include: { tag: true } },
+} as const;
 
 @Injectable()
 export class ProblemsService {
@@ -16,9 +31,13 @@ export class ProblemsService {
     private readonly configService: ConfigService,
   ) {}
 
-  async create(dto: CreateProblemDto, creatorId: string): Promise<Problem> {
-    await this.ensureClassOwner(dto.classRoomId, creatorId);
-    const slug = await this.buildUniqueSlug(dto.title);
+  async create(dto: CreateProblemDto, creatorId: string, role?: Role): Promise<Problem> {
+    const classRoomId = dto.classRoomId?.trim();
+    if (!classRoomId) {
+      throw new BadRequestException('classRoomId is required');
+    }
+    await this.ensureUserCanCreateProblemInClass(classRoomId, creatorId, role);
+    const slug = await buildUniqueProblemSlug(this.prisma.problem, dto.title);
     const supportedLanguages = dto.supportedLanguages ?? [];
 
     return this.prisma.$transaction(async (tx) => {
@@ -56,7 +75,7 @@ export class ProblemsService {
       // Create ClassAssignment automatically
       const assignment = await tx.classAssignment.create({
         data: {
-          classRoomId: dto.classRoomId,
+          classRoomId,
           title: problem.title,
           description: problem.description,
           problemId: problem.id,
@@ -77,8 +96,8 @@ export class ProblemsService {
 
       // Send email notification (async)
       const memberEmails = assignment.classRoom.enrollments
-        .map((e) => e.user.email)
-        .filter((email): email is string => !!email);
+        .map((e: { user: { email: string | null } }) => e.user.email)
+        .filter((email: string | null): email is string => !!email);
 
       if (memberEmails.length > 0) {
         const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3001';
@@ -90,7 +109,7 @@ export class ProblemsService {
             title: problem.title,
             description: problem.description ?? undefined,
             dueAt: dto.dueAt ? new Date(dto.dueAt).toLocaleString() : undefined,
-            url: `${frontendUrl}/dashboard/${dto.classRoomId}/classwork`,
+            url: `${frontendUrl}/dashboard/${classRoomId}/classwork`,
           })
           .catch((err) => console.error('Failed to send assignment notification emails', err));
       }
@@ -99,27 +118,75 @@ export class ProblemsService {
     });
   }
 
-  async findAll(query: { search?: string; page?: number; limit?: number; classRoomId?: string }) {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
+  async findAll(query: {
+    search?: string;
+    page?: number;
+    limit?: number;
+    classRoomId?: string;
+    difficulty?: string;
+    mode?: string;
+  }) {
+    const { page, limit, skip } = this.normalizeListPagination(query.page, query.limit);
     const search = query.search?.trim();
+    const difficultyFilter =
+      query.difficulty === 'EASY' || query.difficulty === 'MEDIUM' || query.difficulty === 'HARD'
+        ? { difficulty: query.difficulty as Difficulty }
+        : {};
+    const modeFilter =
+      query.mode === 'ALGO' || query.mode === 'PROJECT'
+        ? { mode: query.mode as ProblemMode }
+        : {};
     const where: Prisma.ProblemWhereInput = {
       isPublished: true,
       visibility: { not: 'PRIVATE' },
+      ...difficultyFilter,
+      ...modeFilter,
       ...(query.classRoomId ? { assignments: { some: { classRoomId: query.classRoomId } } } : {}),
       ...(search
         ? {
             OR: [
               { title: { contains: search, mode: 'insensitive' as const } },
               { description: { contains: search, mode: 'insensitive' as const } },
+              { slug: { contains: search, mode: 'insensitive' as const } },
             ],
           }
         : {}),
     };
 
     const [items, total] = await Promise.all([
-      this.prisma.problem.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      this.prisma.problem.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: PROBLEM_LIST_INCLUDE,
+      }),
+      this.prisma.problem.count({ where }),
+    ]);
+    return { items, total, page, limit };
+  }
+
+  async findAllAdmin(query: { search?: string; page?: number; limit?: number }) {
+    const { page, limit, skip } = this.normalizeListPagination(query.page, query.limit);
+    const search = query.search?.trim();
+    const where: Prisma.ProblemWhereInput = search
+      ? {
+          OR: [
+            { title: { contains: search, mode: 'insensitive' as const } },
+            { description: { contains: search, mode: 'insensitive' as const } },
+            { slug: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
+
+    const [items, total] = await Promise.all([
+      this.prisma.problem.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: PROBLEM_LIST_INCLUDE,
+      }),
       this.prisma.problem.count({ where }),
     ]);
     return { items, total, page, limit };
@@ -128,10 +195,7 @@ export class ProblemsService {
   async findById(problemId: string) {
     const problem = await this.prisma.problem.findUnique({
       where: { id: problemId },
-      include: {
-        testCases: { orderBy: { orderIndex: 'asc' } },
-        assignments: true,
-      },
+      include: PROBLEM_DETAIL_INCLUDE,
     });
     if (!problem) {
       throw new NotFoundException('Problem not found');
@@ -139,7 +203,7 @@ export class ProblemsService {
     return problem;
   }
 
-  async update(problemId: string, dto: UpdateProblemDto, updaterId: string) {
+  async update(problemId: string, dto: UpdateProblemDto, updaterId: string, role?: Role) {
     const existing = await this.prisma.problem.findUnique({
       where: { id: problemId },
       select: {
@@ -147,6 +211,7 @@ export class ProblemsService {
         title: true,
         slug: true,
         creatorId: true,
+        assignments: { select: { classRoomId: true } },
       },
     });
 
@@ -154,13 +219,13 @@ export class ProblemsService {
       throw new NotFoundException('Problem not found');
     }
 
-    if (existing.creatorId !== updaterId) {
-      throw new ForbiddenException('Only Creator can update this problem');
+    if (!(await this.canManageProblem(existing, updaterId, role))) {
+      throw new ForbiddenException('Only creator, class owner, or admin can update this problem');
     }
 
     const slug =
       dto.title && dto.title !== existing.title
-        ? await this.buildUniqueSlug(dto.title)
+        ? await buildUniqueProblemSlug(this.prisma.problem, dto.title)
         : existing.slug;
 
     return this.prisma.$transaction(async (tx) => {
@@ -218,7 +283,7 @@ export class ProblemsService {
     });
   }
 
-  async delete(problemId: string, userId: string) {
+  async delete(problemId: string, userId: string, role?: Role) {
     const existing = await this.prisma.problem.findUnique({
       where: { id: problemId },
       select: {
@@ -226,6 +291,7 @@ export class ProblemsService {
         title: true,
         slug: true,
         creatorId: true,
+        assignments: { select: { classRoomId: true } },
       },
     });
 
@@ -233,8 +299,8 @@ export class ProblemsService {
       throw new NotFoundException('Problem not found');
     }
 
-    if (existing.creatorId !== userId) {
-      throw new ForbiddenException('Only class owner can delete this problem');
+    if (!(await this.canManageProblem(existing, userId, role))) {
+      throw new ForbiddenException('Only creator, class owner, or admin can delete this problem');
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -244,39 +310,107 @@ export class ProblemsService {
     });
   }
 
-  private async buildUniqueSlug(title: string): Promise<string> {
-    const baseSlug = slugify(title);
-    let slug = baseSlug;
-    let counter = 1;
-    while (await this.prisma.problem.findUnique({ where: { slug } })) {
-      slug = `${baseSlug}-${counter++}`;
+  private async ensureUserCanCreateProblemInClass(
+    classRoomId: string,
+    userId: string,
+    role?: Role,
+  ): Promise<void> {
+    if (role === Role.ADMIN) {
+      await this.ensureClassExists(classRoomId);
+      return;
     }
-    return slug;
-  }
 
-  private async ensureClassOwner(classRoomId: string, userId: string) {
     const classRoom = await this.prisma.classRoom.findUnique({
       where: { id: classRoomId },
-      select: { ownerId: true },
+      select: { id: true, ownerId: true },
     });
 
     if (!classRoom) {
       throw new NotFoundException('Class not found');
     }
 
-    if (classRoom.ownerId !== userId) {
-      throw new ForbiddenException('Only owner can do this action');
+    if (classRoom.ownerId === userId) {
+      return;
+    }
+
+    const asOwnerEnrollment = await this.prisma.classEnrollment.findFirst({
+      where: {
+        classRoomId,
+        userId,
+        role: 'OWNER',
+        status: 'ACTIVE',
+      },
+    });
+
+    if (!asOwnerEnrollment) {
+      throw new ForbiddenException('Only the class owner can create problems for this class');
+    }
+  }
+
+  /** Admin, creator, hoặc chủ lớp (ownerId / enrollment OWNER) của một lớp đang gán bài. */
+  private async canManageProblem(
+    existing: {
+      creatorId: string | null;
+      assignments: { classRoomId: string }[];
+    },
+    userId: string,
+    role?: Role,
+  ): Promise<boolean> {
+    if (role === Role.ADMIN) {
+      return true;
+    }
+    if (existing.creatorId === userId) {
+      return true;
+    }
+    for (const a of existing.assignments) {
+      if (await this.userIsClassOwnerForRoom(a.classRoomId, userId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private async userIsClassOwnerForRoom(classRoomId: string, userId: string): Promise<boolean> {
+    const classRoom = await this.prisma.classRoom.findUnique({
+      where: { id: classRoomId },
+      select: { ownerId: true },
+    });
+    if (!classRoom) {
+      return false;
+    }
+    if (classRoom.ownerId === userId) {
+      return true;
+    }
+    const enrollment = await this.prisma.classEnrollment.findFirst({
+      where: {
+        classRoomId,
+        userId,
+        role: 'OWNER',
+        status: 'ACTIVE',
+      },
+    });
+    return Boolean(enrollment);
+  }
+
+  private async ensureClassExists(classRoomId: string) {
+    const classRoom = await this.prisma.classRoom.findUnique({
+      where: { id: classRoomId },
+      select: { id: true },
+    });
+
+    if (!classRoom) {
+      throw new NotFoundException('Class not found');
     }
 
     return classRoom;
   }
-}
 
-function slugify(value: string): string {
-  const raw = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return raw.length > 0 ? raw : `problem-${randomBytes(4).toString('hex')}`;
+  /** page ≥ 1, limit trong [1, maxLimit], mặc định page=1, limit=20. */
+  private normalizeListPagination(page?: number, limit?: number, maxLimit = 100) {
+    const p = Number.isFinite(page) && (page as number) > 0 ? Math.floor(page as number) : 1;
+    const rawL =
+      Number.isFinite(limit) && (limit as number) > 0 ? Math.floor(limit as number) : 20;
+    const l = Math.min(Math.max(1, rawL), maxLimit);
+    return { page: p, limit: l, skip: (p - 1) * l };
+  }
 }

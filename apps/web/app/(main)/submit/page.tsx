@@ -16,8 +16,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { ArrowRight, Cloud, Code2, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { Problem, problemsApi } from '@/services/problem.apis';
-import { storageApi } from '@/services/storage.apis';
 import { submissionsApi } from '@/services/submission.apis';
+import { diagnoseApiError, logApiErrorDiagnostics } from '@/lib/api-error-diagnostics';
 
 const languageOptions = [
   { value: 'PYTHON', label: 'Python', extension: 'py' },
@@ -25,13 +25,6 @@ const languageOptions = [
   { value: 'JAVA', label: 'Java', extension: 'java' },
   { value: 'CPP', label: 'C++', extension: 'cpp' },
 ];
-
-function getSubmissionId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return (crypto as any).randomUUID();
-  }
-  return `sub-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
-}
 
 export default function SubmitPage() {
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -79,32 +72,15 @@ export default function SubmitPage() {
       return;
     }
 
-    const submissionId = getSubmissionId();
-    const extension = languageOptions.find((item) => item.value === language)?.extension ?? 'txt';
-    const fileName = `main.${extension}`;
-
     setSubmitting(true);
 
     try {
-      const presign = await storageApi.presignUpload({
-        resourceKind: 'submission-source',
-        submissionId,
-        fileName,
-        expiresInSeconds: 900,
-      });
-
-      await fetch(presign.uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'text/plain' },
-        body: sourceCode,
-      });
-
       await submissionsApi.create({
         userId: userId.trim(),
         problemId: selectedProblemId,
         mode: selectedProblem?.mode ?? 'ALGO',
         language,
-        sourceCodeObjectKey: presign.objectKey,
+        sourceCode,
       });
 
       setFeedback({
@@ -113,8 +89,10 @@ export default function SubmitPage() {
       });
       setSourceCode('');
     } catch (error) {
+      const d = diagnoseApiError(error, { operation: 'submitPage' });
+      logApiErrorDiagnostics(d);
       console.error(error);
-      setFeedback({ type: 'error', message: 'Failed to submit code. Please try again.' });
+      setFeedback({ type: 'error', message: `${d.title}: ${d.userMessage}` });
     } finally {
       setSubmitting(false);
     }

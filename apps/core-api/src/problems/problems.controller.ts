@@ -1,18 +1,26 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { CurrentUser, Public, Roles } from '../common';
 import { GenerateAiTestcaseDto } from '../ai-testcase/dto/generate-ai-testcase.dto';
 import { AiTestcaseService } from '../ai-testcase/ai-testcase.service';
+import { CreateAdminProblemDto } from './dto/create-admin-problem.dto';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
+import { AdminProblemsService } from './admin-problems.service';
 import { ProblemsService } from './problems.service';
 
+/**
+ * REST `problems`.
+ * Thứ tự route: path tĩnh (`admin/all`, `generate-test-cases-draft`) trước `:id` để tránh nhầm segment với id.
+ */
 @ApiTags('problems')
 @Controller('problems')
 export class ProblemsController {
   constructor(
     private readonly problemsService: ProblemsService,
+    private readonly adminProblemsService: AdminProblemsService,
     private readonly aiTestcaseService: AiTestcaseService,
   ) {}
 
@@ -24,13 +32,51 @@ export class ProblemsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('classRoomId') classRoomId?: string,
+    @Query('difficulty') difficulty?: string,
+    @Query('mode') mode?: string,
   ) {
     return this.problemsService.findAll({
       search,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
       classRoomId,
+      difficulty,
+      mode,
     });
+  }
+
+  @ApiBearerAuth('JWT')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Admin: danh sách tất cả problem (kèm private / unpublished)' })
+  @Get('admin/all')
+  async findAllAdmin(
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.problemsService.findAllAdmin({
+      search,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @ApiBearerAuth('JWT')
+  @Roles(Role.ADMIN)
+  @ApiOperation({ summary: 'Admin: tạo problem không gán lớp (không ClassAssignment)' })
+  @Post('admin')
+  async createAdmin(@CurrentUser() user: RequestUser, @Body() dto: CreateAdminProblemDto) {
+    return this.adminProblemsService.create(dto, user.userId);
+  }
+
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary:
+      'Sinh bản nháp test case bằng AI (chưa lưu DB). User đã đăng nhập; dùng khi soạn đề / tạo problem.',
+  })
+  @Post('generate-test-cases-draft')
+  async generateTestCasesDraft(@Body() dto: GenerateAiTestcaseDto) {
+    return this.aiTestcaseService.generateDraft(dto);
   }
 
   @Public()
@@ -41,37 +87,27 @@ export class ProblemsController {
   }
 
   @ApiBearerAuth('JWT')
-  @Roles('ADMIN')
-  @ApiOperation({
-    summary: 'Admin: sinh bản nháp test case bằng AI (chưa lưu DB; dùng trước khi tạo problem)',
-  })
-  @Post('generate-test-cases-draft')
-  async generateTestCasesDraft(@Body() dto: GenerateAiTestcaseDto) {
-    return this.aiTestcaseService.generateDraft(dto);
-  }
-
-  @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Owner tạo problem mới' })
+  @ApiOperation({ summary: 'Tạo problem mới (chủ lớp / enrollment OWNER hoặc admin)' })
   @Post()
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateProblemDto) {
-    return this.problemsService.create(dto, user.userId);
+    return this.problemsService.create(dto, user.userId, user.role);
   }
 
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Owner cập nhật problem' })
+  @ApiOperation({ summary: 'Cập nhật problem (creator, chủ lớp đang gán bài, hoặc admin)' })
   @Patch(':id')
   async update(
     @Param('id') id: string,
     @CurrentUser() user: RequestUser,
     @Body() dto: UpdateProblemDto,
   ) {
-    return this.problemsService.update(id, dto, user.userId);
+    return this.problemsService.update(id, dto, user.userId, user.role);
   }
 
   @ApiBearerAuth('JWT')
-  @ApiOperation({ summary: 'Owner xóa problem' })
+  @ApiOperation({ summary: 'Xóa problem (creator, chủ lớp đang gán bài, hoặc admin)' })
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
-    return this.problemsService.delete(id, user.userId);
+    return this.problemsService.delete(id, user.userId, user.role);
   }
 }

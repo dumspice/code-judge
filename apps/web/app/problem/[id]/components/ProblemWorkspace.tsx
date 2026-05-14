@@ -9,9 +9,29 @@ import { storageApi } from '@/services/storage.apis';
 import ProblemDescription from './ProblemDescription';
 import CodeEditorPanel from './CodeEditorPanel';
 import ConsolePanel from './ConsolePanel';
+import { useSocket } from '@/providers/socket-provider';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
+// 1. CHUẨN HÓA TYPE THEO SCHEMA
+export type ProblemType = {
+  id: string;
+  slug: string;
+  title: string;
+  difficulty: 'EASY' | 'MEDIUM' | 'HARD';
+  tags: string[];
+  statementMd: string; // Dùng Markdown thay cho string thường
+  timeLimitMs: number;
+  memoryLimitMb: number;
+  supportedLanguages: string[];
+  publicTestCases: {
+    id: string;
+    input: string;
+    expectedOutput: string;
+  }[];
+};
+
+// 2. TYPE CHO KẾT QUẢ CHẤM ĐIỂM
 export type SubmissionResult = {
   status: string;
   testsPassed: number;
@@ -31,6 +51,40 @@ export default function ProblemWorkspace({ problem }: ProblemWorkspaceProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<SubmissionResult | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (socket) {
+      const handleFinished = (data: any) => {
+        setIsRunning(false);
+        setResult({
+          status: data.status,
+          testsPassed: data.testsPassed,
+          testsTotal: data.testsTotal,
+          runtimeMs: data.runtimeMs,
+          memoryMb: data.memoryMb,
+        });
+      };
+
+      const handleFailed = (data: any) => {
+        setIsRunning(false);
+        setResult({
+          status: 'Error',
+          testsPassed: 0,
+          testsTotal: 0,
+          errorMessage: data.error,
+        });
+      };
+
+      socket.on('submission:finished', handleFinished);
+      socket.on('submission:failed', handleFailed);
+
+      return () => {
+        socket.off('submission:finished', handleFinished);
+        socket.off('submission:failed', handleFailed);
+      };
+    }
+  }, [socket]);
   const [activeTab, setActiveTab] = useState<'description' | 'submissions'>('description');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const socketRef = useRef<Socket | null>(null);

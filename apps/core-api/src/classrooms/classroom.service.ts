@@ -60,6 +60,41 @@ export class ClassroomService {
     return classroom;
   }
 
+  async listAllForAdmin(query: { search?: string; page?: number; limit?: number }) {
+    const page = query.page ?? 1;
+    const limit = Math.min(query.limit ?? 50, 100);
+    const skip = (page - 1) * limit;
+    const search = query.search?.trim();
+    const where = search
+      ? {
+          isActive: true,
+          OR: [
+            { name: { contains: search, mode: 'insensitive' as const } },
+            { classCode: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : { isActive: true };
+
+    const [items, total] = await Promise.all([
+      this.prisma.classRoom.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          classCode: true,
+          academicYear: true,
+          ownerId: true,
+          owner: { select: { id: true, name: true, email: true } },
+        },
+      }),
+      this.prisma.classRoom.count({ where }),
+    ]);
+    return { items, total, page, limit };
+  }
+
   // GET MY CLASSES
   async getMyClasses(userId: string) {
     return this.prisma.classEnrollment.findMany({

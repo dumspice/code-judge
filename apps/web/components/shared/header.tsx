@@ -1,10 +1,13 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Code2 } from 'lucide-react';
+import { useAuthStore } from '@/store/auth-store';
+import { Code2, LayoutDashboard } from 'lucide-react';
 import Link from 'next/link';
 
 export default function Header() {
+  const { user } = useAuthStore();
+
   return (
     <nav className="sticky top-0 z-40 bg-background border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
@@ -21,25 +24,37 @@ export default function Header() {
 
         {/* Menu */}
         <div className="hidden md:flex items-center gap-8">
-          <a href="/#features" className="text-sm hover:text-primary transition">
+          <Link href="/problems" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1.5 group">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+            Problems
+          </Link>
+          <Link href="/contests" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1.5 group">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+            Contests
+          </Link>
+          <a href="/#features" className="text-sm font-medium hover:text-primary transition-colors">
             Features
-          </a>
-          <a href="/#for-educators" className="text-sm hover:text-primary transition">
-            For Educators
-          </a>
-          <a href="/#for-students" className="text-sm hover:text-primary transition">
-            For Students
           </a>
         </div>
 
         <div className="flex items-center gap-4">
-          <Button variant="ghost" asChild>
-            <Link href="/login">Sign In</Link>
-          </Button>
-
-          <Button asChild>
-            <Link href="/register">Get Started</Link>
-          </Button>
+          {user ? (
+            <Button variant="default" asChild className="rounded-full px-6 shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
+              <Link href="/dashboard" className="flex items-center gap-2">
+                <LayoutDashboard className="w-4 h-4" />
+                Go to Dashboard
+              </Link>
+            </Button>
+          ) : (
+            <>
+              <Button variant="ghost" asChild className="hover:bg-primary/5">
+                <Link href="/login">Sign In</Link>
+              </Button>
+              <Button asChild className="rounded-full px-6 shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95">
+                <Link href="/register">Get Started</Link>
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </nav>

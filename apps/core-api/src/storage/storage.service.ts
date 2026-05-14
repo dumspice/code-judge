@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client } from 'minio';
+import { Readable } from 'node:stream';
 import { EnvKeys, STORAGE_DEFAULT_BUCKET, STORAGE_DEFAULT_REGION } from '../common';
 
 export interface PresignedUploadInput {
@@ -102,6 +103,17 @@ export class StorageService {
 
   async removeObject(objectKey: string): Promise<void> {
     await this.client.removeObject(this.bucket, objectKey);
+  }
+
+  /** Đọc toàn bộ object dưới dạng UTF-8 (golden / artifact nhỏ). */
+  async getObjectString(objectKey: string): Promise<string> {
+    await this.ensureBucketExists();
+    const stream = (await this.client.getObject(this.bucket, objectKey)) as Readable;
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks).toString('utf8');
   }
 
   getObjectUrl(objectKey: string): string {
