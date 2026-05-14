@@ -92,6 +92,12 @@ function getJudge0LanguageId(language: string): number {
     case 'CPP':
     case 'C++':
       return 53;
+    case 'GO':
+    case 'GOLANG':
+      return 60;
+    case 'RUST':
+    case 'RS':
+      return 73;
     default:
       return 71; // Default to Python
   }
@@ -322,48 +328,21 @@ async function processSubmission(job: any) {
         const normalizedExpected = normalizeOutput(testCase.expectedOutput || '');
         const isMatch = normalizedActual === normalizedExpected;
 
-        let caseStatus: string = 'RuntimeError';
+        console.log('result', result)
+
+        let caseStatus: string = 'Wrong';
         const sId = result.status?.id;
 
-        if (sId === 3) caseStatus = 'Accepted';
-        else if (sId === 5) caseStatus = 'TimeLimitExceeded';
-        else if (sId === 6) caseStatus = 'CompilationError';
-        else if (sId >= 7 && sId <= 12) caseStatus = 'RuntimeError';
-        else {
-          // Xử lý các trường hợp Status 4 (Wrong), 13 (Internal Error) hoặc các status khác
-          // bằng cách phân tích exit_code và stderr (Heuristic)
-          
-          const isTimeLimitReached = result.time && (parseFloat(result.time) * 1000 >= problem.timeLimitMs - 50);
-          const hasNoOutput = !result.stdout || result.stdout.length === 0;
-          
-          // Lỗi biên dịch: exit 127 hoặc có thông báo lỗi biên dịch
-          const isCompilationError = result.exit_code === 127 || 
-                                     (result.compile_output && result.compile_output.length > 0) ||
-                                     (stderr && stderr.includes('No such file or directory'));
-          
-          // Lỗi thực thi: exit code lớn (tín hiệu hệ thống) hoặc thông báo lỗi đặc trưng
-          const isRuntimeSignal = (result.exit_code > 128 && result.exit_code !== 124) || 
-                                  (stderr && (stderr.includes('Floating point exception') || 
-                                             stderr.includes('Segmentation fault') || 
-                                             stderr.includes('Aborted') ||
-                                             stderr.includes('runtime error')));
-
-          if (isCompilationError) {
-            caseStatus = 'CompilationError';
-          } else if (isRuntimeSignal) {
-            caseStatus = 'RuntimeError';
-          } else if (result.exit_code === 124 || (isTimeLimitReached && hasNoOutput)) {
-            caseStatus = 'TimeLimitExceeded';
-          } else if (sId === 4) {
-            caseStatus = 'Wrong';
-          } else {
-            caseStatus = 'RuntimeError'; // Fallback
-          }
+        if (sId === 3) {
+          caseStatus = 'Accepted';
+        } else if (sId === 5) {
+          caseStatus = 'TimeLimitExceeded';
+        } else {
+          caseStatus = 'Wrong';
         }
-        
 
-        // Override if output matches (Crucial for stubs/custom runs)
-        if (isMatch && (caseStatus === 'Wrong' || caseStatus === 'RuntimeError')) {
+        // Ưu tiên kết quả so khớp output nếu không phải bị quá thời gian
+        if (isMatch && caseStatus !== 'TimeLimitExceeded') {
           caseStatus = 'Accepted';
         }
 
@@ -380,28 +359,17 @@ async function processSubmission(job: any) {
           passed,
         });
 
-        // TỐI ƯU: Nếu bị TLE, dừng ngay để tiết kiệm tài nguyên
+        // Cập nhật trạng thái tổng quát
         if (caseStatus === 'TimeLimitExceeded') {
           finalStatus = SubmissionStatus.TimeLimitExceeded;
-          break;
-        }
-
-        // Determine Overall Status Priority
-        if (caseStatus === 'CompilationError') {
-          finalStatus = SubmissionStatus.CompilationError;
-          combinedLogs += `Compilation Error:\n${compileOut}\n`;
-          stopEarly = true;
+          break; // TLE thì vẫn nên dừng để tiết kiệm tài nguyên
         } else if (!passed && finalStatus === SubmissionStatus.Accepted) {
-          if (caseStatus === 'TimeLimitExceeded') finalStatus = SubmissionStatus.TimeLimitExceeded;
-          else if (caseStatus === 'MemoryLimitExceeded') finalStatus = SubmissionStatus.MemoryLimitExceeded;
-          else if (caseStatus === 'Wrong') finalStatus = SubmissionStatus.Wrong;
-          else if (caseStatus === 'RuntimeError') finalStatus = SubmissionStatus.RuntimeError;
-          else finalStatus = SubmissionStatus.Error;
+          finalStatus = SubmissionStatus.Wrong;
         }
 
         if (passed) {
           combinedLogs += `Test case ${i + 1}: PASSED (${runtimeMs}ms, ${memoryMb}MB)\n`;
-        } else if (caseStatus !== 'CompilationError') {
+        } else {
           combinedLogs += `Test case ${i + 1}: ${caseStatus.toUpperCase()}\n`;
           combinedLogs += `--- Input ---\n${testCase.input.substring(0, 100)}\n`;
           combinedLogs += `--- Expected Output ---\n${testCase.expectedOutput.trim()}\n`;
@@ -414,15 +382,15 @@ async function processSubmission(job: any) {
         const errMsg = err.message || 'Judge execution failed';
         testCaseResults.push({
           testCaseId: testCase.id,
-          status: 'Error',
+          status: 'Wrong',
           runtimeMs: 0,
           memoryMb: 0,
           output: '',
           error: errMsg,
           passed: false,
         });
-        if (finalStatus === SubmissionStatus.Accepted) finalStatus = SubmissionStatus.Error;
-        combinedLogs += `Test case ${i + 1}: ERROR (${errMsg})\n`;
+        if (finalStatus === SubmissionStatus.Accepted) finalStatus = SubmissionStatus.Wrong;
+        combinedLogs += `Test case ${i + 1}: WRONG (Judge Error: ${errMsg})\n`;
       }
 
       job.updateProgress({ 
@@ -462,7 +430,7 @@ async function processSubmission(job: any) {
       await prisma.submission.update({
         where: { id: submissionId },
         data: {
-          status: SubmissionStatus.Error,
+          status: SubmissionStatus.Wrong,
           error: (error as Error).message,
           logs: `${combinedLogs}\nSystem Error: ${(error as Error).message}`,
         },

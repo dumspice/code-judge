@@ -2,7 +2,7 @@ const axios = require('axios');
 
 async function simulateRuntimeError() {
   const submissionData = {
-    problemId: "3b7ffcfd-2d7f-4a6f-92ec-524bc0e3ef13", // ID bài toán tổng 2 số
+    problemId: "95262940-28c9-4233-93d5-37a28fa4aac8", // ID bài toán tổng 2 số
     language: "CPP",
     mode: "ALGO",
     // Code gây lỗi Runtime Error: Chia cho 0
@@ -15,7 +15,7 @@ int main() {
     cout << x << endl;
     return 0;
 }`,
-    userId: "4b17f4d4-1ffa-490a-8e67-7c331d9b9a5d"
+    userId: "e953dfb60654c58fc82dc9a5"
   };
 
   try {
