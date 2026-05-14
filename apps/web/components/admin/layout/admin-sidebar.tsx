@@ -10,6 +10,7 @@ import {
   LogOut, 
   Code2,
   FileQuestion,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,6 @@ const navItems = [
   { title: 'Problems', href: '/admin/problems', icon: Code2 },
   { title: 'Contests', href: '/admin/contests', icon: BookOpen },
   { title: 'Users', href: '/admin/users', icon: Users },
-  { title: 'Problems', href: '/admin/problems', icon: FileQuestion },
   { title: 'Setting', href: '/admin/setting', icon: Settings },
 ];
 

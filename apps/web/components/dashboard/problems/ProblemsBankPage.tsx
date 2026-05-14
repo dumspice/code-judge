@@ -116,7 +116,8 @@ export default function ProblemsBankPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const setDifficulty = (v: string) => {
+  const setDifficulty = (v: string | null) => {
+    if (v == null) return;
     const d = (v === 'all' ? '' : v) as DifficultyFilter;
     replaceQuery((p) => {
       if (d) p.set('difficulty', d);
@@ -125,7 +126,8 @@ export default function ProblemsBankPage() {
     });
   };
 
-  const setMode = (v: string) => {
+  const setMode = (v: string | null) => {
+    if (v == null) return;
     const m = (v === 'all' ? '' : v) as ModeFilter;
     replaceQuery((p) => {
       if (m) p.set('mode', m);

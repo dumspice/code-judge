@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Difficulty, ProblemMode, ProblemVisibility, Prisma, Problem, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProblemDto } from './dto/create-problem.dto';
@@ -7,6 +12,16 @@ import { buildUniqueProblemSlug } from './problem-slug.util';
 
 import { MailerService } from '../mail/mail.service';
 import { ConfigService } from '@nestjs/config';
+
+const PROBLEM_LIST_INCLUDE = {
+  tags: { include: { tag: true } },
+} as const;
+
+const PROBLEM_DETAIL_INCLUDE = {
+  testCases: { orderBy: { orderIndex: 'asc' as const } },
+  assignments: true,
+  tags: { include: { tag: true } },
+} as const;
 
 @Injectable()
 export class ProblemsService {
@@ -17,7 +32,11 @@ export class ProblemsService {
   ) {}
 
   async create(dto: CreateProblemDto, creatorId: string, role?: Role): Promise<Problem> {
-    await this.ensureUserCanCreateProblemInClass(dto.classRoomId, creatorId, role);
+    const classRoomId = dto.classRoomId?.trim();
+    if (!classRoomId) {
+      throw new BadRequestException('classRoomId is required');
+    }
+    await this.ensureUserCanCreateProblemInClass(classRoomId, creatorId, role);
     const slug = await buildUniqueProblemSlug(this.prisma.problem, dto.title);
     const supportedLanguages = dto.supportedLanguages ?? [];
 
@@ -56,7 +75,7 @@ export class ProblemsService {
       // Create ClassAssignment automatically
       const assignment = await tx.classAssignment.create({
         data: {
-          classRoomId: dto.classRoomId,
+          classRoomId,
           title: problem.title,
           description: problem.description,
           problemId: problem.id,
@@ -77,8 +96,8 @@ export class ProblemsService {
 
       // Send email notification (async)
       const memberEmails = assignment.classRoom.enrollments
-        .map((e) => e.user.email)
-        .filter((email): email is string => !!email);
+        .map((e: { user: { email: string | null } }) => e.user.email)
+        .filter((email: string | null): email is string => !!email);
 
       if (memberEmails.length > 0) {
         const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3001';
@@ -90,7 +109,7 @@ export class ProblemsService {
             title: problem.title,
             description: problem.description ?? undefined,
             dueAt: dto.dueAt ? new Date(dto.dueAt).toLocaleString() : undefined,
-            url: `${frontendUrl}/dashboard/${dto.classRoomId}/classwork`,
+            url: `${frontendUrl}/dashboard/${classRoomId}/classwork`,
           })
           .catch((err) => console.error('Failed to send assignment notification emails', err));
       }
@@ -107,9 +126,7 @@ export class ProblemsService {
     difficulty?: string;
     mode?: string;
   }) {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = this.normalizeListPagination(query.page, query.limit);
     const search = query.search?.trim();
     const difficultyFilter =
       query.difficulty === 'EASY' || query.difficulty === 'MEDIUM' || query.difficulty === 'HARD'
@@ -137,16 +154,20 @@ export class ProblemsService {
     };
 
     const [items, total] = await Promise.all([
-      this.prisma.problem.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      this.prisma.problem.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: PROBLEM_LIST_INCLUDE,
+      }),
       this.prisma.problem.count({ where }),
     ]);
     return { items, total, page, limit };
   }
 
   async findAllAdmin(query: { search?: string; page?: number; limit?: number }) {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 20;
-    const skip = (page - 1) * limit;
+    const { page, limit, skip } = this.normalizeListPagination(query.page, query.limit);
     const search = query.search?.trim();
     const where: Prisma.ProblemWhereInput = search
       ? {
@@ -164,6 +185,7 @@ export class ProblemsService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        include: PROBLEM_LIST_INCLUDE,
       }),
       this.prisma.problem.count({ where }),
     ]);
@@ -173,10 +195,7 @@ export class ProblemsService {
   async findById(problemId: string) {
     const problem = await this.prisma.problem.findUnique({
       where: { id: problemId },
-      include: {
-        testCases: { orderBy: { orderIndex: 'asc' } },
-        assignments: true,
-      },
+      include: PROBLEM_DETAIL_INCLUDE,
     });
     if (!problem) {
       throw new NotFoundException('Problem not found');
@@ -384,5 +403,14 @@ export class ProblemsService {
     }
 
     return classRoom;
+  }
+
+  /** page ≥ 1, limit trong [1, maxLimit], mặc định page=1, limit=20. */
+  private normalizeListPagination(page?: number, limit?: number, maxLimit = 100) {
+    const p = Number.isFinite(page) && (page as number) > 0 ? Math.floor(page as number) : 1;
+    const rawL =
+      Number.isFinite(limit) && (limit as number) > 0 ? Math.floor(limit as number) : 20;
+    const l = Math.min(Math.max(1, rawL), maxLimit);
+    return { page: p, limit: l, skip: (p - 1) * l };
   }
 }

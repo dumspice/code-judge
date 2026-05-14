@@ -11,6 +11,10 @@ import { UpdateProblemDto } from './dto/update-problem.dto';
 import { AdminProblemsService } from './admin-problems.service';
 import { ProblemsService } from './problems.service';
 
+/**
+ * REST `problems`.
+ * Thứ tự route: path tĩnh (`admin/all`, `generate-test-cases-draft`) trước `:id` để tránh nhầm segment với id.
+ */
 @ApiTags('problems')
 @Controller('problems')
 export class ProblemsController {
@@ -65,13 +69,6 @@ export class ProblemsController {
     return this.adminProblemsService.create(dto, user.userId);
   }
 
-  @Public()
-  @ApiOperation({ summary: 'Lấy chi tiết problem theo id' })
-  @Get(':id')
-  async findOne(@Param('id') id: string) {
-    return this.problemsService.findById(id);
-  }
-
   @ApiBearerAuth('JWT')
   @ApiOperation({
     summary:
@@ -80,6 +77,13 @@ export class ProblemsController {
   @Post('generate-test-cases-draft')
   async generateTestCasesDraft(@Body() dto: GenerateAiTestcaseDto) {
     return this.aiTestcaseService.generateDraft(dto);
+  }
+
+  @Public()
+  @ApiOperation({ summary: 'Lấy chi tiết problem theo id' })
+  @Get(':id')
+  async findOne(@Param('id') id: string) {
+    return this.problemsService.findById(id);
   }
 
   @ApiBearerAuth('JWT')

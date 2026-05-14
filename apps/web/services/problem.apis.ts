@@ -1,3 +1,9 @@
+/**
+ * `problem.apis.ts` — client Core API `/problems` (cùng convention `auth.apis.ts`, `contest.apis.ts`).
+ * - Tạo theo lớp: `create` + `CreateProblemDto` (bắt buộc `classRoomId`).
+ * - Admin kho đề: `createAdmin` + `CreateAdminProblemDto` (không `classRoomId`, không ClassAssignment).
+ */
+
 import { apiFetch } from './api-client';
 
 export interface Problem {
@@ -47,6 +53,27 @@ export interface CreateProblemDto {
   title: string;
   description?: string;
   statementMd?: string;
+  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  mode?: 'ALGO' | 'PROJECT';
+  timeLimitMs?: number;
+  memoryLimitMb?: number;
+  isPublished?: boolean;
+  visibility?: 'PRIVATE' | 'PUBLIC' | 'CONTEST_ONLY';
+  supportedLanguages?: string[];
+  maxTestCases?: number;
+  testCases?: Array<{
+    input: string;
+    expectedOutput: string;
+    isHidden?: boolean;
+    weight?: number;
+  }>;
+}
+
+/** POST /problems/admin — không `classRoomId`; backend không tạo ClassAssignment. */
+export interface CreateAdminProblemDto {
+  title: string;
+  description: string;
+  statementMd: string;
   difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
   mode?: 'ALGO' | 'PROJECT';
   timeLimitMs?: number;
@@ -123,62 +150,98 @@ export interface UpdateProblemDto {
   }>;
 }
 
+export type PaginatedProblems = {
+  items: Problem[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+/** GET /problems — danh sách public / theo lớp. */
+export type ProblemsListQuery = {
+  search?: string;
+  page?: number;
+  limit?: number;
+  classRoomId?: string;
+  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  mode?: 'ALGO' | 'PROJECT';
+};
+
+/** GET /problems/admin/all */
+export type AdminProblemsListQuery = {
+  search?: string;
+  page?: number;
+  limit?: number;
+};
+
+function appendProblemsListParams(params: URLSearchParams, query: ProblemsListQuery) {
+  if (query.search) params.set('search', query.search);
+  if (query.page != null) params.set('page', String(query.page));
+  if (query.limit != null) params.set('limit', String(query.limit));
+  if (query.classRoomId) params.set('classRoomId', query.classRoomId);
+  if (query.difficulty) params.set('difficulty', query.difficulty);
+  if (query.mode) params.set('mode', query.mode);
+}
+
 export const problemsApi = {
-  async findAll(
-    query?: { search?: string; page?: number; limit?: number; classRoomId?: string },
-    options?: RequestInit,
-  ): Promise<{
-    items: Problem[];
-    total: number;
-    page: number;
-    limit: number;
-  }> {
+  async findAll(query?: ProblemsListQuery, options?: RequestInit): Promise<PaginatedProblems> {
     const params = new URLSearchParams();
-    if (query?.search) params.set('search', query.search);
-    if (query?.page) params.set('page', query.page.toString());
-    if (query?.limit) params.set('limit', query.limit.toString());
-    if (query?.classRoomId) params.set('classRoomId', query.classRoomId);
+    if (query) appendProblemsListParams(params, query);
     const queryString = params.toString();
     return apiFetch(`/problems${queryString ? `?${queryString}` : ''}`, options);
   },
 
-  async findAllAdmin(
-    query?: { search?: string; page?: number; limit?: number },
-    options?: RequestInit,
-  ): Promise<{
-    items: Problem[];
-    total: number;
-    page: number;
-    limit: number;
-  }> {
+  async findAllAdmin(query?: AdminProblemsListQuery, options?: RequestInit): Promise<PaginatedProblems> {
     const params = new URLSearchParams();
     if (query?.search) params.set('search', query.search);
-    if (query?.page) params.set('page', query.page.toString());
-    if (query?.limit) params.set('limit', query.limit.toString());
+    if (query?.page != null) params.set('page', String(query.page));
+    if (query?.limit != null) params.set('limit', String(query.limit));
     const queryString = params.toString();
-    return apiFetch(`/problems/admin${queryString ? `?${queryString}` : ''}`, options);
+    return apiFetch(`/problems/admin/all${queryString ? `?${queryString}` : ''}`, options);
   },
 
-  async findById(id: string): Promise<Problem> {
-    return apiFetch(`/problems/${id}`);
+  async findById(id: string, options?: RequestInit): Promise<Problem> {
+    return apiFetch(`/problems/${id}`, options);
   },
 
-  async create(dto: CreateProblemDto): Promise<Problem> {
+  async create(dto: CreateProblemDto, options?: RequestInit): Promise<Problem> {
     return apiFetch('/problems', {
+      ...options,
       method: 'POST',
       body: dto,
     });
   },
 
-  async update(id: string, dto: UpdateProblemDto): Promise<Problem> {
+  async createAdmin(dto: CreateAdminProblemDto, options?: RequestInit): Promise<Problem> {
+    return apiFetch('/problems/admin', {
+      ...options,
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async generateTestCasesDraft(
+    dto: GenerateTestCasesDraftDto,
+    options?: RequestInit,
+  ): Promise<GenerateTestCasesDraftResult> {
+    return apiFetch('/problems/generate-test-cases-draft', {
+      ...options,
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async update(id: string, dto: UpdateProblemDto, options?: RequestInit): Promise<Problem> {
     return apiFetch(`/problems/${id}`, {
+      ...options,
       method: 'PATCH',
       body: dto,
     });
   },
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, options?: RequestInit): Promise<void> {
     return apiFetch(`/problems/${id}`, {
+      ...options,
       method: 'DELETE',
     });
   },

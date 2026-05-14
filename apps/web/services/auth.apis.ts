@@ -1,5 +1,5 @@
 /**
- * Auth API helpers and barrel re-exports (HTTP client lives in `api-client.ts`).
+ * Auth API helpers. Các domain khác: `problem.apis`, `contest.apis`, …
  */
 
 import { apiFetch, getApiBaseUrl, tryRefresh } from './api-client';
@@ -57,19 +57,6 @@ export const authApi = {
     return tryRefresh();
   },
 };
-
-// ---------------------------------------------------------------------------
-// Other domains
-// ---------------------------------------------------------------------------
-
-export {
-  problemsApi,
-  type CreateProblemDto,
-  type GenerateTestCasesDraftDto,
-  type GenerateTestCasesDraftResult,
-  type Problem,
-  type UpdateProblemDto,
-} from './problem.apis';
 
 export {
   contestsApi,

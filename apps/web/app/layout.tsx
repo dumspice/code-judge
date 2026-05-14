@@ -1,3 +1,4 @@
+// @ts-ignore
 import './globals.css';
 import { Geist } from 'next/font/google';
 import { cn } from '@/lib/utils';

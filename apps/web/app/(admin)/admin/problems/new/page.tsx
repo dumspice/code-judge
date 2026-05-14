@@ -1,22 +1,13 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { Suspense } from 'react';
-import AdminProblemCreate from '@/components/admin/problems/AdminProblemCreate';
-import { Loader2 } from 'lucide-react';
+type PageProps = { searchParams: Promise<{ edit?: string }> };
 
-export default function AdminProblemNewPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <p className="text-sm">Đang tải...</p>
-        </div>
-      }
-    >
-      <div className="p-4 pt-6 md:p-8">
-        <AdminProblemCreate />
-      </div>
-    </Suspense>
-  );
+/** Legacy URL: `/admin/problems/new` → `/admin/problems/create` */
+export default async function AdminProblemsNewRedirect({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const edit = sp?.edit?.trim();
+  if (edit) {
+    redirect(`/admin/problems/create?edit=${encodeURIComponent(edit)}`);
+  }
+  redirect('/admin/problems/create');
 }

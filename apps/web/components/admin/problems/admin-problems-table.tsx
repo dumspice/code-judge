@@ -119,7 +119,7 @@ export default function AdminProblemsTable() {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button asChild className="gap-2">
-            <Link href="/admin/problems/new">
+            <Link href="/admin/problems/create">
               <Plus className="h-4 w-4" />
               Tạo problem
             </Link>
@@ -187,7 +187,7 @@ export default function AdminProblemsTable() {
                         <DropdownMenuLabel>Tùy chọn</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
-                          <Link href={`/admin/problems/new?edit=${p.id}`} className="cursor-pointer">
+                          <Link href={`/admin/problems/create?edit=${p.id}`} className="cursor-pointer">
                             <Pencil className="mr-2 h-4 w-4" />
                             Sửa
                           </Link>
