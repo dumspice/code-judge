@@ -25,7 +25,7 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
 
   const contests = (
     await contestsApi.findAll(
-      { limit: 3 },
+      { limit: 10, classRoomId: id },
       {
         headers: {
           Cookie: cookieHeader,

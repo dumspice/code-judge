@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { hashPassword } from '../common';
 import { ContestStatus, ContestTestFeedbackPolicy, Prisma, Contest } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,9 +9,11 @@ import { UpdateContestDto } from './dto/update-contest.dto';
 export class ContestsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateContestDto, creatorId: string): Promise<Contest> {
+  async create(dto: CreateContestDto, creatorId: string, isAdmin = false) {
     if (dto.classRoomId) {
       await this.ensureClassOwner(dto.classRoomId, creatorId);
+    } else if (!isAdmin) {
+      throw new ForbiddenException('Only Admin can create global contests');
     }
 
     const problems = dto.problems ?? [];
@@ -71,7 +73,7 @@ export class ContestsService {
             description: contest.description,
             contestId: contest.id,
             publishedAt: new Date(),
-            dueAt: contest.endAt, // For contests, due date is end date
+            dueAt: new Date(dto.endAt),
           },
         });
       }
@@ -80,13 +82,42 @@ export class ContestsService {
     });
   }
 
-  async findAll(query: { search?: string; page?: number; limit?: number }) {
+  async findAll(query: { search?: string; page?: number; limit?: number; classRoomId?: string }) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+    const search = query.search?.trim();
+    const where: Prisma.ContestWhereInput = query.classRoomId
+      ? {
+          assignments: {
+            some: { classRoomId: query.classRoomId },
+          },
+        }
+      : {
+          status: { not: 'DRAFT' },
+          assignments: { none: {} }, // Chỉ lấy contest KHÔNG thuộc classroom nào
+        };
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' as const } },
+        { description: { contains: search, mode: 'insensitive' as const } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.contest.findMany({ where, skip, take: limit, orderBy: { startAt: 'desc' } }),
+      this.prisma.contest.count({ where }),
+    ]);
+    return { items, total, page, limit };
+  }
+
+  async findAllAdmin(query: { search?: string; page?: number; limit?: number }) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
     const search = query.search?.trim();
     const where: Prisma.ContestWhereInput = {
-      status: { not: 'DRAFT' },
       ...(search
         ? {
             OR: [
@@ -98,7 +129,13 @@ export class ContestsService {
     };
 
     const [items, total] = await Promise.all([
-      this.prisma.contest.findMany({ where, skip, take: limit, orderBy: { startAt: 'desc' } }),
+      this.prisma.contest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: { createdBy: { select: { name: true, email: true } } },
+      }),
       this.prisma.contest.count({ where }),
     ]);
     return { items, total, page, limit };
@@ -112,23 +149,28 @@ export class ContestsService {
       },
     });
     if (!contest) {
-      throw new BadRequestException('Contest không tồn tại');
+      throw new NotFoundException('Contest không tồn tại');
     }
     const { passwordHash, ...result } = contest;
     return result;
   }
 
-  async update(contestId: string, dto: UpdateContestDto, updaterId: string) {
+  async update(
+    contestId: string,
+    dto: UpdateContestDto,
+    updaterId: string,
+    isAdmin = false,
+  ) {
     const contest = await this.prisma.contest.findUnique({
       where: { id: contestId },
       include: { problems: true },
     });
     if (!contest) {
-      throw new BadRequestException('Contest không tồn tại');
+      throw new NotFoundException('Contest không tồn tại');
     }
 
-    if (contest.createdById !== updaterId) {
-      throw new BadRequestException('Bạn không có quyền cập nhật cuộc thi này');
+    if (contest.createdById !== updaterId && !isAdmin) {
+      throw new ForbiddenException('Bạn không có quyền cập nhật cuộc thi này');
     }
 
     if (dto.problems && dto.problems.length > 0) {
@@ -190,7 +232,6 @@ export class ContestsService {
         }
       }
 
-      // Sync ClassAssignment details if changed
       if (dto.title !== undefined || dto.description !== undefined || dto.endAt !== undefined) {
         await tx.classAssignment.updateMany({
           where: { contestId },
@@ -206,21 +247,129 @@ export class ContestsService {
     });
   }
 
-  async delete(contestId: string, userId: string) {
+  async delete(contestId: string, userId: string, isAdmin = false) {
     const contest = await this.prisma.contest.findUnique({
       where: { id: contestId },
       select: { createdById: true },
     });
     if (!contest) {
-      throw new BadRequestException('Contest không tồn tại');
+      throw new NotFoundException('Contest không tồn tại');
     }
-    if (contest.createdById !== userId) {
-      throw new BadRequestException('Bạn không có quyền xóa cuộc thi này');
+    if (contest.createdById !== userId && !isAdmin) {
+      throw new ForbiddenException('Bạn không có quyền xóa cuộc thi này');
     }
     return this.prisma.$transaction(async (tx) => {
       await tx.classAssignment.deleteMany({ where: { contestId } });
       return tx.contest.delete({ where: { id: contestId } });
     });
+  }
+
+  async getLeaderboard(contestId: string) {
+    const contest = await this.prisma.contest.findUnique({
+      where: { id: contestId },
+      include: {
+        problems: {
+          orderBy: { orderIndex: 'asc' },
+          include: { problem: true },
+        },
+        participants: {
+          include: { user: true },
+        },
+      },
+    });
+
+    if (!contest) {
+      throw new NotFoundException('Contest không tồn tại');
+    }
+
+    const submissions = await this.prisma.submission.findMany({
+      where: { contestId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const contestStartTime = contest.startAt.getTime();
+    const PENALTY_PER_FAILED = 20 * 60 * 1000;
+
+    // Lấy tất cả userId duy nhất từ submissions và participants
+    const submissionUserIds = [...new Set(submissions.map((s) => s.userId))];
+    const participantUserIds = contest.participants.map((p) => p.userId);
+    const allUserIds = [...new Set([...submissionUserIds, ...participantUserIds])];
+
+    // Fetch thông tin user cho những người nộp bài nhưng không phải participant
+    const missingUserIds = submissionUserIds.filter(id => !participantUserIds.includes(id));
+    const missingUsers = missingUserIds.length > 0 
+      ? await this.prisma.user.findMany({
+          where: { id: { in: missingUserIds } },
+          select: { id: true, name: true, image: true }
+        })
+      : [];
+
+    const userMap = new Map<string, { name: string; image: string | null }>();
+    contest.participants.forEach(p => userMap.set(p.userId, { name: p.user.name, image: p.user.image }));
+    missingUsers.forEach(u => userMap.set(u.id, { name: u.name || 'Unknown', image: u.image }));
+
+    const leaderboard = allUserIds.map((userId) => {
+      const user = userMap.get(userId)!;
+      const userSubmissions = submissions.filter((s) => s.userId === userId);
+      const problemStats = contest.problems.map((cp) => {
+        const problemSubmissions = userSubmissions.filter((s) => s.problemId === cp.problemId);
+        const acceptedSubmission = problemSubmissions.find((s) => s.status === 'Accepted');
+
+        let penalty = 0;
+        let solvedAt = null;
+        let attempts = 0;
+
+        if (acceptedSubmission) {
+          solvedAt = acceptedSubmission.createdAt.getTime();
+          const failedSubmissions = problemSubmissions.filter(
+            (s) => s.status !== 'Accepted' && s.createdAt < acceptedSubmission.createdAt,
+          );
+          attempts = failedSubmissions.length + 1;
+          penalty = solvedAt - contestStartTime + failedSubmissions.length * PENALTY_PER_FAILED;
+        } else {
+          attempts = problemSubmissions.length;
+        }
+
+        return {
+          problemId: cp.problemId,
+          problemTitle: cp.problem.title,
+          isSolved: !!acceptedSubmission,
+          points: acceptedSubmission ? cp.points : 0,
+          penalty: acceptedSubmission ? penalty : 0,
+          solvedAt: solvedAt ? new Date(solvedAt) : null,
+          attempts,
+        };
+      });
+
+      const totalScore = problemStats.reduce((sum, p) => sum + p.points, 0);
+      const totalPenalty = problemStats.reduce((sum, p) => sum + p.penalty, 0);
+      const solvedCount = problemStats.filter((p) => p.isSolved).length;
+
+      return {
+        userId,
+        userName: user.name,
+        userAvatar: user.image,
+        solvedCount,
+        totalScore,
+        totalPenalty,
+        problems: problemStats,
+      };
+    });
+
+    leaderboard.sort((a, b) => {
+      if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+      return a.totalPenalty - b.totalPenalty;
+    });
+
+    return {
+      contest: {
+        id: contest.id,
+        title: contest.title,
+        startAt: contest.startAt,
+        endAt: contest.endAt,
+      },
+      leaderboard,
+    };
   }
 
   private async ensureClassOwner(classRoomId: string, userId: string) {
@@ -230,11 +379,11 @@ export class ContestsService {
     });
 
     if (!classRoom) {
-      throw new BadRequestException('Class not found');
+      throw new NotFoundException('Class not found');
     }
 
     if (classRoom.ownerId !== userId) {
-      throw new BadRequestException('Only owner can do this action');
+      throw new ForbiddenException('Only owner can do this action');
     }
 
     return classRoom;

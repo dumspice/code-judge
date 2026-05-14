@@ -18,8 +18,26 @@ export class ContestsController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('classRoomId') classRoomId?: string,
   ) {
     return this.contestsService.findAll({
+      search,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      classRoomId,
+    });
+  }
+
+  @ApiBearerAuth('JWT')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Admin: Danh sách tất cả contest' })
+  @Get('admin')
+  async findAllAdmin(
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.contestsService.findAllAdmin({
       search,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
@@ -33,11 +51,18 @@ export class ContestsController {
     return this.contestsService.findById(id);
   }
 
+  @Public()
+  @ApiOperation({ summary: 'Lấy bảng xếp hạng contest' })
+  @Get(':id/leaderboard')
+  async getLeaderboard(@Param('id') id: string) {
+    return this.contestsService.getLeaderboard(id);
+  }
+
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Tạo contest mới' })
   @Post()
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateContestDto) {
-    return this.contestsService.create(dto, user.userId);
+    return this.contestsService.create(dto, user.userId, user.role === 'ADMIN');
   }
 
   @ApiBearerAuth('JWT')
@@ -48,13 +73,18 @@ export class ContestsController {
     @CurrentUser() user: RequestUser,
     @Body() dto: UpdateContestDto,
   ) {
-    return this.contestsService.update(id, dto, user.userId);
+    return this.contestsService.update(
+      id,
+      dto,
+      user.userId,
+      user.role === 'ADMIN',
+    );
   }
 
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Xóa contest' })
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
-    return this.contestsService.delete(id, user.userId);
+    return this.contestsService.delete(id, user.userId, user.role === 'ADMIN');
   }
 }

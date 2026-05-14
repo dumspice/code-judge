@@ -9,8 +9,12 @@ import { UpdateProblemDto } from './dto/update-problem.dto';
 export class ProblemsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(dto: CreateProblemDto, creatorId: string): Promise<Problem> {
-    await this.ensureClassOwner(dto.classRoomId, creatorId);
+  async create(dto: CreateProblemDto, creatorId: string, isAdmin = false): Promise<Problem> {
+    if (dto.classRoomId) {
+      await this.ensureClassOwner(dto.classRoomId, creatorId);
+    } else if (!isAdmin) {
+      throw new ForbiddenException('Only Admin can create global problems');
+    }
     const slug = await this.buildUniqueSlug(dto.title);
     const supportedLanguages = dto.supportedLanguages ?? [];
 
@@ -26,7 +30,7 @@ export class ProblemsService {
           timeLimitMs: dto.timeLimitMs ?? 1000,
           memoryLimitMb: dto.memoryLimitMb ?? 256,
           isPublished: dto.isPublished ?? true,
-          visibility: dto.visibility ?? ProblemVisibility.PUBLIC,
+          visibility: dto.classRoomId ? ProblemVisibility.PRIVATE : (dto.visibility ?? ProblemVisibility.PUBLIC),
           supportedLanguages: supportedLanguages.length > 0 ? supportedLanguages : undefined,
           maxTestCases: dto.maxTestCases ?? 100,
           creatorId,
@@ -46,30 +50,61 @@ export class ProblemsService {
         });
       }
 
-      // Create ClassAssignment automatically
-      await tx.classAssignment.create({
-        data: {
-          classRoomId: dto.classRoomId,
-          title: problem.title,
-          description: problem.description,
-          problemId: problem.id,
-          publishedAt: new Date(),
-          dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
-        },
-      });
+      // Create ClassAssignment automatically only if classRoomId is provided
+      if (dto.classRoomId) {
+        await tx.classAssignment.create({
+          data: {
+            classRoomId: dto.classRoomId,
+            title: problem.title,
+            description: problem.description,
+            problemId: problem.id,
+            publishedAt: new Date(),
+            dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+          },
+        });
+      }
 
       return problem;
     });
   }
 
-  async findAll(query: { search?: string; page?: number; limit?: number }) {
+  async findAll(query: { search?: string; page?: number; limit?: number; classRoomId?: string }) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+    const search = query.search?.trim();
+    const where: Prisma.ProblemWhereInput = query.classRoomId
+      ? {
+          assignments: {
+            some: { classRoomId: query.classRoomId },
+          },
+        }
+      : {
+          isPublished: true,
+          visibility: { not: 'PRIVATE' },
+          assignments: { none: {} }, // Không hiện problem của lớp học ra ngoài
+        };
+
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' as const } },
+        { description: { contains: search, mode: 'insensitive' as const } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.problem.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      this.prisma.problem.count({ where }),
+    ]);
+    return { items, total, page, limit };
+  }
+
+  async findAllAdmin(query: { search?: string; page?: number; limit?: number }) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
     const search = query.search?.trim();
     const where: Prisma.ProblemWhereInput = {
-      isPublished: true,
-      visibility: { not: 'PRIVATE' },
       ...(search
         ? {
             OR: [
@@ -81,7 +116,13 @@ export class ProblemsService {
     };
 
     const [items, total] = await Promise.all([
-      this.prisma.problem.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      this.prisma.problem.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: { creator: { select: { name: true, email: true } } },
+      }),
       this.prisma.problem.count({ where }),
     ]);
     return { items, total, page, limit };
@@ -101,7 +142,12 @@ export class ProblemsService {
     return problem;
   }
 
-  async update(problemId: string, dto: UpdateProblemDto, updaterId: string) {
+  async update(
+    problemId: string,
+    dto: UpdateProblemDto,
+    updaterId: string,
+    isAdmin = false,
+  ) {
     const existing = await this.prisma.problem.findUnique({
       where: { id: problemId },
       select: {
@@ -116,8 +162,8 @@ export class ProblemsService {
       throw new NotFoundException('Problem not found');
     }
 
-    if (existing.creatorId !== updaterId) {
-      throw new ForbiddenException('Only Creator can update this problem');
+    if (existing.creatorId !== updaterId && !isAdmin) {
+      throw new ForbiddenException('Only Creator or Admin can update this problem');
     }
 
     const slug =
@@ -180,7 +226,7 @@ export class ProblemsService {
     });
   }
 
-  async delete(problemId: string, userId: string) {
+  async delete(problemId: string, userId: string, isAdmin = false) {
     const existing = await this.prisma.problem.findUnique({
       where: { id: problemId },
       select: {
@@ -195,8 +241,8 @@ export class ProblemsService {
       throw new NotFoundException('Problem not found');
     }
 
-    if (existing.creatorId !== userId) {
-      throw new ForbiddenException('Only class owner can delete this problem');
+    if (existing.creatorId !== userId && !isAdmin) {
+      throw new ForbiddenException('Only Creator or Admin can delete this problem');
     }
 
     return this.prisma.$transaction(async (tx) => {

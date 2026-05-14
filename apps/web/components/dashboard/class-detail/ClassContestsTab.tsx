@@ -80,8 +80,8 @@ export default function ClassContestsTab({ classId }: { classId: string }) {
     setLoading(true);
     try {
       const [contestsResult, problemsResult] = await Promise.all([
-        contestsApi.findAll({ limit: 50 }),
-        problemsApi.findAll({ limit: 100 }),
+        contestsApi.findAll({ limit: 50, classRoomId: classId }),
+        problemsApi.findAll({ limit: 100, classRoomId: classId }),
       ]);
       setContests(contestsResult.items);
       setProblems(problemsResult.items);

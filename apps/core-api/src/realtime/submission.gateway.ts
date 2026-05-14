@@ -46,6 +46,13 @@ export class SubmissionGateway implements OnGatewayInit, OnGatewayConnection {
     this.server.to(socketUserRoom(userId)).emit(event, payload);
   }
 
+  /**
+   * Broadcast to all connected clients.
+   */
+  emitToAll(event: string, payload: AnyRecord) {
+    this.server.emit(event, payload);
+  }
+
   // Optional helper to let frontend "ping" or validate connection.
   @SubscribeMessage('client:hello')
   onHello(@ConnectedSocket() client: any, @MessageBody() _body: AnyRecord) {

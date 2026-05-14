@@ -41,15 +41,7 @@ export function middleware(request: NextRequest) {
   const decodedToken = decodeJwtPayload(token)
   const userRole = decodedToken?.role || 'CLIENT'
 
-  // NEW:
-  // Nếu user đã login mà vào "/" -> redirect luôn
-  if (pathname === '/') {
-    if (userRole === 'ADMIN') {
-      return NextResponse.redirect(new URL('/admin/users', request.url))
-    }
-
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
+// No automatic redirect from / to dashboard
 
   // Nếu đã login mà cố vào login/register
   if (pathname === '/login' || pathname === '/register') {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import ProblemDescription from './ProblemDescription';
 import CodeEditorPanel from './CodeEditorPanel';
 import ConsolePanel from './ConsolePanel';
+import { useSocket } from '@/providers/socket-provider';
 
 // 1. CHUẨN HÓA TYPE THEO SCHEMA
 export type ProblemType = {
@@ -63,6 +64,40 @@ You can return the answer in any order.
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<SubmissionResult | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (socket) {
+      const handleFinished = (data: any) => {
+        setIsRunning(false);
+        setResult({
+          status: data.status,
+          testsPassed: data.testsPassed,
+          testsTotal: data.testsTotal,
+          runtimeMs: data.runtimeMs,
+          memoryMb: data.memoryMb,
+        });
+      };
+
+      const handleFailed = (data: any) => {
+        setIsRunning(false);
+        setResult({
+          status: 'Error',
+          testsPassed: 0,
+          testsTotal: 0,
+          errorMessage: data.error,
+        });
+      };
+
+      socket.on('submission:finished', handleFinished);
+      socket.on('submission:failed', handleFailed);
+
+      return () => {
+        socket.off('submission:finished', handleFinished);
+        socket.off('submission:failed', handleFailed);
+      };
+    }
+  }, [socket]);
 
   // Load/Save Code (Giữ nguyên)
   useEffect(() => {

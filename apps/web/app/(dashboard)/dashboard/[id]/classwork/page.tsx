@@ -19,6 +19,7 @@ export default async function ClassworkPage({ params }: { params: Promise<{ id: 
   const problemsResult = await problemsApi.findAll(
     {
       limit: 50,
+      classRoomId: id,
     },
     {
       headers: {

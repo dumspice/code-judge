@@ -3,6 +3,7 @@ import { Geist } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { Metadata } from 'next';
 import { AuthProvider } from '@/providers/auth-provider';
+import { SocketProvider } from '@/providers/socket-provider';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -34,7 +35,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi" className={cn('font-sans bg-background scroll-smooth', geist.variable)}>
       <body className="font-sans antialiased bg-background text-foreground">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <SocketProvider>{children}</SocketProvider>
+        </AuthProvider>
       </body>
     </html>
   );

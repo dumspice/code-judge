@@ -23,8 +23,26 @@ export class ProblemsController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('classRoomId') classRoomId?: string,
   ) {
     return this.problemsService.findAll({
+      search,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      classRoomId,
+    });
+  }
+
+  @ApiBearerAuth('JWT')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Admin: Danh sách tất cả problem' })
+  @Get('admin')
+  async findAllAdmin(
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.problemsService.findAllAdmin({
       search,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
@@ -52,7 +70,7 @@ export class ProblemsController {
   @ApiOperation({ summary: 'Owner tạo problem mới' })
   @Post()
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateProblemDto) {
-    return this.problemsService.create(dto, user.userId);
+    return this.problemsService.create(dto, user.userId, user.role === 'ADMIN');
   }
 
   @ApiBearerAuth('JWT')
@@ -63,13 +81,18 @@ export class ProblemsController {
     @CurrentUser() user: RequestUser,
     @Body() dto: UpdateProblemDto,
   ) {
-    return this.problemsService.update(id, dto, user.userId);
+    return this.problemsService.update(
+      id,
+      dto,
+      user.userId,
+      user.role === 'ADMIN',
+    );
   }
 
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Owner xóa problem' })
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
-    return this.problemsService.delete(id, user.userId);
+    return this.problemsService.delete(id, user.userId, user.role === 'ADMIN');
   }
 }

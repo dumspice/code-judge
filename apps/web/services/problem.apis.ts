@@ -17,6 +17,13 @@ export interface Problem {
   creatorId: string | null;
   createdAt: string;
   updatedAt: string;
+  tags?: Array<{
+    tag: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>;
   testCases?: Array<{
     id: string;
     orderIndex: number;
@@ -118,6 +125,24 @@ export interface UpdateProblemDto {
 
 export const problemsApi = {
   async findAll(
+    query?: { search?: string; page?: number; limit?: number; classRoomId?: string },
+    options?: RequestInit,
+  ): Promise<{
+    items: Problem[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams();
+    if (query?.search) params.set('search', query.search);
+    if (query?.page) params.set('page', query.page.toString());
+    if (query?.limit) params.set('limit', query.limit.toString());
+    if (query?.classRoomId) params.set('classRoomId', query.classRoomId);
+    const queryString = params.toString();
+    return apiFetch(`/problems${queryString ? `?${queryString}` : ''}`, options);
+  },
+
+  async findAllAdmin(
     query?: { search?: string; page?: number; limit?: number },
     options?: RequestInit,
   ): Promise<{
@@ -131,7 +156,7 @@ export const problemsApi = {
     if (query?.page) params.set('page', query.page.toString());
     if (query?.limit) params.set('limit', query.limit.toString());
     const queryString = params.toString();
-    return apiFetch(`/problems${queryString ? `?${queryString}` : ''}`, options);
+    return apiFetch(`/problems/admin${queryString ? `?${queryString}` : ''}`, options);
   },
 
   async findById(id: string): Promise<Problem> {
