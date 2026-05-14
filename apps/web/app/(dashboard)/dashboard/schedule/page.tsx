@@ -1,9 +1,11 @@
-'use client';
-
 import SchedulePageContent from '@/components/dashboard/schedule/SchedulePageContent';
 
-export const dynamic = 'force-dynamic';
+type Props = {
+  searchParams: {
+    filter?: string;
+  };
+};
 
-export default function SchedulePage() {
-  return <SchedulePageContent />;
+export default function SchedulePage({ searchParams }: Props) {
+  return <SchedulePageContent filter={searchParams.filter} />;
 }
