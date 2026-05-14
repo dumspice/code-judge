@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Problem } from '@/services/problem.apis';
+import Link from 'next/link';
 
 interface AssignmentItemProps extends Problem {
   onEdit?: (id: string) => void;
@@ -98,13 +99,13 @@ export default function AssignmentItem({
         </div>
       </div>
 
-      <Button
-        className="mt-5 cursor-pointer h-10 w-full rounded-xl border border-gray-200 bg-white text-sm font-semibold text-black hover:bg-gray-50 hover:border-black transition-all"
-        variant="ghost"
+      <Link
+        href={`/problem/${id}`}
+        className="flex items-center justify-center mt-5 cursor-pointer h-10 w-full rounded-xl border border-gray-200 bg-white text-sm font-semibold text-black hover:bg-gray-50 hover:border-black transition-all"
       >
         <span>Solve Problem</span>
         <ArrowRight className="ml-2 h-4 w-4" />
-      </Button>
+      </Link>
     </div>
   );
 }
