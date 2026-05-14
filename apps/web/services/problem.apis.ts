@@ -15,12 +15,15 @@ export interface Problem {
   supportedLanguages: string[] | null;
   maxTestCases: number;
   creatorId: string | null;
-  /** Lớp nơi đề được tạo (không dùng ClassAssignment) */
-  originClassRoomId?: string | null;
-  /** Hạn nộp khi không có assignment */
-  classworkDueAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  tags?: Array<{
+    tag: {
+      id: string;
+      name: string;
+      slug: string;
+    };
+  }>;
   testCases?: Array<{
     id: string;
     orderIndex: number;
@@ -36,35 +39,9 @@ export interface Problem {
     classRoomId: string;
     dueAt: string | null;
   }>;
-  tags?: Array<{
-    problemId: string;
-    tagId: string;
-    tag: { id: string; slug: string; name: string };
-  }>;
-}
-
-export interface CreateAdminProblemDto {
-  title: string;
-  description?: string;
-  statementMd?: string;
-  difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
-  mode?: 'ALGO' | 'PROJECT';
-  timeLimitMs?: number;
-  memoryLimitMb?: number;
-  isPublished?: boolean;
-  visibility?: 'PRIVATE' | 'PUBLIC' | 'CONTEST_ONLY';
-  supportedLanguages?: string[];
-  maxTestCases?: number;
-  testCases?: Array<{
-    input: string;
-    expectedOutput: string;
-    isHidden?: boolean;
-    weight?: number;
-  }>;
 }
 
 export interface CreateProblemDto {
-  /** Bắt buộc khi gọi POST /problems (tạo kèm gán lớp). */
   classRoomId: string;
   dueAt?: string;
   title: string;
@@ -148,14 +125,7 @@ export interface UpdateProblemDto {
 
 export const problemsApi = {
   async findAll(
-    query?: {
-      search?: string;
-      page?: number;
-      limit?: number;
-      classRoomId?: string;
-      difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
-      mode?: 'ALGO' | 'PROJECT';
-    },
+    query?: { search?: string; page?: number; limit?: number; classRoomId?: string },
     options?: RequestInit,
   ): Promise<{
     items: Problem[];
@@ -168,18 +138,10 @@ export const problemsApi = {
     if (query?.page) params.set('page', query.page.toString());
     if (query?.limit) params.set('limit', query.limit.toString());
     if (query?.classRoomId) params.set('classRoomId', query.classRoomId);
-    if (query?.difficulty) params.set('difficulty', query.difficulty);
-    if (query?.mode) params.set('mode', query.mode);
     const queryString = params.toString();
     return apiFetch(`/problems${queryString ? `?${queryString}` : ''}`, options);
   },
 
-  /** Tag có ít nhất một problem public (filter kho đề). */
-  async listTagsForBank(options?: RequestInit): Promise<{ id: string; slug: string; name: string }[]> {
-    return apiFetch('/problems/tags/bank', options);
-  },
-
-  /** Admin: mọi problem (kèm private / unpublished). Cần JWT role ADMIN. */
   async findAllAdmin(
     query?: { search?: string; page?: number; limit?: number },
     options?: RequestInit,
@@ -194,30 +156,15 @@ export const problemsApi = {
     if (query?.page) params.set('page', query.page.toString());
     if (query?.limit) params.set('limit', query.limit.toString());
     const queryString = params.toString();
-    return apiFetch(`/problems/admin/all${queryString ? `?${queryString}` : ''}`, options);
+    return apiFetch(`/problems/admin${queryString ? `?${queryString}` : ''}`, options);
   },
 
   async findById(id: string): Promise<Problem> {
     return apiFetch(`/problems/${id}`);
   },
 
-  async generateTestCasesDraft(dto: GenerateTestCasesDraftDto): Promise<GenerateTestCasesDraftResult> {
-    return apiFetch('/problems/generate-test-cases-draft', {
-      method: 'POST',
-      body: dto,
-    });
-  },
-
   async create(dto: CreateProblemDto): Promise<Problem> {
     return apiFetch('/problems', {
-      method: 'POST',
-      body: dto,
-    });
-  },
-
-  /** Admin: tạo problem không ClassAssignment (POST /problems/admin). */
-  async createAdmin(dto: CreateAdminProblemDto): Promise<Problem> {
-    return apiFetch('/problems/admin', {
       method: 'POST',
       body: dto,
     });

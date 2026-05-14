@@ -82,6 +82,23 @@ export const contestsApi = {
     return apiFetch(`/contests${queryString ? `?${queryString}` : ''}`, options);
   },
 
+  async findAllAdmin(
+    query?: { search?: string; page?: number; limit?: number },
+    options?: RequestInit,
+  ): Promise<{
+    items: Contest[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams();
+    if (query?.search) params.set('search', query.search);
+    if (query?.page) params.set('page', query.page.toString());
+    if (query?.limit) params.set('limit', query.limit.toString());
+    const queryString = params.toString();
+    return apiFetch(`/contests/admin${queryString ? `?${queryString}` : ''}`, options);
+  },
+
   async findById(id: string, options?: RequestInit): Promise<Contest> {
     return apiFetch(`/contests/${id}`, options);
   },
@@ -104,5 +121,9 @@ export const contestsApi = {
     return apiFetch(`/contests/${id}`, {
       method: 'DELETE',
     });
+  },
+
+  async getLeaderboard(id: string): Promise<any> {
+    return apiFetch(`/contests/${id}/leaderboard`);
   },
 };

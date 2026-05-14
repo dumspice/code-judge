@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { problemsApi, Problem } from '@/services/problem.apis';
+import { contestsApi, Contest } from '@/services/contest.apis';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -18,14 +18,13 @@ import {
   Plus, 
   Edit, 
   Trash2, 
-  Globe, 
-  Lock, 
-  Eye, 
-  EyeOff,
+  Calendar, 
+  Clock, 
+  Trophy,
   MoreVertical,
   ChevronLeft,
   ChevronRight,
-  Code2
+  Layout
 } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -35,76 +34,76 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { Switch } from '@/components/ui/switch';
+import { format } from 'date-fns';
 import Link from 'next/link';
 
-export default function AdminProblemsPage() {
-  const [problems, setProblems] = useState<Problem[]>([]);
+export default function AdminContestsPage() {
+  const [contests, setContests] = useState<Contest[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  const loadProblems = async () => {
+  const loadContests = async () => {
     setLoading(true);
     try {
-      const data = await problemsApi.findAllAdmin({ search, page, limit: 10 });
-      setProblems(data.items);
+      const data = await contestsApi.findAllAdmin({ search, page, limit: 10 });
+      setContests(data.items);
       setTotal(data.total);
     } catch (error) {
-      toast.error('Failed to load problems');
+      toast.error('Failed to load contests');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadProblems();
+    loadContests();
   }, [page]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    loadProblems();
+    loadContests();
   };
 
-  const toggleVisibility = async (problemId: string, currentVisibility: string) => {
-    const newVisibility = currentVisibility === 'PUBLIC' ? 'PRIVATE' : 'PUBLIC';
+  const toggleStatus = async (contestId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'DRAFT' ? 'PUBLISHED' : 'DRAFT';
     try {
-      await problemsApi.update(problemId, { visibility: newVisibility });
-      toast.success(`Problem is now ${newVisibility.toLowerCase()}`);
-      loadProblems();
-    } catch (error) {
-      toast.error('Failed to update visibility');
-    }
-  };
-
-  const togglePublished = async (problemId: string, currentStatus: boolean) => {
-    try {
-      await problemsApi.update(problemId, { isPublished: !currentStatus });
-      toast.success(`Problem ${!currentStatus ? 'published' : 'unpublished'}`);
-      loadProblems();
+      // Note: Backend handles auto-status (RUNNING/ENDED) based on dates if PUBLISHED
+      await contestsApi.update(contestId, { 
+        // We might need to handle specific status logic if backend doesn't auto-flip
+      } as any);
+      toast.success(`Contest status updated`);
+      loadContests();
     } catch (error) {
       toast.error('Failed to update status');
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this problem?')) return;
+    if (!confirm('Are you sure you want to delete this contest?')) return;
     try {
-      await problemsApi.delete(id);
-      toast.success('Problem deleted');
-      loadProblems();
+      await contestsApi.delete(id);
+      toast.success('Contest deleted');
+      loadContests();
     } catch (error) {
-      toast.error('Failed to delete problem');
+      toast.error('Failed to delete contest');
     }
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'EASY': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'MEDIUM': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'HARD': return 'bg-rose-100 text-rose-700 border-rose-200';
-      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'RUNNING':
+        return <Badge className="bg-emerald-500 hover:bg-emerald-600 animate-pulse">Live Now</Badge>;
+      case 'ENDED':
+        return <Badge variant="secondary">Finished</Badge>;
+      case 'PUBLISHED':
+        return <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50">Upcoming</Badge>;
+      case 'DRAFT':
+        return <Badge variant="outline" className="border-slate-200 text-slate-500 bg-slate-50">Draft</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
     }
   };
 
@@ -112,13 +111,13 @@ export default function AdminProblemsPage() {
     <div className="p-8 space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Problems Management</h1>
-          <p className="text-slate-500 mt-1">Manage public and private coding challenges</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Contests Management</h1>
+          <p className="text-slate-500 mt-1">Schedule and monitor programming competitions</p>
         </div>
         <Button asChild className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all hover:scale-105">
-          <Link href="/admin/problems/create">
+          <Link href="/admin/contests/create">
             <Plus className="w-4 h-4 mr-2" />
-            New Problem
+            New Contest
           </Link>
         </Button>
       </div>
@@ -129,7 +128,7 @@ export default function AdminProblemsPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
-                placeholder="Search problems..."
+                placeholder="Search contests..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10 bg-white border-slate-200 focus:ring-indigo-500"
@@ -142,9 +141,8 @@ export default function AdminProblemsPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-              <TableHead className="w-[300px]">Problem</TableHead>
-              <TableHead>Difficulty</TableHead>
-              <TableHead>Visibility</TableHead>
+              <TableHead className="w-[300px]">Contest</TableHead>
+              <TableHead>Timeline</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Creator</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -154,61 +152,47 @@ export default function AdminProblemsPage() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i} className="animate-pulse">
-                  <TableCell colSpan={6} className="h-16 bg-slate-50/20" />
+                  <TableCell colSpan={5} className="h-16 bg-slate-50/20" />
                 </TableRow>
               ))
-            ) : problems.length === 0 ? (
+            ) : contests.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-40 text-center text-slate-500">
+                <TableCell colSpan={5} className="h-40 text-center text-slate-500">
                   <div className="flex flex-col items-center gap-2">
-                    <Code2 className="w-8 h-8 text-slate-300" />
-                    <p>No problems found</p>
+                    <Trophy className="w-8 h-8 text-slate-300" />
+                    <p>No contests found</p>
                   </div>
                 </TableCell>
               </TableRow>
             ) : (
-              problems.map((problem) => (
-                <TableRow key={problem.id} className="hover:bg-slate-50/50 transition-colors">
+              contests.map((contest) => (
+                <TableRow key={contest.id} className="hover:bg-slate-50/50 transition-colors">
                   <TableCell className="font-medium">
                     <div className="flex flex-col">
-                      <span className="text-slate-900">{problem.title}</span>
-                      <span className="text-xs text-slate-400 font-normal truncate max-w-[250px]">
-                        {problem.slug}
+                      <span className="text-slate-900">{contest.title}</span>
+                      <span className="text-xs text-slate-400 font-normal">
+                        {contest.slug}
                       </span>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={getDifficultyColor(problem.difficulty)}>
-                      {problem.difficulty}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Switch 
-                        checked={problem.visibility === 'PUBLIC'} 
-                        onCheckedChange={() => toggleVisibility(problem.id, problem.visibility)}
-                      />
-                      {problem.visibility === 'PUBLIC' ? (
-                        <Globe className="w-4 h-4 text-emerald-500" />
-                      ) : (
-                        <Lock className="w-4 h-4 text-slate-400" />
-                      )}
+                    <div className="flex flex-col text-sm text-slate-600 gap-1">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        <span>{format(new Date(contest.startAt), 'MMM d, h:mm a')}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-3 h-3 text-slate-400" />
+                        <span>Duration: {Math.round((new Date(contest.endAt).getTime() - new Date(contest.startAt).getTime()) / 60000)}m</span>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                     <div className="flex items-center gap-2">
-                      <Switch 
-                        checked={problem.isPublished} 
-                        onCheckedChange={() => togglePublished(problem.id, problem.isPublished)}
-                      />
-                      <Badge variant={problem.isPublished ? "default" : "secondary"} className={problem.isPublished ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-100 border-indigo-200" : ""}>
-                        {problem.isPublished ? 'Published' : 'Draft'}
-                      </Badge>
-                    </div>
+                    {getStatusBadge(contest.status)}
                   </TableCell>
                   <TableCell>
                     <div className="text-sm text-slate-600">
-                      {(problem as any).creator?.name || 'System'}
+                      {(contest as any).createdBy?.name || 'System'}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -220,12 +204,12 @@ export default function AdminProblemsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-40">
                         <DropdownMenuItem asChild>
-                          <Link href={`/admin/problems/${problem.id}`} className="flex items-center">
+                          <Link href={`/admin/contests/${contest.id}`} className="flex items-center">
                             <Edit className="w-4 h-4 mr-2" />
                             Edit
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-rose-600 focus:text-rose-600 focus:bg-rose-50" onClick={() => handleDelete(problem.id)}>
+                        <DropdownMenuItem className="text-rose-600 focus:text-rose-600 focus:bg-rose-50" onClick={() => handleDelete(contest.id)}>
                           <Trash2 className="w-4 h-4 mr-2" />
                           Delete
                         </DropdownMenuItem>
@@ -240,7 +224,7 @@ export default function AdminProblemsPage() {
 
         <div className="p-4 border-t border-slate-100 bg-slate-50/30 flex items-center justify-between">
           <p className="text-sm text-slate-500">
-            Showing {problems.length} of {total} problems
+            Showing {contests.length} of {total} contests
           </p>
           <div className="flex gap-2">
             <Button

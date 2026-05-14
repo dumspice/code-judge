@@ -24,6 +24,7 @@
     "typescript-eslint": "^8.15.0"
   },
   "dependencies": {
-    "nodemailer": "^8.0.7"
+    "nodemailer": "^8.0.7",
+    "sonner": "^2.0.7"
   }
 }

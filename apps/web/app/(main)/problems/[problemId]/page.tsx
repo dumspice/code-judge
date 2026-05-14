@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Cloud, FileInput, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,8 +32,10 @@ const languageOptions = [
 
 export default function ProblemDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const rawProblemId = params?.problemId;
   const problemId = Array.isArray(rawProblemId) ? rawProblemId[0] : (rawProblemId ?? '');
+  const contestId = searchParams.get('contestId');
   const user = useAuthStore((state) => state.user);
 
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -231,6 +233,7 @@ export default function ProblemDetailPage() {
       const created = await submissionsApi.create({
         userId: user.id,
         problemId,
+        contestId: contestId ?? undefined,
         mode: problem?.mode ?? 'ALGO',
         language,
         sourceCode,

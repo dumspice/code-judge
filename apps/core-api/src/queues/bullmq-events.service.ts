@@ -43,17 +43,26 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
 
       const submission = await this.prisma.submission.findUnique({
         where: { id: jobId },
-        select: { userId: true, status: true, score: true, runtimeMs: true, memoryMb: true, logs: true },
+        select: { userId: true, status: true, score: true, runtimeMs: true, memoryMb: true, logs: true, contestId: true },
       });
       if (!submission) return;
 
-      this.realtime.emitToUser(submission.userId, 'submission:finished', {
+      const payload = {
         submissionId: jobId,
         status: submission.status,
         score: submission.score ?? null,
         runtimeMs: submission.runtimeMs ?? null,
         memoryMb: submission.memoryMb ?? null,
-      });
+        contestId: submission.contestId ?? null,
+      };
+
+      // Emit to private room for the submitter
+      this.realtime.emitToUser(submission.userId, 'submission:finished', payload);
+
+      // Emit to ALL if it's a contest submission (for leaderboards)
+      if (submission.contestId) {
+        this.realtime.emitToAll('submission:finished', payload);
+      }
     });
 
     this.queueEvents.on('failed', async (event: { jobId: string; failedReason: string }) => {
@@ -62,15 +71,22 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
 
       const submission = await this.prisma.submission.findUnique({
         where: { id: jobId },
-        select: { userId: true, status: true, error: true },
+        select: { userId: true, status: true, error: true, contestId: true },
       });
       if (!submission) return;
 
-      this.realtime.emitToUser(submission.userId, 'submission:failed', {
+      const payload = {
         submissionId: jobId,
         status: submission.status,
         error: submission.error ?? failedReason ?? 'Unknown error',
-      });
+        contestId: submission.contestId ?? null,
+      };
+
+      this.realtime.emitToUser(submission.userId, 'submission:failed', payload);
+
+      if (submission.contestId) {
+        this.realtime.emitToAll('submission:failed', payload);
+      }
     });
 
     this.logger.log('BullMQ queue events listeners attached');
