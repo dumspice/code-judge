@@ -5,9 +5,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
 
+import { MailerService } from '../mail/mail.service';
+import { ConfigService } from '@nestjs/config';
+
 @Injectable()
 export class ProblemsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailerService: MailerService,
+    private readonly configService: ConfigService,
+  ) {}
 
   async create(dto: CreateProblemDto, creatorId: string): Promise<Problem> {
     await this.ensureClassOwner(dto.classRoomId, creatorId);
@@ -47,7 +54,7 @@ export class ProblemsService {
       }
 
       // Create ClassAssignment automatically
-      await tx.classAssignment.create({
+      const assignment = await tx.classAssignment.create({
         data: {
           classRoomId: dto.classRoomId,
           title: problem.title,
@@ -56,7 +63,37 @@ export class ProblemsService {
           publishedAt: new Date(),
           dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
         },
+        include: {
+          classRoom: {
+            include: {
+              enrollments: {
+                where: { status: 'ACTIVE', role: 'MEMBER' },
+                include: { user: { select: { email: true } } },
+              },
+            },
+          },
+        },
       });
+
+      // Send email notification (async)
+      const memberEmails = assignment.classRoom.enrollments
+        .map((e) => e.user.email)
+        .filter((email): email is string => !!email);
+
+      if (memberEmails.length > 0) {
+        const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3001';
+        this.mailerService
+          .sendAssignmentNotification({
+            to: memberEmails,
+            classroomName: assignment.classRoom.name,
+            type: 'problem',
+            title: problem.title,
+            description: problem.description ?? undefined,
+            dueAt: dto.dueAt ? new Date(dto.dueAt).toLocaleString() : undefined,
+            url: `${frontendUrl}/dashboard/${dto.classRoomId}/classwork`,
+          })
+          .catch((err) => console.error('Failed to send assignment notification emails', err));
+      }
 
       return problem;
     });
