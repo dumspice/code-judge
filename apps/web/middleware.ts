@@ -30,10 +30,12 @@ export async function middleware(request: NextRequest) {
     if (
       pathname === '/' ||
       pathname === '/login' ||
-      pathname === '/register'
+      pathname === '/register' ||
+      pathname === '/locked'
     ) {
       return NextResponse.next()
     }
+
 
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('callbackUrl', pathname + request.nextUrl.search)
@@ -109,7 +111,8 @@ export async function middleware(request: NextRequest) {
     if (
       pathname !== '/' &&
       pathname !== '/login' &&
-      pathname !== '/register'
+      pathname !== '/register' &&
+      pathname !== '/locked'
     ) {
       const response = NextResponse.redirect(new URL('/login', request.url))
       response.cookies.delete('refreshToken')
