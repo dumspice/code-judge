@@ -14,7 +14,7 @@ export class ContestsService {
     private readonly prisma: PrismaService,
     private readonly mailerService: MailerService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   async create(dto: CreateContestDto, creatorId: string, isAdmin = false) {
     if (dto.classRoomId) {
@@ -111,7 +111,7 @@ export class ContestsService {
               title: contest.title,
               description: contest.description ?? undefined,
               dueAt: new Date(dto.endAt).toLocaleString(),
-              url: `${frontendUrl}/dashboard/${dto.classRoomId}/classwork`,
+              url: `${frontendUrl}/dashboard/${dto.classRoomId}/contests`,
             })
             .catch((err) => console.error('Failed to send contest notification emails', err));
         }
@@ -128,14 +128,14 @@ export class ContestsService {
     const search = query.search?.trim();
     const where: Prisma.ContestWhereInput = query.classRoomId
       ? {
-          assignments: {
-            some: { classRoomId: query.classRoomId },
-          },
-        }
+        assignments: {
+          some: { classRoomId: query.classRoomId },
+        },
+      }
       : {
-          status: { not: 'DRAFT' },
-          assignments: { none: {} }, // Chỉ lấy contest KHÔNG thuộc classroom nào
-        };
+        status: { not: 'DRAFT' },
+        assignments: { none: {} }, // Chỉ lấy contest KHÔNG thuộc classroom nào
+      };
 
     if (search) {
       where.OR = [
@@ -159,11 +159,11 @@ export class ContestsService {
     const where: Prisma.ContestWhereInput = {
       ...(search
         ? {
-            OR: [
-              { title: { contains: search, mode: 'insensitive' as const } },
-              { description: { contains: search, mode: 'insensitive' as const } },
-            ],
-          }
+          OR: [
+            { title: { contains: search, mode: 'insensitive' as const } },
+            { description: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
         : {}),
     };
 
@@ -202,7 +202,7 @@ export class ContestsService {
   ) {
     const contest = await this.prisma.contest.findUnique({
       where: { id: contestId },
-      include: { 
+      include: {
         problems: true,
         assignments: {
           include: { classRoom: { select: { isActive: true } } }
@@ -300,7 +300,7 @@ export class ContestsService {
   async delete(contestId: string, userId: string, isAdmin = false) {
     const contest = await this.prisma.contest.findUnique({
       where: { id: contestId },
-      select: { 
+      select: {
         createdById: true,
         assignments: {
           include: { classRoom: { select: { isActive: true } } }
@@ -357,11 +357,11 @@ export class ContestsService {
 
     // Fetch thông tin user cho những người nộp bài nhưng không phải participant
     const missingUserIds = submissionUserIds.filter(id => !participantUserIds.includes(id));
-    const missingUsers = missingUserIds.length > 0 
+    const missingUsers = missingUserIds.length > 0
       ? await this.prisma.user.findMany({
-          where: { id: { in: missingUserIds } },
-          select: { id: true, name: true, image: true }
-        })
+        where: { id: { in: missingUserIds } },
+        select: { id: true, name: true, image: true }
+      })
       : [];
 
     const userMap = new Map<string, { name: string; image: string | null }>();
