@@ -34,7 +34,8 @@ export class VerifyTestcasesWithGoldenDto {
   goldenSolutionId?: string;
 
   @ApiPropertyOptional({
-    description: 'Mã Python golden (stdin/stdout). ADMIN hoặc chủ đề khi có problemId.',
+    description:
+      'Mã golden (stdin/stdout). ADMIN hoặc chủ đề khi có problemId. Khi dùng golden trong DB, worker lấy ngôn ngữ từ bản ghi GoldenSolution.',
   })
   @IsOptional()
   @IsString()
@@ -52,7 +53,11 @@ export class VerifyTestcasesWithGoldenDto {
   @IsBoolean()
   usePersistedTestCases?: boolean;
 
-  @ApiPropertyOptional({ default: 'python' })
+  @ApiPropertyOptional({
+    default: 'python',
+    description:
+      'Áp dụng khi gửi goldenSourceCode: python | javascript | java | cpp | c | go | rust (alias: JS, C++, …). Golden trong DB: bỏ qua, dùng language đã lưu.',
+  })
   @IsOptional()
   @IsString()
   language?: string;

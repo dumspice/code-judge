@@ -746,6 +746,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         previewCases={previewMappedCases}
         onApplyReplace={() => applyAiTestCases('replace')}
         onApplyAppend={() => applyAiTestCases('append')}
+        problemId={editId ?? undefined}
         locale="en"
       />
     </div>

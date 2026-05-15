@@ -48,9 +48,9 @@ export class AiTestcaseController {
 
   @ApiOperation({
     summary:
-      'Chạy golden solution (Python) trên test case AI draft hoặc test đã lưu DB — so khớp stdout với expectedOutput',
+      'Chạy golden solution (đa ngôn ngữ) trên test case AI draft hoặc test đã lưu DB — so khớp stdout với expectedOutput',
     description:
-      'Cần JWT. `goldenSourceCode` (Python): ADMIN hoặc chủ đề nếu có `problemId`. Hoặc bỏ `goldenSourceCode` và dùng golden đã lưu cho `problemId`.',
+      'Cần JWT. Hỗ trợ python, javascript, java, cpp, c, go, rust (khi goldenSourceCode). Golden trong DB: dùng trường language của bản ghi. Worker không Lambda: chỉ chạy local Python; các ngôn ngữ khác cần Lambda judge.',
   })
   @Post('verify-testcases-with-golden')
   async verifyTestcasesWithGolden(

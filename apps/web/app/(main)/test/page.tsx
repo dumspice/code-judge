@@ -26,6 +26,7 @@ import { Loader2Icon } from 'lucide-react';
 import { getPublicCoreUrl } from '@/lib/public-config';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiFetch, getApiBaseUrl } from '@/services/api-client';
+import { readSourceFileAsUtf8Text } from '@/lib/read-source-file';
 
 function coreApiHeaders(jsonBody = false): HeadersInit {
   const headers: Record<string, string> = {};
@@ -133,6 +134,16 @@ type VerifyGoldenResult = {
   }>;
 };
 
+const GOLDEN_VERIFY_LANG_OPTIONS = [
+  { value: 'python', label: 'Python' },
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'java', label: 'Java' },
+  { value: 'cpp', label: 'C++' },
+  { value: 'c', label: 'C' },
+  { value: 'go', label: 'Go' },
+  { value: 'rust', label: 'Rust' },
+] as const;
+
 function AiGoldenVerifyTab() {
   const coreUrl = useMemo(() => getApiBaseUrl().replace(/\/+$/, ''), []);
 
@@ -143,6 +154,8 @@ function AiGoldenVerifyTab() {
   const [ioSpec, setIoSpec] = useState('Input: một dòng "a b". Output: một số nguyên.');
   const [provider, setProvider] = useState<'openai' | 'google'>('google');
   const [goldenCode, setGoldenCode] = useState('a, b = map(int, input().split())\nprint(a + b)');
+  const [goldenLanguage, setGoldenLanguage] =
+    useState<(typeof GOLDEN_VERIFY_LANG_OPTIONS)[number]['value']>('python');
   const [problemIdOpt, setProblemIdOpt] = useState('');
 
   const [aiBusy, setAiBusy] = useState(false);
@@ -214,7 +227,7 @@ function AiGoldenVerifyTab() {
       return;
     }
     if (!goldenCode.trim()) {
-      setTabLog((s) => s + '\nNhập mã golden (Python).');
+      setTabLog((s) => s + '\nNhập mã golden hoặc tải file mã ở trên (stdin/stdout).');
       return;
     }
 
@@ -228,7 +241,7 @@ function AiGoldenVerifyTab() {
           input: c.input.trimEnd(),
           expectedOutput: c.expectedOutput.trimEnd(),
         })),
-        language: 'python',
+        language: goldenLanguage,
       };
       if (pid) body.problemId = pid;
 
@@ -239,7 +252,7 @@ function AiGoldenVerifyTab() {
       setVerifyResult(res);
       setTabLog(
         (s) =>
-          `${s}\nVerify: ${res.summary.passed}/${res.summary.total} đúng (golden: ${res.goldenSource}).`,
+          `${s}\nVerify (${goldenLanguage}): ${res.summary.passed}/${res.summary.total} đúng (golden: ${res.goldenSource}).`,
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -249,12 +262,26 @@ function AiGoldenVerifyTab() {
     }
   }
 
+  async function onGoldenCodeFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const text = await readSourceFileAsUtf8Text(file);
+      setGoldenCode(text);
+      setTabLog((s) => `${s}\nĐã nạp file: ${file.name} (${file.size} bytes).`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setTabLog((s) => `${s}\nLỗi đọc file: ${msg}`);
+    }
+  }
+
   return (
     <div className={cn('space-y-8')}>
       <p className={cn('text-sm text-muted-foreground')}>
         Luồng: <strong>Sinh testcase (AI)</strong> cần role <code className={cn('rounded bg-muted px-1')}>ADMIN</code>
         . Bước verify gọi API enqueue job — cần <strong>worker</strong> chạy (queue{' '}
-        <code className={cn('rounded bg-muted px-1')}>golden-verify</code>, Lambda hoặc Python trên máy worker). Core API:{' '}
+        <code className={cn('rounded bg-muted px-1')}>golden-verify</code>, Lambda cho Java/C++/JS/Go/Rust hoặc Python local trên worker). Core API:{' '}
         <code className={cn('rounded bg-muted px-1')}>{coreUrl}</code>
       </p>
 
@@ -392,12 +419,35 @@ function AiGoldenVerifyTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Golden solution (Python)</CardTitle>
+          <CardTitle>Golden solution</CardTitle>
           <CardDescription>
-            Mã đọc stdin / ghi stdout. Nếu bạn không phải ADMIN, điền <strong>problemId</strong> của đề bạn tạo.
+            Mã đọc stdin / ghi stdout theo ngôn ngữ đã chọn. Python có thể chạy local; các ngôn ngữ khác cần Lambda.
+            Nếu bạn không phải ADMIN, điền <strong>problemId</strong> của đề bạn tạo.
           </CardDescription>
         </CardHeader>
         <CardContent className={cn('space-y-4')}>
+          <div className={cn('grid gap-2 md:max-w-xs')}>
+            <Label>Ngôn ngữ golden</Label>
+            <Select
+              value={goldenLanguage}
+              onValueChange={(v) => {
+                if (GOLDEN_VERIFY_LANG_OPTIONS.some((o) => o.value === v)) {
+                  setGoldenLanguage(v as (typeof GOLDEN_VERIFY_LANG_OPTIONS)[number]['value']);
+                }
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {GOLDEN_VERIFY_LANG_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className={cn('grid gap-2')}>
             <Label>problemId (tuỳ chọn)</Label>
             <Input
@@ -407,7 +457,19 @@ function AiGoldenVerifyTab() {
             />
           </div>
           <div className={cn('grid gap-2')}>
-            <Label>Source Python</Label>
+            <Label>Tải file mã (tuỳ chọn)</Label>
+            <p className={cn('text-xs text-muted-foreground')}>
+              File nguồn UTF-8 (ví dụ .py, .java) — nội dung điền vào ô bên dưới; tối đa ~512KB.
+            </p>
+            <Input
+              type="file"
+              accept=".py,.js,.mjs,.ts,.tsx,.jsx,.java,.cpp,.cc,.cxx,.c,.h,.go,.rs,.kt,.cs,text/plain,application/octet-stream"
+              className={cn('max-w-md cursor-pointer text-sm')}
+              onChange={onGoldenCodeFile}
+            />
+          </div>
+          <div className={cn('grid gap-2')}>
+            <Label>Source ({goldenLanguage})</Label>
             <Textarea
               value={goldenCode}
               onChange={(e) => setGoldenCode(e.target.value)}
@@ -444,8 +506,19 @@ function AiGoldenVerifyTab() {
                   <span className={cn('font-medium')}>Case {r.index + 1}</span>
                   <Badge variant={r.passed ? 'secondary' : 'destructive'}>{r.verdict}</Badge>
                 </div>
-                {r.actualOutput !== undefined ? (
-                  <pre className={cn('mt-2 max-h-32 overflow-auto text-xs')}>{r.actualOutput}</pre>
+                {!r.passed && r.expectedOutput ? (
+                  <div className={cn('mt-2 space-y-1')}>
+                    <p className={cn('text-xs font-medium text-muted-foreground')}>Expected</p>
+                    <pre className={cn('max-h-24 overflow-auto text-xs font-mono text-muted-foreground')}>
+                      {r.expectedOutput}
+                    </pre>
+                  </div>
+                ) : null}
+                {r.actualOutput !== undefined && r.actualOutput !== '' ? (
+                  <div className={cn('mt-2 space-y-1')}>
+                    <p className={cn('text-xs font-medium text-muted-foreground')}>Actual (stdout)</p>
+                    <pre className={cn('max-h-32 overflow-auto text-xs font-mono')}>{r.actualOutput}</pre>
+                  </div>
                 ) : null}
                 {r.stderr ? (
                   <pre className={cn('mt-1 text-xs text-destructive')}>{r.stderr}</pre>

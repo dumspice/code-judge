@@ -808,6 +808,7 @@ export default function AdminProblemCreate() {
         previewCases={previewMappedCases}
         onApplyReplace={() => applyAiTestCases('replace')}
         onApplyAppend={() => applyAiTestCases('append')}
+        problemId={editId ?? undefined}
         locale="vi"
       />
     </div>

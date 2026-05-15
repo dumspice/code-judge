@@ -69,14 +69,30 @@ function unwrapLambdaResult(payload: unknown): unknown {
   return result;
 }
 
-function normalizeLanguage(language: string): string {
-  const normalized = language?.trim().toUpperCase();
-  switch (normalized) {
-    case 'PYTHON':
-      return 'python';
-    default:
-      return language?.toLowerCase() ?? language;
-  }
+function normalizeGoldenVerifyLanguage(language: string | undefined): string {
+  const raw = (language ?? 'python').trim();
+  if (!raw) return 'python';
+  const compact = raw.toUpperCase().replace(/\s+/g, '');
+  const alias: Record<string, string> = {
+    PYTHON: 'python',
+    JS: 'javascript',
+    JAVASCRIPT: 'javascript',
+    JAVA: 'java',
+    CPP: 'cpp',
+    'C++': 'cpp',
+    C: 'c',
+    GO: 'go',
+    RUST: 'rust',
+  };
+  if (alias[compact]) return alias[compact];
+  const lower = raw.toLowerCase();
+  const allowed = new Set(['python', 'javascript', 'java', 'cpp', 'c', 'go', 'rust']);
+  if (allowed.has(lower)) return lower;
+  throw new Error(`golden-verify: ngôn ngữ không hỗ trợ: ${raw}`);
+}
+
+function normalizeLanguageForLambdaPayload(language: string): string {
+  return normalizeGoldenVerifyLanguage(language);
 }
 
 async function runWithLambda(
@@ -101,7 +117,7 @@ async function runWithLambda(
     userId: 'golden-verify',
     problemId: 'golden-verify',
     contestId: null,
-    language: normalizeLanguage(language),
+    language: normalizeLanguageForLambdaPayload(language),
     code,
     sourceCodeObjectKey: null,
     timeLimit: timeLimitMs,
@@ -309,22 +325,43 @@ export async function processGoldenVerifyJob(
 
   await job.updateProgress({ pct: 5, log: 'golden-verify start' });
 
-  const lang = (language ?? 'python').toLowerCase();
-  if (lang !== 'python') {
-    throw new Error('golden-verify: tạm chỉ hỗ trợ python');
+  let lang: string;
+  try {
+    lang = normalizeGoldenVerifyLanguage(language);
+  } catch (e) {
+    throw new Error(e instanceof Error ? e.message : 'golden-verify: language invalid');
   }
 
-  if (deps.lambdaClient && deps.lambdaFunctionName) {
-    log.info(`golden-verify job=${job.id} path=lambda cases=${testCases.length}`);
+  const useLambda = Boolean(deps.lambdaClient && deps.lambdaFunctionName);
+
+  if (useLambda) {
+    log.info(`golden-verify job=${job.id} path=lambda lang=${lang} cases=${testCases.length}`);
     await job.updateProgress({ pct: 20, log: 'golden-verify lambda' });
     return runWithLambda(
-      deps.lambdaClient,
-      deps.lambdaFunctionName,
+      deps.lambdaClient!,
+      deps.lambdaFunctionName!,
       goldenSourceCode,
-      language,
+      lang,
       testCases,
       timeLimitMs,
     );
+  }
+
+  if (lang !== 'python') {
+    const msg =
+      `Worker không có Lambda: chỉ chạy golden Python trên máy này. ` +
+      `Ngôn ngữ "${lang}" cần JUDGE_LAMBDA_FUNCTION_NAME (hoặc AWS_LAMBDA_FUNCTION_NAME) trùng hàm judge.`;
+    const results: GoldenVerifyWorkerResult['results'] = testCases.map((tc, i) => ({
+      index: i,
+      passed: false,
+      expectedOutput: tc.expectedOutput,
+      stderr: msg,
+      verdict: 'RUNTIME_ERROR' as const,
+    }));
+    return {
+      summary: { total: testCases.length, passed: 0, failed: testCases.length },
+      results,
+    };
   }
 
   log.info(`golden-verify job=${job.id} path=local-python cases=${testCases.length}`);
