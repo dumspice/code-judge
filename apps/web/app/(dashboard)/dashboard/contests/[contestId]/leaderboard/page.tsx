@@ -73,7 +73,7 @@ export default function LeaderboardPage({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-10 animate-in fade-in duration-700">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="bg-black text-white p-10 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl"></div>
         <div className="relative z-10 space-y-4">

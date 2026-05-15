@@ -73,7 +73,7 @@ export default function ContestDetailPage() {
   const endAt = contest.endAt ? new Date(contest.endAt).toLocaleString() : 'Chưa khai báo';
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between mb-10">
         <div className="space-y-3">
           <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">
@@ -86,7 +86,7 @@ export default function ContestDetailPage() {
         </div>
         <div className="flex flex-wrap gap-4">
           <Button variant="outline" size="lg" asChild className="border-2">
-            <Link href={`/contests/${contestId}/leaderboard`} className="flex items-center gap-2">
+            <Link href={`/dashboard/contests/${contestId}/leaderboard`} className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-blue-600" />
               Xem bảng xếp hạng
             </Link>
@@ -169,7 +169,7 @@ export default function ContestDetailPage() {
                         <div className="space-y-2">
                           <h3 className="text-lg font-semibold">
                             <Link
-                              href={`/problems/${item.problemId}?contestId=${contestId}`}
+                              href={`/problem/${item.problemId}?contestId=${contestId}`}
                               className="hover:text-primary"
                             >
                               {item.problem?.title ?? item.problemId}
