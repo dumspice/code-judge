@@ -98,8 +98,10 @@ export class ProblemsService {
 
       // Send email notification (async)
       const memberEmails = assignment.classRoom.enrollments
-        .map((e: { user: { email: string | null } }) => e.user.email)
+        .map((e: any) => e.user.email)
         .filter((email: string | null): email is string => !!email);
+
+      console.log(`[ProblemsService] Found ${memberEmails.length} members to notify for problem "${problem.title}" in class "${assignment.classRoom.name}"`);
 
       if (memberEmails.length > 0) {
         const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3001';
@@ -113,7 +115,7 @@ export class ProblemsService {
             dueAt: dto.dueAt ? new Date(dto.dueAt).toLocaleString() : undefined,
             url: `${frontendUrl}/dashboard/${classRoomId}/classwork`,
           })
-          .catch((err) => console.error('Failed to send assignment notification emails', err));
+          .catch((err) => console.error('[ProblemsService] Failed to send assignment notification emails:', err));
       }
 
       return problem;
