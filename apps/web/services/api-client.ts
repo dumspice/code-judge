@@ -100,14 +100,21 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
   const data = await res.json().catch(() => null);
 
   if (!res.ok) {
-    throw new ApiRequestError(
-      res.status,
-      {
-        code: res.status,
-        message: data?.message ?? res.statusText,
-      },
-      path,
-    );
+    const errorBody: ApiError = {
+      code: res.status,
+      message: data?.message ?? res.statusText,
+    };
+
+    // If account is locked, force redirect to locked page
+    if (typeof window !== 'undefined' && res.status === 401 && errorBody.message.includes('khoá')) {
+      if (window.location.pathname !== '/locked') {
+        window.location.href = '/locked';
+      }
+      // Return a promise that never resolves to stop execution of the caller
+      return new Promise(() => {});
+    }
+
+    throw new ApiRequestError(res.status, errorBody, path);
   }
 
   return (data?.result ?? data) as T;
