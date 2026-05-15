@@ -39,6 +39,7 @@ export type SubmissionResult = {
   runtimeMs?: number;
   memoryMb?: number;
   errorMessage?: string;
+  language?: string | null;
 };
 
 interface ProblemWorkspaceProps {
@@ -52,63 +53,6 @@ export default function ProblemWorkspace({ problem }: ProblemWorkspaceProps) {
   const [result, setResult] = useState<SubmissionResult | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const { socket } = useSocket();
-
-  useEffect(() => {
-    if (socket) {
-      const handleFinished = (data: any) => {
-        setIsRunning(false);
-        setResult({
-          status: data.status,
-          testsPassed: data.testsPassed,
-          testsTotal: data.testsTotal,
-          runtimeMs: data.runtimeMs,
-          memoryMb: data.memoryMb,
-        });
-      };
-
-      const handleFailed = (data: any) => {
-        setIsRunning(false);
-        setResult({
-          status: 'Error',
-          testsPassed: 0,
-          testsTotal: 0,
-          errorMessage: data.error,
-        });
-      };
-
-      socket.on('submission:finished', handleFinished);
-      socket.on('submission:failed', handleFailed);
-
-      return () => {
-        socket.off('submission:finished', handleFinished);
-        socket.off('submission:failed', handleFailed);
-      };
-    }
-  }, [socket]);
-  const [activeTab, setActiveTab] = useState<'description' | 'submissions'>('description');
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const socketRef = useRef<Socket | null>(null);
-
-  // Initialize code from localStorage or default
-  useEffect(() => {
-    const saved = localStorage.getItem(`code-${problem.id}`);
-    if (saved) {
-      setCode(saved);
-    } else {
-      const lang = problem.supportedLanguages?.[0]?.toLowerCase();
-      if (lang === 'python') setCode('# Write your code here\n');
-      else if (lang === 'javascript' || lang === 'typescript') setCode('// Write your code here\n');
-      else if (lang === 'cpp') setCode('#include <iostream>\nusing namespace std;\n\nint main() {\n  return 0;\n}\n');
-      else setCode('');
-    }
-  }, [problem.id, problem.supportedLanguages]);
-
-  // Save code to localStorage
-  useEffect(() => {
-    if (code) {
-      localStorage.setItem(`code-${problem.id}`, code);
-    }
-  }, [code, problem.id]);
 
   const loadSubmissions = useCallback(async () => {
     if (!user || !problem.id) return;
@@ -124,41 +68,78 @@ export default function ProblemWorkspace({ problem }: ProblemWorkspaceProps) {
     loadSubmissions();
   }, [loadSubmissions]);
 
-  // WebSocket Setup
   useEffect(() => {
-    if (!user) return;
+    if (socket) {
+      const handleFinished = (data: any) => {
+        setIsRunning(false);
+        setResult({
+          status: data.status,
+          testsPassed: data.testsPassed ?? 0,
+          testsTotal: data.testsTotal ?? 0,
+          runtimeMs: data.runtimeMs,
+          memoryMb: data.memoryMb,
+          errorMessage: data.error,
+          language: data.language,
+        });
+        loadSubmissions();
+        
+        if (data.status === 'Accepted') {
+          toast.success('Accepted!', { description: `All ${data.testsTotal} test cases passed.` });
+        } else {
+          toast.error(data.status, { description: data.error || 'Some test cases failed.' });
+        }
+      };
 
-    const socketInstance = io(process.env.NEXT_PUBLIC_CORE_URL || 'http://localhost:3000', {
-      query: { userId: user.id },
-    });
+      const handleFailed = (data: any) => {
+        setIsRunning(false);
+        setResult({
+          status: 'Error',
+          testsPassed: data.testsPassed ?? 0,
+          testsTotal: data.testsTotal ?? 0,
+          errorMessage: data.error || 'Judging failed',
+          language: data.language,
+        });
+        loadSubmissions();
+        toast.error('Error', { description: data.error || 'Judging failed' });
+      };
 
-    socketRef.current = socketInstance;
+      socket.on('submission:finished', handleFinished);
+      socket.on('submission:failed', handleFailed);
 
-    socketInstance.on('submission:finished', (data) => {
-      // Check if this submission belongs to the current problem
-      // Note: Backend should ideally send problemId in the payload
-      setIsRunning(false);
-      setResult({
-        status: data.status,
-        testsPassed: data.testsPassed || 0,
-        testsTotal: data.testsTotal || 0,
-        runtimeMs: data.runtimeMs,
-        memoryMb: data.memoryMb,
-        errorMessage: data.error,
-      });
-      loadSubmissions();
-      
-      if (data.status === 'Accepted') {
-        toast.success('Accepted!', { description: `All ${data.testsTotal} test cases passed.` });
-      } else {
-        toast.error(data.status, { description: data.error || 'Some test cases failed.' });
-      }
-    });
+      return () => {
+        socket.off('submission:finished', handleFinished);
+        socket.off('submission:failed', handleFailed);
+      };
+    }
+  }, [socket, loadSubmissions]);
 
-    return () => {
-      socketInstance.disconnect();
-    };
-  }, [user, problem.id, loadSubmissions]);
+
+  // Initialize code from localStorage or default
+  useEffect(() => {
+    const saved = localStorage.getItem(`code-${problem.id}`);
+    if (saved) {
+      setCode(saved);
+    } else {
+      const lang = problem.supportedLanguages?.[0]?.toLowerCase();
+      if (lang === 'python') setCode('# Write your code here\n');
+      else if (lang === 'javascript' || lang === 'typescript') setCode('// Write your code here\n');
+      else if (lang === 'cpp') setCode('#include <iostream>\nusing namespace std;\n\nint main() {\n  return 0;\n}\n');
+      else if (lang === 'go' || lang === 'golang') setCode('package main\nimport "fmt"\n\nfunc main() {\n  \n}\n');
+      else if (lang === 'rust' || lang === 'rs') setCode('fn main() {\n    \n}\n');
+      else setCode('');
+    }
+  }, [problem.id, problem.supportedLanguages]);
+
+  // Save code to localStorage
+  useEffect(() => {
+    if (code) {
+      localStorage.setItem(`code-${problem.id}`, code);
+    }
+  }, [code, problem.id]);
+
+  const [activeTab, setActiveTab] = useState<'description' | 'submissions'>('description');
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+
 
   const handleSubmit = async (language: string) => {
     if (!user) {
@@ -181,6 +162,8 @@ export default function ProblemWorkspace({ problem }: ProblemWorkspaceProps) {
                   optionLang === 'JAVASCRIPT' ? 'js' : 
                   optionLang === 'TYPESCRIPT' ? 'ts' :
                   optionLang === 'JAVA' ? 'java' :
+                  optionLang === 'GO' ? 'go' :
+                  optionLang === 'RUST' ? 'rs' :
                   optionLang === 'CPP' ? 'cpp' : 'txt';
       
       const presign = await storageApi.presignUpload({

@@ -1,5 +1,6 @@
 // @ts-ignore
 import './globals.css';
+import 'katex/dist/katex.min.css';
 import { Geist } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { Metadata } from 'next';

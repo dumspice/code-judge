@@ -3,6 +3,8 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { Clock, HardDrive, BookOpen, History, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import { Problem } from '@/services/problem.apis';
 import { Submission } from '@/services/submission.apis';
@@ -77,8 +79,18 @@ export default function ProblemDescription({
             </div>
 
             <div className={cn("prose prose-blue max-w-none mb-12", isDarkMode && "prose-invert")}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {problem.statementMd || problem.description || "No description provided."}
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+              >
+                {(problem.statementMd || problem.description || "No description provided.")
+                  .replace(/Input:/g, '\n### Input\n')
+                  .replace(/Output:/g, '\n### Output\n')
+                  .replace(/Constraints:/g, '\n### Constraints\n')
+                  .replace(/Explanation:/g, '\n### Explanation\n')
+                  .replace(/Ví dụ/g, '\n### Ví dụ\n')
+                  .replace(/Ghi chú/g, '\n### Ghi chú\n')
+                }
               </ReactMarkdown>
             </div>
 
@@ -141,7 +153,7 @@ export default function ProblemDescription({
                       </div>
                       <div className="flex flex-col text-right">
                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Language</span>
-                        <span className="text-sm font-mono text-blue-400">{(sub as any).language || 'Unknown'}</span>
+                        <span className="text-sm font-mono text-blue-400">{sub.language || 'Unknown'}</span>
                       </div>
                     </div>
                   </div>

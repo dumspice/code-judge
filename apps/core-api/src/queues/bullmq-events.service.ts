@@ -43,7 +43,18 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
 
       const submission = await this.prisma.submission.findUnique({
         where: { id: jobId },
-        select: { userId: true, status: true, score: true, runtimeMs: true, memoryMb: true, logs: true, contestId: true },
+        select: {
+          userId: true,
+          status: true,
+          score: true,
+          runtimeMs: true,
+          memoryMb: true,
+          logs: true,
+          contestId: true,
+          testsPassed: true,
+          testsTotal: true,
+          language: true,
+        },
       });
       if (!submission) return;
 
@@ -54,6 +65,9 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
         runtimeMs: submission.runtimeMs ?? null,
         memoryMb: submission.memoryMb ?? null,
         contestId: submission.contestId ?? null,
+        testsPassed: submission.testsPassed ?? 0,
+        testsTotal: submission.testsTotal ?? 0,
+        language: submission.language ?? null,
       };
 
       // Emit to private room for the submitter
@@ -71,7 +85,15 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
 
       const submission = await this.prisma.submission.findUnique({
         where: { id: jobId },
-        select: { userId: true, status: true, error: true, contestId: true },
+        select: {
+          userId: true,
+          status: true,
+          error: true,
+          contestId: true,
+          testsPassed: true,
+          testsTotal: true,
+          language: true,
+        },
       });
       if (!submission) return;
 
@@ -80,6 +102,9 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
         status: submission.status,
         error: submission.error ?? failedReason ?? 'Unknown error',
         contestId: submission.contestId ?? null,
+        testsPassed: submission.testsPassed ?? 0,
+        testsTotal: submission.testsTotal ?? 0,
+        language: submission.language ?? null,
       };
 
       this.realtime.emitToUser(submission.userId, 'submission:failed', payload);

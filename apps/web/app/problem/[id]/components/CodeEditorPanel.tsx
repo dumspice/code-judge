@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { Play, Send, Maximize2, Moon, Sun, Settings, ChevronDown } from 'lucide-react';
+import Link from 'next/link';
+import { Play, Send, Maximize2, Moon, Sun, Settings, ChevronDown, LayoutDashboard } from 'lucide-react';
 import { Problem } from '@/services/problem.apis';
 import { cn } from '@/lib/utils';
 
@@ -25,13 +26,16 @@ export default function CodeEditorPanel({
   const [language, setLanguage] = useState('PYTHON');
   const [isEditorReady, setIsEditorReady] = useState(false);
 
-  const supportedLanguages = problem.supportedLanguages || ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'];
+  const supportedLanguages = useMemo(() => Array.from(new Set([
+    ...(problem.supportedLanguages || []),
+    'PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'
+  ])), [problem.supportedLanguages]);
 
   useEffect(() => {
     if (supportedLanguages.length > 0) {
       setLanguage(supportedLanguages[0]);
     }
-  }, [supportedLanguages]);
+  }, [problem.id]); // Only reset when switching to a different problem
 
   const handleEditorWillMount = (monacoInstance: any) => {
     monacoInstance.editor.defineTheme('premium-dark', {
@@ -59,6 +63,13 @@ export default function CodeEditorPanel({
       {/* Editor Header */}
       <div className="flex items-center justify-between border-b border-border/50 bg-muted/20 px-6 py-3">
         <div className="flex items-center gap-4">
+          <Link href="/dashboard" className="flex items-center gap-2 rounded-lg border border-border/50 bg-background px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground transition-all hover:bg-muted hover:text-foreground">
+            <LayoutDashboard size={14} className="text-blue-500" />
+            Dashboard
+          </Link>
+
+          <div className="h-4 w-[1px] bg-border/50 mx-1" />
+
           <div className="relative group">
             <select
               value={language}

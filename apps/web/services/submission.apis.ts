@@ -17,6 +17,7 @@ export interface Submission {
   error: string | null;
   logs?: string | null;
   caseResults?: unknown;
+  language?: string | null;
   createdAt: string;
   updatedAt: string;
 }
