@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { getClassroomDetail } from '@/services/classroom.apis';
 import { getPublicCoreUrl } from '@/lib/public-config';
@@ -24,21 +25,26 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
   const cookieStore = await cookies();
   const cookieHeader = cookieStore.toString();
 
-  const contests = (
-    await contestsApi.findAll(
-      { limit: 10, classRoomId: id },
-      {
-        headers: {
-          Cookie: cookieHeader,
-        },
-      },
-    )
-  ).items;
+  let classroom;
+  let contests: Contest[] = [];
 
-  // Fetch classroom details
-  const classroom = await getClassroomDetail(id, {
-    headers: { Cookie: cookieHeader },
-  });
+  try {
+    const [classroomRes, contestsRes] = await Promise.all([
+      getClassroomDetail(id, { headers: { Cookie: cookieHeader } }),
+      contestsApi.findAll(
+        { limit: 10, classRoomId: id },
+        { headers: { Cookie: cookieHeader } },
+      ),
+    ]);
+    classroom = classroomRes;
+    contests = contestsRes.items;
+  } catch (error: any) {
+    // If not in class or class not found, redirect to dashboard
+    if (error.status === 403 || error.status === 404) {
+      redirect('/dashboard');
+    }
+    throw error;
+  }
 
   const sortedAssignments = [...(classroom.assignments || [])].sort(
     (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
