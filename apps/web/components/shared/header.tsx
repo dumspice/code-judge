@@ -24,11 +24,11 @@ export default function Header() {
 
         {/* Menu */}
         <div className="hidden md:flex items-center gap-8">
-          <Link href="/problems" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1.5 group">
+          <Link href="/dashboard/problems" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1.5 group">
             <span className="w-1.5 h-1.5 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
             Problems
           </Link>
-          <Link href="/contests" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1.5 group">
+          <Link href="/dashboard/contests" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-1.5 group">
             <span className="w-1.5 h-1.5 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
             Contests
           </Link>

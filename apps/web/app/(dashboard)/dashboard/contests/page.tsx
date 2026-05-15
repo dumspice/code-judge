@@ -93,11 +93,11 @@ export default async function ContestsPage() {
               </div>
 
               <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex items-center justify-between">
-                <Link href={`/contests/${contest.id}`} className="text-sm font-bold text-black hover:underline">
+                <Link href={`/dashboard/contests/${contest.id}`} className="text-sm font-bold text-black hover:underline">
                   View Rules
                 </Link>
                 <Button asChild className="rounded-xl bg-black hover:bg-gray-800 text-white px-6 font-bold shadow-lg shadow-black/10 transition-transform hover:scale-105 active:scale-95">
-                  <Link href={`/contests/${contest.id}`}>
+                  <Link href={`/dashboard/contests/${contest.id}`}>
                     {contest.status === 'RUNNING' ? 'Join Now' : 'Details'}
                   </Link>
                 </Button>

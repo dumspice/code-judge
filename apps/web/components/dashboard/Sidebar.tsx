@@ -11,6 +11,7 @@ import {
   Settings,
   Archive,
   Library,
+  Trophy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { usePathname } from 'next/navigation';
@@ -23,6 +24,7 @@ const menuItems = [
   { icon: Home, label: 'Classroom', path: '/dashboard' },
   { icon: Calendar, label: 'Schedule', path: '/dashboard/schedule' },
   { icon: Library, label: 'Problems', path: '/dashboard/problems' },
+  { icon: Trophy, label: 'Contests', path: '/dashboard/contests' },
 ];
 
 const adminMenuItems = [{ icon: Settings, label: 'Admin Panel', path: '/dashboard/admin' }];

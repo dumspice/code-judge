@@ -86,7 +86,7 @@ export default function ContestDetailPage() {
         </div>
         <div className="flex flex-wrap gap-4">
           <Button variant="outline" size="lg" asChild className="border-2">
-            <Link href={`/contests/${contestId}/leaderboard`} className="flex items-center gap-2">
+            <Link href={`/dashboard/contests/${contestId}/leaderboard`} className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-blue-600" />
               View Leaderboard
             </Link>
@@ -167,7 +167,7 @@ export default function ContestDetailPage() {
                         <div className="space-y-2">
                           <h3 className="text-lg font-semibold">
                             <Link
-                              href={`/problems/${item.problemId}?contestId=${contestId}`}
+                              href={`/problem/${item.problemId}?contestId=${contestId}`}
                               className="hover:text-primary"
                             >
                               {item.problem?.title ?? item.problemId}
