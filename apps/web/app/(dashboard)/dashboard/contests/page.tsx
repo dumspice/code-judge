@@ -28,7 +28,7 @@ export default async function ContestsPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-12 animate-in fade-in duration-700">
+    <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-gray-100 pb-8">
         <div className="space-y-4">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-gray-900">

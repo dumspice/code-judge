@@ -73,7 +73,7 @@ export default function ContestDetailPage() {
   const endAt = contest.endAt ? new Date(contest.endAt).toLocaleString() : 'Chưa khai báo';
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+    <main className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between mb-10">
         <div className="space-y-3">
           <p className="text-sm uppercase tracking-[0.35em] text-muted-foreground">
