@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GOLDEN_VERIFY_QUEUE, GOLDEN_VERIFY_QUEUE_EVENTS } from '../queues/tokens';
 import { StorageService } from '../storage/storage.service';
 import { VerifyTestcasesWithGoldenDto } from './dto/verify-testcases-with-golden.dto';
+import { normalizeGoldenVerifyLanguage } from './golden-verify-language.util';
 
 export interface VerifyTestcasesWithGoldenResult {
   language: string;
@@ -45,11 +46,6 @@ export class AiGoldenVerifyService {
   ) {}
 
   async verify(dto: VerifyTestcasesWithGoldenDto, user: RequestUser): Promise<VerifyTestcasesWithGoldenResult> {
-    const lang = (dto.language ?? 'python').toLowerCase().trim();
-    if (lang !== 'python') {
-      throw new BadRequestException('Tạm thời chỉ hỗ trợ language=python cho verify golden');
-    }
-
     const usePersisted = dto.usePersistedTestCases === true;
     const draft = dto.testCases ?? [];
 
@@ -78,10 +74,18 @@ export class AiGoldenVerifyService {
     let goldenSource: 'inline' | 'database';
     let goldenSolutionId: string | undefined;
     let code: string;
+    let verifyLanguage: string;
 
     if (inlineGolden) {
       goldenSource = 'inline';
       code = inlineGolden;
+      try {
+        verifyLanguage = normalizeGoldenVerifyLanguage(dto.language);
+      } catch (e) {
+        throw new BadRequestException(
+          e instanceof Error ? e.message : 'Tham số language không hợp lệ cho verify golden',
+        );
+      }
     } else {
       goldenSource = 'database';
       const golden = dto.goldenSolutionId
@@ -112,6 +116,15 @@ export class AiGoldenVerifyService {
         throw new BadRequestException('Golden solution không có mã nguồn (file hoặc DB trống)');
       }
       code = loaded;
+      try {
+        verifyLanguage = normalizeGoldenVerifyLanguage(fallback.language);
+      } catch (e) {
+        throw new BadRequestException(
+          e instanceof Error
+            ? e.message
+            : 'Ngôn ngữ golden trong DB không hợp lệ — cập nhật bản ghi GoldenSolution.language',
+        );
+      }
     }
 
     let cases: Array<{ input: string; expectedOutput: string }>;
@@ -134,7 +147,7 @@ export class AiGoldenVerifyService {
       'verify',
       {
         goldenSourceCode: code,
-        language: lang,
+        language: verifyLanguage,
         testCases: cases,
         timeLimitMs: timeLimit,
       },
@@ -161,7 +174,7 @@ export class AiGoldenVerifyService {
     }
 
     return {
-      language: 'python',
+      language: verifyLanguage,
       goldenSource,
       goldenSolutionId,
       summary: workerPayload.summary,

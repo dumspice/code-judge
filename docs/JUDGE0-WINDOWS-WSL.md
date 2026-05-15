@@ -220,4 +220,4 @@ Docker Desktop dùng engine Linux (WSL2). Bạn có thể gọi `docker compose`
 
 
 
-## NOTICE: change run type of script file isolate_stub.sh and sudo_stub.sh from CSRF to LF
+## NOTICE: change run type of script file isolate_stub.sh and sudo_stub.sh from CRLF to LF
