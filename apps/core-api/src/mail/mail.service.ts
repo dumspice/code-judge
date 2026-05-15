@@ -45,9 +45,16 @@ export class MailerService {
   }) {
     if (params.to.length === 0) return;
 
+    const fromEmail = this.configService.get<string>('MAIL_ACCOUNT');
+    if (!fromEmail) {
+      console.warn('[MailerService] MAIL_ACCOUNT not configured, skipping assignment notification');
+      return;
+    }
+
     const html = assignmentNotificationTemplate(params);
     const typeLabel = params.type === 'problem' ? 'Assignment' : 'Contest';
-    const fromEmail = this.configService.get('MAIL_ACCOUNT');
+
+    console.log(`[MailerService] Sending ${typeLabel} notification to ${params.to.length} recipients via BCC`);
 
     await this.transporter.sendMail({
       from: `CodeJudge <${fromEmail}>`,
