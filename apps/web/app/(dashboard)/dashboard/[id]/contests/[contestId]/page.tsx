@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 export default function ContestDetailPage() {
   const params = useParams();
   const rawContestId = params?.contestId;
+  const rawClassId = params?.id;
+  const classId = Array.isArray(rawClassId) ? rawClassId[0] : rawClassId;
   const contestId = Array.isArray(rawContestId) ? rawContestId[0] : rawContestId;
 
   const [contest, setContest] = useState<Contest | null>(null);
@@ -99,10 +101,7 @@ export default function ContestDetailPage() {
         </div>
         <div className="flex flex-wrap gap-4">
           <Button variant="outline" size="lg" asChild className="border-2">
-            <Link
-              href={`/dashboard/contests/${contestId}/leaderboard`}
-              className="flex items-center gap-2"
-            >
+            <Link href={`/dashboard/${classId}/contests/${contestId}/leaderboard`} className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-blue-600" />
               View Leaderboard
             </Link>
