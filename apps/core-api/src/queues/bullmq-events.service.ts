@@ -54,9 +54,33 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
           testsPassed: true,
           testsTotal: true,
           language: true,
+          isDryRun: true,
+          caseResults: true,
         },
       });
       if (!submission) return;
+
+      let sanitizedCaseResults = null;
+      if (submission.caseResults) {
+        try {
+          const resultsObj = JSON.parse(JSON.stringify(submission.caseResults));
+          if (resultsObj.testCases && Array.isArray(resultsObj.testCases)) {
+            resultsObj.testCases = resultsObj.testCases.map((tc: any) => {
+              if (tc.isHidden) {
+                return {
+                  ...tc,
+                  output: '[Hidden Test Case]',
+                  error: tc.error ? '[Hidden Test Case]' : null,
+                };
+              }
+              return tc;
+            });
+          }
+          sanitizedCaseResults = resultsObj;
+        } catch (e) {
+          sanitizedCaseResults = submission.caseResults;
+        }
+      }
 
       const payload = {
         submissionId: jobId,
@@ -68,6 +92,8 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
         testsPassed: submission.testsPassed ?? 0,
         testsTotal: submission.testsTotal ?? 0,
         language: submission.language ?? null,
+        isDryRun: submission.isDryRun ?? false,
+        caseResults: sanitizedCaseResults,
       };
 
       // Emit to private room for the submitter
@@ -93,9 +119,33 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
           testsPassed: true,
           testsTotal: true,
           language: true,
+          isDryRun: true,
+          caseResults: true,
         },
       });
       if (!submission) return;
+
+      let sanitizedCaseResults = null;
+      if (submission.caseResults) {
+        try {
+          const resultsObj = JSON.parse(JSON.stringify(submission.caseResults));
+          if (resultsObj.testCases && Array.isArray(resultsObj.testCases)) {
+            resultsObj.testCases = resultsObj.testCases.map((tc: any) => {
+              if (tc.isHidden) {
+                return {
+                  ...tc,
+                  output: '[Hidden Test Case]',
+                  error: tc.error ? '[Hidden Test Case]' : null,
+                };
+              }
+              return tc;
+            });
+          }
+          sanitizedCaseResults = resultsObj;
+        } catch (e) {
+          sanitizedCaseResults = submission.caseResults;
+        }
+      }
 
       const payload = {
         submissionId: jobId,
@@ -105,6 +155,8 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
         testsPassed: submission.testsPassed ?? 0,
         testsTotal: submission.testsTotal ?? 0,
         language: submission.language ?? null,
+        isDryRun: submission.isDryRun ?? false,
+        caseResults: sanitizedCaseResults,
       };
 
       this.realtime.emitToUser(submission.userId, 'submission:failed', payload);
