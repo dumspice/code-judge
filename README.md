@@ -98,6 +98,13 @@ Mọi endpoint HTTP trả về (hoặc lỗi) cùng một **envelope**:
 - Mở: `http://localhost:3001`
 - Nhập `userId/problemId/mode`, bấm `Submit` và xem realtime logs.
 
+## Triển khai lên VPS (Ubuntu 24.04 LTS x64)
+1. Trên VPS: `./deploy/ubuntu-24.04-setup.sh` (Docker, UFW, swap tuỳ RAM).
+2. `cp .env.production.example .env.production` — sửa mật khẩu và URL.
+3. `./deploy/production-up.sh`
+- Stack: `docker-compose.production.yml` (Judge0 isolate thật trên Linux; dev Windows dùng `docker-compose.yml` + stub).
+- Hướng dẫn SSH/PM2 thay thế: [docs/DEPLOY-VPS.html](docs/DEPLOY-VPS.html).
+
 ## Tài liệu cấu hình & utils
 - Xem: [docs/CAU-HINH-VA-UTILS.md](docs/CAU-HINH-VA-UTILS.md) (ESLint/Prettier, `common/`, `lib/`, cách import).
 - Phần **JWT / envelope JSON** ở trên bổ sung cho Core API; có thể đọc kèm comment trong `apps/core-api/src/auth/` và `apps/core-api/src/common/`.
