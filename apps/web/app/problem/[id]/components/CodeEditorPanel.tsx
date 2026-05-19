@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Play, Send, Moon, Sun, Settings, ChevronDown, LayoutDashboard } from 'lucide-react';
 import { Problem } from '@/services/problem.apis';
+import { cn } from '@/lib/utils';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
