@@ -239,6 +239,11 @@ export class SubmissionsService {
     if (!classRoom) {
       return false;
     }
+
+    if (!classRoom.isActive) {
+      return false;
+    }
+
     if (classRoom.ownerId === userId) {
       return true;
     }

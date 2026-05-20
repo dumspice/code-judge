@@ -32,6 +32,10 @@ export default async function CreateProblemPage({ params }: { params: Promise<{ 
     redirect(`/dashboard/${id}/classwork`);
   }
 
+  if (classroom.isActive === false) {
+    redirect(`/dashboard/${id}/classwork`);
+  }
+
   return (
     <div className="py-8">
       <ClassProblemCreate classId={id} />

@@ -6,6 +6,7 @@ export interface Classroom {
   description?: string | null;
   academicYear?: string | null;
   classCode: string;
+  /** false when the class is archived */
   isActive: boolean;
   owner: {
     id: string;
