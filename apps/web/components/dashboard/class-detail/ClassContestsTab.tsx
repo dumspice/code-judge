@@ -44,6 +44,7 @@ import {
 import { format } from 'date-fns';
 import { Contest, contestsApi, CreateContestDto, UpdateContestDto } from '@/services/contest.apis';
 import { Problem, problemsApi } from '@/services/problem.apis';
+import { dateTimeLocalToUtcIso, utcIsoToDateTimeLocal } from '@/lib/utils';
 import { useDebounce } from '@/hooks/use-debounce';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -174,6 +175,8 @@ export default function ClassContestsTab({
       const payload = {
         ...formData,
         classRoomId: classId,
+        startAt: formData.startAt ? dateTimeLocalToUtcIso(formData.startAt) : undefined,
+        endAt: formData.endAt ? dateTimeLocalToUtcIso(formData.endAt) : undefined,
       };
 
       if (editingContestId) {
@@ -202,8 +205,8 @@ export default function ClassContestsTab({
       setFormData({
         title: data.title,
         description: data.description ?? '',
-        startAt: data.startAt.slice(0, 16),
-        endAt: data.endAt.slice(0, 16),
+        startAt: utcIsoToDateTimeLocal(data.startAt),
+        endAt: utcIsoToDateTimeLocal(data.endAt),
         testFeedbackPolicy: data.testFeedbackPolicy,
         maxSubmissionsPerProblem: data.maxSubmissionsPerProblem ?? undefined,
         password: '',
