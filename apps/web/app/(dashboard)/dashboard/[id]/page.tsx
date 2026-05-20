@@ -48,6 +48,7 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
   }
 
   const isOwner = classroom.ownerId === user?.id;
+  const canManage = isOwner && classroom.isActive !== false;
 
   const sortedAssignments = [...(classroom.assignments || [])]
     .filter((assignment) => {
@@ -110,7 +111,7 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
         {/* Right Column (Feed) */}
         <div className="flex-1 w-full space-y-4">
           {/* Announce something to your class box */}
-          {classroom.ownerId === user?.id && (
+          {canManage && (
             <Link
               href={`/dashboard/${id}/contests`}
               className="cursor-pointer bg-white border border-gray-200 rounded-lg p-4 shadow-sm flex items-center gap-4 hover:bg-gray-50 transition-colors"

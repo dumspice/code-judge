@@ -52,9 +52,11 @@ import Link from 'next/link';
 export default function ClassContestsTab({
   classId,
   isOwner,
+  canManage,
 }: {
   classId: string;
   isOwner: boolean;
+  canManage: boolean;
 }) {
   const [contests, setContests] = useState<Contest[]>([]);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -333,7 +335,7 @@ export default function ClassContestsTab({
               : 'View contests available for your class.'}
           </p>
         </div>
-        {isOwner && (
+        {canManage && (
           <Button
             onClick={handleShowCreate}
             className="cursor-pointer bg-black hover:bg-gray-800 text-white shadow-lg transition-all hover:scale-105 active:scale-95"
@@ -697,7 +699,7 @@ export default function ClassContestsTab({
                       </div>
                     </TableCell>
                     <TableCell className="py-4 text-right pr-6">
-                      {isOwner ? (
+                      {canManage ? (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
