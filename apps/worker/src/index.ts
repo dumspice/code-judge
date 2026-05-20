@@ -16,6 +16,7 @@ import path from 'path';
 import { execa } from 'execa';
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
+import { parseJudge0MemoryMb, parseJudge0RuntimeMs } from './lib/judge0-metrics';
 
 const log = createWorkerLogger('worker');
 
@@ -291,13 +292,18 @@ async function processSubmission(job: any) {
         const encodedInput = Buffer.from(testCase.input || '').toString('base64');
         const encodedExpected = Buffer.from(testCase.expectedOutput || '').toString('base64');
 
+        const cpuTimeLimitSec = problem.timeLimitMs / 1000;
+        const wallTimeLimitSec = Math.max(cpuTimeLimitSec + 2, 5);
+
         // 1. Submit
         const submitResponse = await axios.post(`${judge0Url}/submissions?base64_encoded=true`, {
           source_code: encodedCode,
           language_id: languageId,
           stdin: encodedInput,
           expected_output: encodedExpected,
-          cpu_time_limit: problem.timeLimitMs / 1000,
+          cpu_time_limit: cpuTimeLimitSec,
+          wall_time_limit: wallTimeLimitSec,
+          cpu_extra_time: 0.5,
           memory_limit: problem.memoryLimitMb * 1024,
         }, { timeout: 10000 });
 
@@ -323,16 +329,14 @@ async function processSubmission(job: any) {
         const stderr = result.stderr ? Buffer.from(result.stderr, 'base64').toString('utf-8') : '';
         const compileOut = result.compile_output ? Buffer.from(result.compile_output, 'base64').toString('utf-8') : '';
         
-        const runtimeMs = Math.round((result.time || 0) * 1000);
-        const memoryMb = Math.round((result.memory || 0) / 1024);
+        const runtimeMs = parseJudge0RuntimeMs(result, cpuTimeLimitSec);
+        const memoryMb = parseJudge0MemoryMb(result);
         maxTime = Math.max(maxTime, runtimeMs);
         maxMemory = Math.max(maxMemory, memoryMb);
 
         const normalizedActual = normalizeOutput(stdout);
         const normalizedExpected = normalizeOutput(testCase.expectedOutput || '');
         const isMatch = normalizedActual === normalizedExpected;
-
-        console.log('result', result)
 
         let caseStatus: string = 'Wrong';
         const sId = result.status?.id;
