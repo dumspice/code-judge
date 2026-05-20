@@ -198,7 +198,7 @@ async function processSubmission(job: any) {
     throw new Error(`Problem not found: ${existingSubmission.problemId}`);
   }
 
-  let testCasesToRun = problem.testCases;
+  const testCasesToRun = problem.testCases;
 
   await prisma.submission.update({
     where: { id: submissionId },
@@ -262,7 +262,7 @@ async function processSubmission(job: any) {
     let maxMemory = 0;
     let combinedLogs = '';
     let finalStatus: SubmissionStatus = SubmissionStatus.Accepted;
-    let stopEarly = false;
+    const stopEarly = false;
 
     const languageId = getJudge0LanguageId(existingSubmission.language as string);
     job.updateProgress({ pct: 20, log: `Judging with Judge0 (ID: ${languageId})...` });
