@@ -25,9 +25,15 @@ async function bootstrap() {
   const accessLogPath = path.join(logsDir, `${day}.log`);
   const accessLogStream = createWriteStream(accessLogPath, { flags: 'a' });
 
-  // Cho phép frontend (Next.js) gọi API và Socket.io từ origin khác trong dev.
+  // Cho phép frontend gọi API / Socket.io. `FRONTEND_URL` phải **khớp** URL trên thanh địa chỉ
+  // (vd. nginx :80 → http://localhost, không được để http://localhost:3000).
+  // Nhiều origin (local): FRONTEND_URL=http://localhost,http://localhost:3000
+  const frontends = (process.env.FRONTEND_URL ?? 'http://localhost:3001')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
   app.enableCors({
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:3001',
+    origin: frontends.length === 1 ? frontends[0] : frontends,
     credentials: true,
   });
 
