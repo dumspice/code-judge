@@ -792,7 +792,7 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
               isSidebarOpen={isSidebarOpen}
               setIsSidebarOpen={handleToggleSidebar}
             />
-            <div className="flex flex-1 flex-col overflow-hidden border-l border-border/50">
+            <div className="flex-1 min-w-0 flex flex-col overflow-hidden border-l border-border/50">
               <CodeEditorPanel
                 problem={problem}
                 code={code}
