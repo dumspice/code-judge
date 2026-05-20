@@ -291,6 +291,8 @@ async function processSubmission(job: any) {
         const encodedInput = Buffer.from(testCase.input || '').toString('base64');
         const encodedExpected = Buffer.from(testCase.expectedOutput || '').toString('base64');
 
+        console.log('problem', problem)
+
         // 1. Submit
         const submitResponse = await axios.post(`${judge0Url}/submissions?base64_encoded=true`, {
           source_code: encodedCode,
