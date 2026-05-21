@@ -611,52 +611,55 @@ export default function AdminProblemCreate() {
             </CardHeader>
             <CardContent className="p-6 space-y-6">
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Difficulty</Label>
-                  <Select
-                    value={formData.difficulty}
-                    onValueChange={(value: any) => setFormData({ ...formData, difficulty: value })}
-                  >
-                    <SelectTrigger className="rounded-xl border-gray-200 h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="EASY">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                          <span>Easy</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="MEDIUM">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                          <span>Medium</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="HARD">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                          <span>Hard</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Mode</Label>
-                  <Select
-                    value={formData.mode}
-                    onValueChange={(value: any) => setFormData({ ...formData, mode: value })}
-                  >
-                    <SelectTrigger className="rounded-xl border-gray-200 h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALGO">Algorithmic</SelectItem>
-                      <SelectItem value="PROJECT">Project Based</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Difficulty</Label>
+                    <Select
+                      value={formData.difficulty}
+                      onValueChange={(value: any) =>
+                        setFormData({ ...formData, difficulty: value })
+                      }
+                    >
+                      <SelectTrigger className="rounded-xl border-gray-200 h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EASY">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span>Easy</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="MEDIUM">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                            <span>Medium</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="HARD">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                            <span>Hard</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Mode</Label>
+                    <Select
+                      value={formData.mode}
+                      onValueChange={(value: any) => setFormData({ ...formData, mode: value })}
+                    >
+                      <SelectTrigger className="rounded-xl border-gray-200 h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALGO">Algorithmic</SelectItem>
+                        <SelectItem value="PROJECT">Project Based</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 pt-2">
