@@ -32,6 +32,8 @@ import { CreateProblemDto, problemsApi, UpdateProblemDto } from '@/services/prob
 import { toast } from 'sonner';
 import { ProblemTagPicker } from '@/components/problems/ProblemTagPicker';
 
+const SUPPORTED_LANGUAGES = ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'] as const;
+
 export default function AdminProblemEditor({ problemId }: { problemId?: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -46,7 +48,7 @@ export default function AdminProblemEditor({ problemId }: { problemId?: string }
     timeLimitMs: 1000,
     memoryLimitMb: 256,
     isPublished: true,
-    supportedLanguages: ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'],
+    supportedLanguages: Array.from(SUPPORTED_LANGUAGES),
     maxTestCases: 100,
     testCases: [],
     tagIds: [],
@@ -70,7 +72,7 @@ export default function AdminProblemEditor({ problemId }: { problemId?: string }
         timeLimitMs: data.timeLimitMs,
         memoryLimitMb: data.memoryLimitMb,
         isPublished: data.isPublished,
-        supportedLanguages: data.supportedLanguages ?? ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'],
+        supportedLanguages: data.supportedLanguages ?? Array.from(SUPPORTED_LANGUAGES),
         maxTestCases: data.maxTestCases,
         testCases: (data.testCases ?? []).map(
           ({ id, problemId, orderIndex, createdAt, updatedAt, ...rest }: any) => rest,
@@ -410,25 +412,11 @@ export default function AdminProblemEditor({ problemId }: { problemId?: string }
                     <Languages className="w-4 h-4 text-slate-400" /> Languages
                   </Label>
                   <div className="flex flex-wrap gap-1.5">
-                    {['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'].map((lang) => {
-                      const isSelected = formData.supportedLanguages?.includes(lang);
-                      return (
-                        <Badge
-                          key={lang}
-                          variant={isSelected ? 'default' : 'outline'}
-                          className={`cursor-pointer transition-all hover:scale-105 ${isSelected ? 'bg-indigo-600' : 'text-slate-400'}`}
-                          onClick={() => {
-                            const current = formData.supportedLanguages || [];
-                            const next = isSelected
-                              ? current.filter((l) => l !== lang)
-                              : [...current, lang];
-                            setFormData({ ...formData, supportedLanguages: next });
-                          }}
-                        >
-                          {lang}
-                        </Badge>
-                      );
-                    })}
+                    {SUPPORTED_LANGUAGES.map((lang) => (
+                      <Badge key={lang} variant="default" className="bg-black text-white">
+                        {lang}
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               </div>

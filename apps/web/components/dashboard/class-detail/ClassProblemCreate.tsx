@@ -44,6 +44,8 @@ import {
   mapAiDraftToFormTestCases,
 } from '@/components/problems/ai-testcase-draft.shared';
 
+const SUPPORTED_LANGUAGES = ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'] as const;
+
 export default function ClassProblemCreate({ classId }: { classId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,7 +64,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
     memoryLimitMb: 256,
     isPublished: true,
     visibility: 'PRIVATE',
-    supportedLanguages: ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'],
+    supportedLanguages: Array.from(SUPPORTED_LANGUAGES),
     maxTestCases: 100,
     testCases: [],
     dueAt: undefined,
@@ -95,7 +97,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         memoryLimitMb: data.memoryLimitMb,
         isPublished: data.isPublished,
         visibility: data.visibility,
-        supportedLanguages: data.supportedLanguages ?? ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'],
+        supportedLanguages: data.supportedLanguages ?? Array.from(SUPPORTED_LANGUAGES),
         maxTestCases: data.maxTestCases,
         testCases: (data.testCases ?? []).map(
           ({ id, problemId, orderIndex, createdAt, updatedAt, ...rest }: any) => rest,
@@ -145,7 +147,6 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         if (!tc.expectedOutput.trim()) newErrors[`testCase_${index}_output`] = 'Output is required';
       });
     }
-
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -662,8 +663,6 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                   </div>
                 </div>
 
-
-
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
                   <p className="text-xs text-blue-700">
                     <strong>ℹ️ Class Problems Are Private:</strong> Problems created in this class
@@ -676,7 +675,8 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                   <div className="space-y-0.5">
                     <Label className="text-sm font-semibold">For Contest Only</Label>
                     <p className="text-xs text-gray-500">
-                      Hide this problem from students in the normal assignments list. It will only be accessible within contests.
+                      Hide this problem from students in the normal assignments list. It will only
+                      be accessible within contests.
                     </p>
                   </div>
                   <Switch
@@ -705,25 +705,11 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                     <Languages className="w-4 h-4 text-gray-400" /> Supported Languages
                   </Label>
                   <div className="flex flex-wrap gap-1.5">
-                    {['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'].map((lang) => {
-                      const isSelected = formData.supportedLanguages?.includes(lang);
-                      return (
-                        <Badge
-                          key={lang}
-                          variant={isSelected ? 'default' : 'outline'}
-                          className={`cursor-pointer transition-all hover:scale-105 active:scale-95 ${isSelected ? 'bg-black' : 'text-gray-400'}`}
-                          onClick={() => {
-                            const current = formData.supportedLanguages || [];
-                            const next = isSelected
-                              ? current.filter((l) => l !== lang)
-                              : [...current, lang];
-                            setFormData({ ...formData, supportedLanguages: next });
-                          }}
-                        >
-                          {lang}
-                        </Badge>
-                      );
-                    })}
+                    {SUPPORTED_LANGUAGES.map((lang) => (
+                      <Badge key={lang} variant="default" className="bg-black text-white">
+                        {lang}
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               </div>
