@@ -75,6 +75,7 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
   const [problem, setProblem] = useState<Problem | null>(null);
   const [loadingProblem, setLoadingProblem] = useState(true);
   const [code, setCode] = useState('');
+  const [language, setLanguage] = useState<string>('PYTHON');
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<SubmissionResult | null>(null);
@@ -462,30 +463,33 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
     });
   }, [contestId, problem?.id, lastSubmissionId, fetchHint, hintState]);
 
-  // Initialize code from localStorage or default
+  // Synchronize language dropdown with problem default language when switching problems
   useEffect(() => {
     if (!problem) return;
-    const saved = localStorage.getItem(`code-${problem.id}`);
-    if (saved) {
-      setCode(saved);
+    const supported = problem.supportedLanguages || [];
+    if (supported.length > 0) {
+      setLanguage(supported[0].toUpperCase());
     } else {
-      const lang = problem.supportedLanguages?.[0]?.toLowerCase();
-      if (lang === 'python') setCode('# Write your code here\n');
-      else if (lang === 'javascript' || lang === 'typescript') setCode('// Write your code here\n');
-      else if (lang === 'cpp')
-        setCode('#include <iostream>\nusing namespace std;\n\nint main() {\n  return 0;\n}\n');
-      else if (lang === 'go' || lang === 'golang')
-        setCode('package main\nimport "fmt"\n\nfunc main() {\n  \n}\n');
-      else if (lang === 'rust' || lang === 'rs') setCode('fn main() {\n    \n}\n');
-      else setCode('');
+      setLanguage('PYTHON');
     }
   }, [problem?.id, problem?.supportedLanguages]);
 
-  // Save code to localStorage
+  // Load code from localStorage or default template when problem or language changes
+  useEffect(() => {
+    if (!problem) return;
+    const saved = localStorage.getItem(`code-${problem.id}-${language.toUpperCase()}`);
+    if (saved) {
+      setCode(saved);
+    } else {
+      setCode(getTemplateForLanguage(problem, language));
+    }
+  }, [problem?.id, language]);
+
+  // Save code to localStorage specific to problem and language
   useEffect(() => {
     if (!problem || !code) return;
-    localStorage.setItem(`code-${problem.id}`, code);
-  }, [code, problem?.id]);
+    localStorage.setItem(`code-${problem.id}-${language.toUpperCase()}`, code);
+  }, [code, problem?.id, language]);
 
   const [activeTab, setActiveTab] = useState<'description' | 'submissions'>('description');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -550,10 +554,12 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
         fileName: `solution.${ext}`,
       });
 
+      const wrappedCode = appendDriverCode(code, problem, optionLang);
+
       await fetch(presign.uploadUrl, {
         method: 'PUT',
         headers: { 'Content-Type': 'text/plain' },
-        body: code,
+        body: wrappedCode,
       });
 
       const created = await submissionsApi.create({
@@ -807,6 +813,8 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
                 problem={problem}
                 code={code}
                 setCode={setCode}
+                language={language}
+                setLanguage={setLanguage}
                 isRunning={isRunning || isSubmitting}
                 isSubmitting={isSubmitting}
                 onSubmit={handleSubmit}
@@ -844,4 +852,152 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
       )}
     </div>
   );
+}
+
+function getInputsCount(problem: any): number {
+  if (!problem || !problem.testCases || problem.testCases.length === 0) {
+    return 1;
+  }
+  const firstInput = problem.testCases[0].input || '';
+  const tokens = firstInput.trim().split(/\s+/).filter(Boolean);
+  return tokens.length;
+}
+
+function getParamNamesForProblem(problem: any): string[] {
+  if (!problem) return ['n'];
+  
+  const slug = (problem.slug || '').toLowerCase();
+  const title = (problem.title || '').toLowerCase();
+  
+  // 1. Array-based problems
+  if (slug.includes('array') || slug.includes('sum-array') || title.includes('dãy số') || title.includes('mảng')) {
+    return ['arr'];
+  }
+  
+  // 2. String-based problems
+  if (slug.includes('string') || slug.includes('palindrome') || title.includes('chuỗi') || title.includes('xâu')) {
+    return ['s'];
+  }
+  
+  // 3. Perfect square / single number checking
+  if (slug.includes('perfect-square') || title.includes('chính phương') || title.includes('nguyên dương')) {
+    return ['n'];
+  }
+  
+  // 4. Two numbers max / sum
+  if (slug.includes('two-numbers') || slug.includes('two') || slug.includes('double') || title.includes('hai số') || title.includes('2 số')) {
+    return ['a', 'b'];
+  }
+
+  // Fallback to inputs count
+  const inputsCount = getInputsCount(problem);
+  if (inputsCount === 1) {
+    return ['n'];
+  } else if (inputsCount === 2) {
+    return ['a', 'b'];
+  } else if (inputsCount === 3) {
+    return ['a', 'b', 'c'];
+  } else {
+    const args = [];
+    for (let i = 1; i <= inputsCount; i++) {
+      args.push(`arg${i}`);
+    }
+    return args;
+  }
+}
+
+function appendDriverCode(userCode: string, problem: any, language: string): string {
+  const lang = language.toUpperCase();
+  const params = getParamNamesForProblem(problem);
+  const inputsCount = params.length;
+
+  // If the user already wrote standard I/O code, do not append anything!
+  const codeLower = userCode.toLowerCase();
+  if (
+    codeLower.includes('int main') ||
+    codeLower.includes('input()') ||
+    codeLower.includes('sys.stdin') ||
+    codeLower.includes('fs.readfilesync') ||
+    codeLower.includes('bufferedreader') ||
+    codeLower.includes('fmt.scan')
+  ) {
+    return userCode;
+  }
+
+  if (lang === 'PYTHON') {
+    if (inputsCount === 1) {
+      return `${userCode}\n\nimport sys\nif __name__ == '__main__':\n    inputs = sys.stdin.read().split()\n    if inputs:\n        val = inputs[0]\n        try:\n            val = int(val)\n        except ValueError:\n            try:\n                val = float(val)\n            except ValueError:\n                pass\n        res = solve(val)\n        if res is not None:\n            print(res)\n`;
+    } else if (inputsCount === 2) {
+      return `${userCode}\n\nimport sys\nif __name__ == '__main__':\n    inputs = sys.stdin.read().split()\n    if len(inputs) >= 2:\n        args = []\n        for val in inputs[:2]:\n            try:\n                args.append(int(val))\n            except ValueError:\n                try:\n                    args.append(float(val))\n                except ValueError:\n                    args.append(val)\n        res = solve(*args)\n        if res is not None:\n            print(res)\n`;
+    } else {
+      return `${userCode}\n\nimport sys\nimport inspect\nif __name__ == '__main__':\n    inputs = sys.stdin.read().split()\n    if 'solve' in globals():\n        func = globals()['solve']\n        sig = inspect.signature(func)\n        num_args = len(sig.parameters)\n        args = []\n        for i in range(min(num_args, len(inputs))):\n            val = inputs[i]\n            try:\n                args.append(int(val))\n            except ValueError:\n                try:\n                    args.append(float(val))\n                except ValueError:\n                    args.append(val)\n        while len(args) < num_args:\n            args.append(None)\n        res = func(*args)\n        if res is not None:\n            print(res)\n`;
+    }
+  }
+
+  if (lang === 'CPP') {
+    if (inputsCount === 1) {
+      return `${userCode}\n\nint main() {\n    std::ios_base::sync_with_stdio(false);\n    std::cin.tie(NULL);\n    int n;\n    if (std::cin >> n) {\n        std::cout << solve(n) << "\\n";\n    }\n    return 0;\n}\n`;
+    } else if (inputsCount === 2) {
+      return `${userCode}\n\nint main() {\n    std::ios_base::sync_with_stdio(false);\n    std::cin.tie(NULL);\n    int a, b;\n    if (std::cin >> a >> b) {\n        std::cout << solve(a, b) << "\\n";\n    }\n    return 0;\n}\n`;
+    }
+  }
+
+  if (lang === 'JAVASCRIPT') {
+    if (inputsCount === 1) {
+      return `${userCode}\n\nconst fs = require('fs');\nconst input = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/).filter(Boolean);\nif (input.length >= 1) {\n    const n = parseInt(input[0]);\n    const res = solve(n);\n    if (res !== undefined) {\n        console.log(res);\n    }\n}\n`;
+    } else if (inputsCount === 2) {
+      return `${userCode}\n\nconst fs = require('fs');\nconst input = fs.readFileSync(0, 'utf-8').trim().split(/\\s+/).filter(Boolean);\nif (input.length >= 2) {\n    const a = parseInt(input[0]);\n    const b = parseInt(input[1]);\n    const res = solve(a, b);\n    if (res !== undefined) {\n        console.log(res);\n    }\n}\n`;
+    }
+  }
+
+  return userCode;
+}
+
+function getTemplateForLanguage(problem: any, language: string): string {
+  const lang = language.toUpperCase();
+
+  // 1. Prioritize templateCode from database
+  if (problem.templateCode && typeof problem.templateCode === 'object') {
+    const dbTemplate = (problem.templateCode as Record<string, string>)[lang];
+    if (dbTemplate) {
+      return dbTemplate;
+    }
+  }
+
+  const params = getParamNamesForProblem(problem);
+  const inputsCount = params.length;
+
+  if (lang === 'PYTHON') {
+    const paramsStr = params.map(p => `${p}: int`).join(', ');
+    const typedParams = params.map(p => `# Tham số ${p} là giá trị đầu vào tự động`).join('\n');
+    return `# Viết logic giải thuật của bạn trong hàm solve\n${typedParams}\n\ndef solve(${paramsStr}) -> any:\n    # Viết code ở đây\n    pass\n`;
+  }
+
+  if (lang === 'CPP') {
+    const paramsStr = params.map(p => `int ${p}`).join(', ');
+    const returnType = 'int'; 
+    return `// Viết logic giải thuật của bạn trong hàm solve\n#include <iostream>\n#include <string>\n#include <vector>\n#include <algorithm>\n\nusing namespace std;\n\n${returnType} solve(${paramsStr}) {\n    // Viết code ở đây\n    \n}\n`;
+  }
+
+  if (lang === 'JAVASCRIPT') {
+    const paramsStr = params.join(', ');
+    const jsdocs = params.map(p => ` * @param {number} ${p}`).join('\n');
+    return `/**\n${jsdocs}\n * @return {any}\n */\nfunction solve(${paramsStr}) {\n    // Viết code ở đây\n    \n}\n`;
+  }
+
+  // Fallbacks for other languages
+  if (lang === 'TYPESCRIPT') {
+    return `// Viết code của bạn ở đây\nimport * as fs from 'fs';\n\nfunction main() {\n    const input = fs.readFileSync(0, 'utf-8').trim().split('\\n');\n    if (!input || input.length === 0 || input[0] === '') return;\n    \n    // Logic của bạn\n}\n\nmain();\n`;
+  }
+  if (lang === 'JAVA') {
+    return `// Viết code của bạn ở đây\nimport java.io.*;\nimport java.util.*;\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        // String line = br.readLine();\n        \n        // Logic của bạn\n    }\n}\n`;
+  }
+  if (lang === 'GO') {
+    return `// Viết code của bạn ở đây\npackage main\n\nimport (\n\t"fmt"\n)\n\nfunc main() {\n\t// var n int\n\t// fmt.Scan(&n)\n}\n`;
+  }
+  if (lang === 'RUST') {
+    return `// Viết code của bạn ở đây\nuse std::io::{self, BufRead};\n\nfn main() {\n    let stdin = io::stdin();\n    for line in stdin.lock().lines() {\n        let line = line.unwrap();\n        // Logic của bạn\n    }\n}\n`;
+  }
+
+  return `// Write your code here\n`;
 }

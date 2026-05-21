@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
+const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 import {
   Select,
   SelectContent,
@@ -51,6 +54,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
 
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(!!editId);
+  const [activeTemplateLang, setActiveTemplateLang] = useState<string>('PYTHON');
 
   const [formData, setFormData] = useState<Omit<CreateProblemDto, 'classRoomId'>>({
     title: '',
@@ -67,6 +71,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
     testCases: [],
     dueAt: undefined,
     tagIds: [],
+    templateCode: {},
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -102,7 +107,11 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         ),
         dueAt: data.assignments?.find((a) => a.classRoomId === classId)?.dueAt ?? undefined,
         tagIds: (data.tags ?? []).map((t: any) => t.tag.id),
+        templateCode: data.templateCode ?? {},
       });
+      if (data.supportedLanguages && data.supportedLanguages.length > 0) {
+        setActiveTemplateLang(data.supportedLanguages[0]);
+      }
     } catch (error) {
       console.error('Failed to load problem:', error);
       const msg =
@@ -403,6 +412,106 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.statementMd}</p>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Starter Code Templates Card */}
+          <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="border-b">
+              <CardTitle className="text-xl">Starter Code Templates (Mẫu code khởi đầu)</CardTitle>
+              <CardDescription>
+                Provide custom template code for each language. If left empty, fallback boilerplates will be generated dynamically.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6">
+              {!formData.supportedLanguages || formData.supportedLanguages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 text-gray-400 text-sm">
+                  <Languages className="w-10 h-10 mb-2 opacity-25" />
+                  <p>Please select supported languages in Configuration first</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Language Tab List */}
+                  <div className="flex flex-wrap gap-2 border-b border-gray-100 pb-3">
+                    {formData.supportedLanguages.map((lang) => {
+                      const isActive = activeTemplateLang === lang;
+                      return (
+                        <button
+                          key={lang}
+                          type="button"
+                          onClick={() => setActiveTemplateLang(lang)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wider transition-all duration-200 ${
+                            isActive
+                              ? 'bg-black text-white shadow-sm'
+                              : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                          }`}
+                        >
+                          {lang}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Template Editor Box */}
+                  {activeTemplateLang && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <Label className="text-sm font-semibold flex items-center gap-1.5">
+                          Starter template for <span className="text-indigo-600 font-bold">{activeTemplateLang}</span>
+                        </Label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updatedTemplates = { ...(formData.templateCode || {}) };
+                            delete updatedTemplates[activeTemplateLang];
+                            setFormData({ ...formData, templateCode: updatedTemplates });
+                          }}
+                          className="text-xs text-rose-500 hover:underline"
+                        >
+                          Reset / Clear
+                        </button>
+                      </div>
+                      <div className="border border-slate-200 rounded-lg overflow-hidden h-[250px] shadow-sm">
+                        <MonacoEditor
+                          height="100%"
+                          language={
+                            activeTemplateLang === 'CPP'
+                              ? 'cpp'
+                              : activeTemplateLang === 'PYTHON'
+                              ? 'python'
+                              : activeTemplateLang === 'JAVASCRIPT'
+                              ? 'javascript'
+                              : activeTemplateLang === 'JAVA'
+                              ? 'java'
+                              : activeTemplateLang === 'GO'
+                              ? 'go'
+                              : activeTemplateLang === 'RUST'
+                              ? 'rust'
+                              : 'plaintext'
+                          }
+                          theme="vs-dark"
+                          value={(formData.templateCode as Record<string, string>)?.[activeTemplateLang] || ''}
+                          onChange={(val) => {
+                            const updatedTemplates = {
+                              ...(formData.templateCode || {}),
+                              [activeTemplateLang]: val || '',
+                            };
+                            setFormData({ ...formData, templateCode: updatedTemplates });
+                          }}
+                          options={{
+                            minimap: { enabled: false },
+                            fontSize: 13,
+                            lineNumbers: 'on',
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            tabSize: 4,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

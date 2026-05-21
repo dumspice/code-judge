@@ -57,6 +57,7 @@ type SeedProblemDef = {
   tagSlugs: string[];
   visibility: ProblemVisibility;
   testCases: SeedTestCase[];
+  templateCode?: Record<string, string>;
 };
 
 type SeedClassAssignmentDef = {
@@ -88,6 +89,11 @@ const SEED_CONTEST_PROBLEMS: SeedProblemDef[] = [
       { id: 'seed-tc-e01-4', input: '1000000\n2000000', expectedOutput: '3000000', isHidden: true },
       { id: 'seed-tc-e01-5', input: '-1000000\n-1', expectedOutput: '-1000001', isHidden: true },
     ],
+    templateCode: {
+      PYTHON: "# Viết logic tính tổng hai số\n\ndef solve(first_num: int, second_num: int) -> int:\n    # Viết logic của bạn ở đây\n    return first_num + second_num\n",
+      CPP: "// Viết logic tính tổng hai số\n#include <iostream>\n\nusing namespace std;\n\nint solve(int first_num, int second_num) {\n    // Viết logic của bạn ở đây\n    return first_num + second_num;\n}\n",
+      JAVASCRIPT: "/**\n * @param {number} first_num\n * @param {number} second_num\n * @return {number}\n */\nfunction solve(first_num, second_num) {\n    // Viết logic của bạn ở đây\n    return first_num + second_num;\n}\n"
+    }
   },
   {
     id: 'seed-problem-easy-02',
@@ -105,6 +111,11 @@ const SEED_CONTEST_PROBLEMS: SeedProblemDef[] = [
       { id: 'seed-tc-e02-4', input: '999999\n1', expectedOutput: '999999', isHidden: true },
       { id: 'seed-tc-e02-5', input: '-1000000\n-1000000', expectedOutput: '-1000000', isHidden: true },
     ],
+    templateCode: {
+      PYTHON: "# Viết logic tìm số lớn hơn\n\ndef solve(x: int, y: int) -> int:\n    # Viết logic của bạn ở đây\n    return max(x, y)\n",
+      CPP: "// Viết logic tìm số lớn hơn\n#include <iostream>\n#include <algorithm>\n\nusing namespace std;\n\nint solve(int x, int y) {\n    // Viết logic của bạn ở đây\n    return max(x, y);\n}\n",
+      JAVASCRIPT: "/**\n * @param {number} x\n * @param {number} y\n * @return {number}\n */\nfunction solve(x, y) {\n    // Viết logic của bạn ở đây\n    return Math.max(x, y);\n}\n"
+    }
   },
   {
     id: 'seed-problem-med-01',
@@ -270,6 +281,19 @@ const LEGACY_SEED_IDS = [
 async function wipeSeedArtifacts(): Promise<void> {
   const seedPrefix = { startsWith: SEED_PREFIX };
 
+  // 1. Fetch all problem IDs that are scheduled for deletion to bypass Prisma relation filter limitations in deleteMany
+  const problemsToDelete = await prisma.problem.findMany({
+    where: {
+      OR: [
+        { id: seedPrefix },
+        { creatorId: seedPrefix },
+        { id: { in: [...LEGACY_SEED_IDS] } },
+      ],
+    },
+    select: { id: true },
+  });
+  const problemIds = problemsToDelete.map((p) => p.id);
+
   await prisma.codeSimilarityFinding.deleteMany({
     where: { contestId: seedPrefix },
   });
@@ -278,34 +302,57 @@ async function wipeSeedArtifacts(): Promise<void> {
       OR: [
         { id: seedPrefix },
         { userId: seedPrefix },
-        { problemId: seedPrefix },
         { contestId: seedPrefix },
         { classRoomId: seedPrefix },
         { classAssignmentId: seedPrefix },
+        { problemId: { in: problemIds } },
       ],
     },
   });
   await prisma.reportExport.deleteMany({ where: { id: seedPrefix } });
   await prisma.contestParticipant.deleteMany({ where: { id: seedPrefix } });
   await prisma.contestProblem.deleteMany({
-    where: { OR: [{ contestId: seedPrefix }, { problemId: seedPrefix }] },
+    where: {
+      OR: [
+        { contestId: seedPrefix },
+        { problemId: { in: problemIds } },
+      ],
+    },
   });
-  await prisma.classAssignment.deleteMany({ where: { id: seedPrefix } });
-  await prisma.aiGenerationJob.deleteMany({ where: { id: seedPrefix } });
-  await prisma.goldenSolution.deleteMany({ where: { id: seedPrefix } });
-  await prisma.testCase.deleteMany({
-    where: { OR: [{ id: seedPrefix }, { problemId: seedPrefix }] },
-  });
-  await prisma.problemTag.deleteMany({
-    where: { problem: { id: seedPrefix } },
-  });
-  await prisma.problem.deleteMany({
+  await prisma.classAssignment.deleteMany({
     where: {
       OR: [
         { id: seedPrefix },
-        { creatorId: seedPrefix },
         { id: { in: [...LEGACY_SEED_IDS] } },
+        { problemId: { in: problemIds } },
       ],
+    },
+  });
+  await prisma.aiGenerationJob.deleteMany({ where: { id: seedPrefix } });
+  await prisma.goldenSolution.deleteMany({
+    where: {
+      OR: [
+        { id: seedPrefix },
+        { problemId: { in: problemIds } },
+      ],
+    },
+  });
+  await prisma.testCase.deleteMany({
+    where: {
+      OR: [
+        { id: seedPrefix },
+        { problemId: { in: problemIds } },
+      ],
+    },
+  });
+  await prisma.problemTag.deleteMany({
+    where: {
+      problemId: { in: problemIds },
+    },
+  });
+  await prisma.problem.deleteMany({
+    where: {
+      id: { in: problemIds },
     },
   });
   await prisma.classInvite.deleteMany({ where: { id: seedPrefix } });
@@ -339,6 +386,7 @@ function problemRows(problems: SeedProblemDef[]) {
     supportedLanguages: SUPPORTED_LANGUAGES,
     maxTestCases: 100,
     creatorId: SEED_IDS.instructor,
+    templateCode: (p.templateCode ?? null) as any,
   }));
 }
 

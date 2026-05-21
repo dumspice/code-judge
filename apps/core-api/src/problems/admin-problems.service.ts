@@ -27,6 +27,7 @@ export class AdminProblemsService {
           isPublished: dto.isPublished ?? true,
           visibility: ProblemVisibility.PUBLIC,
           supportedLanguages: supportedLanguages.length > 0 ? supportedLanguages : undefined,
+          templateCode: dto.templateCode ?? undefined,
           maxTestCases: dto.maxTestCases ?? 100,
           creatorId,
         },

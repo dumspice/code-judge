@@ -19,6 +19,7 @@ export interface Problem {
   isPublished: boolean;
   visibility: 'PRIVATE' | 'PUBLIC' | 'CONTEST_ONLY';
   supportedLanguages: string[] | null;
+  templateCode: Record<string, string> | null;
   maxTestCases: number;
   creatorId: string | null;
   createdAt: string;
@@ -71,6 +72,7 @@ export interface CreateProblemDto {
     weight?: number;
   }>;
   tagIds?: string[];
+  templateCode?: Record<string, string> | null;
 }
 
 /** POST /problems/admin — không `classRoomId`; backend không tạo ClassAssignment. */
@@ -92,6 +94,7 @@ export interface CreateAdminProblemDto {
     weight?: number;
   }>;
   tagIds?: string[];
+  templateCode?: Record<string, string> | null;
 }
 
 export interface GenerateTestCasesDraftDto {
@@ -153,6 +156,7 @@ export interface UpdateProblemDto {
     weight?: number;
   }>;
   tagIds?: string[];
+  templateCode?: Record<string, string> | null;
 }
 
 export type PaginatedProblems = {

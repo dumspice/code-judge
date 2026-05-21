@@ -58,6 +58,7 @@ export class ProblemsService {
           isPublished: dto.isPublished ?? true,
           visibility: this.visibilityService.getVisibilityForCreate(dto, classRoomId),
           supportedLanguages: supportedLanguages.length > 0 ? supportedLanguages : undefined,
+          templateCode: dto.templateCode ?? undefined,
           maxTestCases: dto.maxTestCases ?? 100,
           creatorId,
         },
@@ -319,6 +320,9 @@ export class ProblemsService {
         ...(dto.visibility !== undefined ? { visibility: enforcedVisibility } : {}),
         ...(dto.supportedLanguages !== undefined
           ? { supportedLanguages: dto.supportedLanguages }
+          : {}),
+        ...(dto.templateCode !== undefined
+          ? { templateCode: dto.templateCode }
           : {}),
         ...(dto.maxTestCases !== undefined ? { maxTestCases: dto.maxTestCases } : {}),
         slug,

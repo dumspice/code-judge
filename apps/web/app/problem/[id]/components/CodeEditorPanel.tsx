@@ -13,6 +13,8 @@ type CodeEditorPanelProps = {
   problem: Problem;
   code: string;
   setCode: (val: string) => void;
+  language: string;
+  setLanguage: (lang: string) => void;
   isRunning: boolean;
   isSubmitting?: boolean;
   onSubmit: (language: string, isDryRun?: boolean) => void;
@@ -26,6 +28,8 @@ export default function CodeEditorPanel({
   problem,
   code,
   setCode,
+  language,
+  setLanguage,
   isRunning,
   isSubmitting = false,
   onSubmit,
@@ -35,19 +39,12 @@ export default function CodeEditorPanel({
   submissionLimitText
 }: CodeEditorPanelProps) {
   
-  const [language, setLanguage] = useState('PYTHON');
   const [isEditorReady, setIsEditorReady] = useState(false);
 
   const supportedLanguages = useMemo(() => Array.from(new Set([
     ...(problem.supportedLanguages || []),
     'PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'
   ])), [problem.supportedLanguages]);
-
-  useEffect(() => {
-    if (supportedLanguages.length > 0) {
-      setLanguage(supportedLanguages[0]);
-    }
-  }, [problem.id]); // Only reset when switching to a different problem
 
   const handleEditorWillMount = (monacoInstance: any) => {
     monacoInstance.editor.defineTheme('premium-dark', {
