@@ -26,8 +26,16 @@ import { Loader2Icon } from 'lucide-react';
 import { getPublicCoreUrl } from '@/lib/public-config';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiFetch, getApiBaseUrl } from '@/services/api-client';
+import { aiTestcaseApi, type GoldenVerifyFailureDiagnosis, type VerifyTestcasesWithGoldenResult } from '@/services/ai-testcase.apis';
+import { GoldenVerifyDiagnosisModal } from '@/components/problems/GoldenVerifyDiagnosisModal';
+import {
+  loadSavedGoldenVerifyDiagnosis,
+  saveSavedGoldenVerifyDiagnosis,
+  type SavedGoldenVerifyDiagnosis,
+} from '@/lib/golden-verify-diagnosis-storage';
 import { readSourceFileAsUtf8Text } from '@/lib/read-source-file';
 import { ProjectTestcaseGenerateTab } from '@/components/test/ProjectTestcaseGenerateTab';
+import { toast } from 'sonner';
 
 function coreApiHeaders(jsonBody = false): HeadersInit {
   const headers: Record<string, string> = {};
@@ -120,20 +128,7 @@ type QuickGenerateResult = {
   parseError?: string;
 };
 
-type VerifyGoldenResult = {
-  language: string;
-  goldenSource: 'inline' | 'database';
-  goldenSolutionId?: string;
-  summary: { total: number; passed: number; failed: number };
-  results: Array<{
-    index: number;
-    passed: boolean;
-    expectedOutput: string;
-    actualOutput?: string;
-    stderr?: string;
-    verdict: string;
-  }>;
-};
+type VerifyGoldenResult = VerifyTestcasesWithGoldenResult;
 
 const GOLDEN_VERIFY_LANG_OPTIONS = [
   { value: 'python', label: 'Python' },
@@ -163,11 +158,35 @@ function AiGoldenVerifyTab() {
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [aiResult, setAiResult] = useState<QuickGenerateResult | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyGoldenResult | null>(null);
+  const [diagnoseBusy, setDiagnoseBusy] = useState(false);
+  const [diagnosisModalOpen, setDiagnosisModalOpen] = useState(false);
+  const [lastSavedDiagnosis, setLastSavedDiagnosis] = useState<SavedGoldenVerifyDiagnosis | null>(null);
   const [tabLog, setTabLog] = useState('');
+
+  const diagnosisStorageScope = problemIdOpt.trim() || 'test-lab';
+
+  useEffect(() => {
+    setLastSavedDiagnosis(loadSavedGoldenVerifyDiagnosis(diagnosisStorageScope));
+  }, [diagnosisStorageScope]);
   /** Bản có thể sửa — verify luôn dùng mảng này (không đọc trực tiếp từ aiResult). */
   const [editableTestCases, setEditableTestCases] = useState<
     Array<{ input: string; expectedOutput: string }>
   >([]);
+
+  const filteredCasesForVerify = useMemo(
+    () =>
+      editableTestCases.filter((c) => c.input.trim() !== '' && c.expectedOutput.trim() !== ''),
+    [editableTestCases],
+  );
+
+  const verifyIndexToEditableIndex = useMemo(
+    () =>
+      editableTestCases
+        .map((c, i) => ({ c, i }))
+        .filter(({ c }) => c.input.trim() !== '' && c.expectedOutput.trim() !== '')
+        .map(({ i }) => i),
+    [editableTestCases],
+  );
 
   function restoreTestCasesFromAi() {
     const parsed = aiResult?.parsed?.testCases;
@@ -261,6 +280,83 @@ function AiGoldenVerifyTab() {
     } finally {
       setVerifyBusy(false);
     }
+  }
+
+  async function onAnalyzeVerifyFailures() {
+    if (!verifyResult || verifyResult.summary.failed === 0) return;
+    setDiagnoseBusy(true);
+    setDiagnosisModalOpen(true);
+    try {
+      const pid = problemIdOpt.trim();
+      const res = await aiTestcaseApi.analyzeGoldenVerifyFailures({
+        problemId: pid || undefined,
+        title: title.trim(),
+        statement: statement.trim(),
+        ioSpec: ioSpec.trim() || undefined,
+        language: verifyResult.language,
+        testCases: filteredCasesForVerify.map((c) => ({
+          input: c.input.trimEnd(),
+          expectedOutput: c.expectedOutput.trimEnd(),
+        })),
+        verifyResult,
+      });
+      const saved: SavedGoldenVerifyDiagnosis = {
+        savedAt: new Date().toISOString(),
+        verifySummary: { ...verifyResult.summary },
+        language: verifyResult.language,
+        diagnosis: res,
+      };
+      setLastSavedDiagnosis(saved);
+      saveSavedGoldenVerifyDiagnosis(diagnosisStorageScope, saved);
+      setTabLog((s) => `${s}\nAI chẩn đoán: ${res.provider}/${res.model}${res.parseError ? ` (parse lỗi: ${res.parseError})` : ''}.`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setTabLog((s) => `${s}\nLỗi phân tích AI: ${msg}`);
+      toast.error(msg, { position: 'top-center' });
+    } finally {
+      setDiagnoseBusy(false);
+    }
+  }
+
+  function applySuggestionAtVerifyIndex(
+    verifyIndex: number,
+    fix: { input?: string; expectedOutput?: string } | undefined,
+  ) {
+    if (!fix) return;
+    const editableIndex = verifyIndexToEditableIndex[verifyIndex];
+    if (editableIndex === undefined) return;
+    setEditableTestCases((prev) =>
+      prev.map((row, j) =>
+        j === editableIndex
+          ? {
+              input: fix.input !== undefined ? fix.input : row.input,
+              expectedOutput: fix.expectedOutput !== undefined ? fix.expectedOutput : row.expectedOutput,
+            }
+          : row,
+      ),
+    );
+    setTabLog((s) => `${s}\nĐã áp dụng gợi ý cho test #${verifyIndex + 1}.`);
+  }
+
+  function applyAllSuggestions(structured: GoldenVerifyFailureDiagnosis) {
+    let count = 0;
+    setEditableTestCases((prev) => {
+      const next = [...prev];
+      for (const d of structured.caseDiagnoses) {
+        if (!d.suggestedFix) continue;
+        const editableIndex = verifyIndexToEditableIndex[d.index];
+        if (editableIndex === undefined) continue;
+        const row = next[editableIndex]!;
+        next[editableIndex] = {
+          input: d.suggestedFix.input !== undefined ? d.suggestedFix.input : row.input,
+          expectedOutput:
+            d.suggestedFix.expectedOutput !== undefined ? d.suggestedFix.expectedOutput : row.expectedOutput,
+        };
+        count++;
+      }
+      return next;
+    });
+    setTabLog((s) => `${s}\nÁp dụng ${count} gợi ý từ AI.`);
   }
 
   async function onGoldenCodeFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -528,6 +624,22 @@ function AiGoldenVerifyTab() {
             ))}
           </CardContent>
         </Card>
+      ) : null}
+
+      {(verifyResult?.summary.failed ?? 0) > 0 || lastSavedDiagnosis ? (
+        <GoldenVerifyDiagnosisModal
+          locale="vi"
+          open={diagnosisModalOpen}
+          onOpenChange={setDiagnosisModalOpen}
+          lastSaved={lastSavedDiagnosis}
+          canAnalyze={Boolean(verifyResult && verifyResult.summary.failed > 0)}
+          diagnoseBusy={diagnoseBusy}
+          verifyBusy={verifyBusy}
+          onAnalyze={onAnalyzeVerifyFailures}
+          onRecheck={onVerifyGolden}
+          onApplySuggestion={applySuggestionAtVerifyIndex}
+          onApplyAllSuggestions={applyAllSuggestions}
+        />
       ) : null}
 
       <div className={cn('grid gap-2')}>

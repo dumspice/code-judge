@@ -12,6 +12,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Sparkles } from 'lucide-react';
 import type { AiGenOptionsState } from './ai-testcase-draft.shared';
+import { AiStatementLengthHint } from './AiStatementLengthHint';
 
 type Locale = 'vi' | 'en';
 
@@ -35,6 +36,8 @@ const COPY: Record<
     revSummaryPh: string;
     revFeedbackPh: string;
     revValidatorPh: string;
+    fullIo: string;
+    fullIoHelp: string;
     provDefault: string;
     provGoogle: string;
     provOpenai: string;
@@ -60,6 +63,9 @@ const COPY: Record<
     revSummaryPh: 'Tóm tắt lần trước (vd. thiếu biên, sai format output)…',
     revFeedbackPh: 'Yêu cầu cụ thể cho lần chạy này…',
     revValidatorPh: 'validatorIssues — mỗi dòng một mục (tuỳ chọn)',
+    fullIo: 'Sinh đủ dữ liệu I/O (lưới / ma trận)',
+    fullIoHelp:
+      'Bật khi đề có lưới, ma trận, bảng lớn — tránh AI chỉ ghi "..." thay vì in hết từng dòng. Tự bật nếu đề/ioSpec có gợi ý lưới.',
     provDefault: 'Mặc định (theo server)',
     provGoogle: 'Google (Gemini)',
     provOpenai: 'OpenAI',
@@ -84,6 +90,9 @@ const COPY: Record<
     revSummaryPh: 'Summary of last run (e.g. missing edge case, wrong output format)…',
     revFeedbackPh: 'Concrete instructions for this run…',
     revValidatorPh: 'validatorIssues — one line per item (optional)',
+    fullIo: 'Generate full I/O (grids / matrices)',
+    fullIoHelp:
+      'Enable for grid/matrix/board problems so the model prints every line instead of "..." placeholders. Auto-enabled when the statement suggests a grid.',
     provDefault: 'Server default',
     provGoogle: 'Google (Gemini)',
     provOpenai: 'OpenAI',
@@ -96,9 +105,18 @@ export function AiTestCaseAdvancedOptions(props: {
   maxTestCasesForProblem: number;
   locale?: Locale;
   idPrefix?: string;
+  problemDescription?: string;
+  problemStatementMd?: string;
 }) {
-  const { aiGenOptions, setAiGenOptions, maxTestCasesForProblem, locale = 'vi', idPrefix = '' } =
-    props;
+  const {
+    aiGenOptions,
+    setAiGenOptions,
+    maxTestCasesForProblem,
+    locale = 'vi',
+    idPrefix = '',
+    problemDescription,
+    problemStatementMd,
+  } = props;
   const t = COPY[locale];
   const cap = Math.min(maxTestCasesForProblem ?? 100, 25);
 
@@ -114,6 +132,12 @@ export function AiTestCaseAdvancedOptions(props: {
         </span>
       </summary>
       <div className="border-t border-violet-200/60 dark:border-violet-800/40 px-4 py-4 space-y-4 text-sm">
+        <AiStatementLengthHint
+          description={problemDescription}
+          statementMd={problemStatementMd}
+          ioSpec={aiGenOptions.ioSpec}
+          locale={locale}
+        />
         <div className="space-y-2">
           <Label htmlFor={`${idPrefix}ai-io-spec`} className="text-xs font-semibold text-foreground">
             {t.ioSpec}
@@ -141,6 +165,24 @@ export function AiTestCaseAdvancedOptions(props: {
             className="min-h-[56px] rounded-lg border-violet-200/80 bg-white/90 dark:bg-background text-xs"
             rows={2}
           />
+        </div>
+
+        <div className="flex items-start gap-2 rounded-lg border border-violet-200/60 bg-white/80 dark:bg-background/60 px-3 py-2">
+          <input
+            id={`${idPrefix}ai-full-io`}
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-violet-300"
+            checked={aiGenOptions.preferFullIoOutput}
+            onChange={(e) =>
+              setAiGenOptions((o) => ({ ...o, preferFullIoOutput: e.target.checked }))
+            }
+          />
+          <div className="space-y-0.5">
+            <Label htmlFor={`${idPrefix}ai-full-io`} className="text-xs font-semibold cursor-pointer">
+              {t.fullIo}
+            </Label>
+            <p className="text-[11px] text-muted-foreground leading-snug">{t.fullIoHelp}</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
