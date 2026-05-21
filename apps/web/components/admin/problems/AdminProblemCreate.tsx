@@ -42,6 +42,13 @@ import { toast } from 'sonner';
 import { AiGenerateProblemModal } from '@/components/problems/AiGenerateProblemModal';
 import { AiTestCaseAdvancedOptions } from '@/components/problems/AiTestCaseAdvancedOptions';
 import { AiTestCaseDraftSheet } from '@/components/problems/AiTestCaseDraftSheet';
+import { AiTestcaseDraftReopenButton } from '@/components/problems/AiTestcaseDraftReopenButton';
+import {
+  aiTestcaseDraftStorageScope,
+  clearSavedAiTestcaseDraft,
+  saveSavedAiTestcaseDraft,
+  type SavedAiTestcaseDraft,
+} from '@/lib/ai-testcase-draft-storage';
 import { ProblemTagPicker } from '@/components/problems/ProblemTagPicker';
 import {
   defaultAiGenOptions,
@@ -83,6 +90,9 @@ export default function AdminProblemCreate() {
   const [aiDraftLoading, setAiDraftLoading] = useState(false);
   const [aiDraftResult, setAiDraftResult] = useState<GenerateTestCasesDraftResult | null>(null);
   const [aiGenOptions, setAiGenOptions] = useState<AiGenOptionsState>(defaultAiGenOptions);
+  const [aiDraftStorageKey, setAiDraftStorageKey] = useState(0);
+
+  const aiDraftScope = aiTestcaseDraftStorageScope(editId);
 
   useEffect(() => {
     if (editId) {
@@ -270,6 +280,15 @@ export default function AdminProblemCreate() {
       setAiDraftResult(res);
       setAiSheetOpen(true);
       const mapped = mapAiDraftToFormTestCases(res.parsed);
+      if (mapped.length > 0 || res.raw) {
+        saveSavedAiTestcaseDraft(aiDraftScope, {
+          savedAt: new Date().toISOString(),
+          problemTitle: formData.title.trim(),
+          draftResult: res,
+          previewCases: mapped,
+        });
+        setAiDraftStorageKey((k) => k + 1);
+      }
       if (res.generationMode === 'summarized') {
         toast.info('Long statement — server summarized it before generating test cases.', {
           position: 'top-center',
@@ -313,12 +332,28 @@ export default function AdminProblemCreate() {
       testCases: mode === 'replace' ? mapped : [...(prev.testCases ?? []), ...mapped],
     }));
     setAiSheetOpen(false);
+    clearSavedAiTestcaseDraft(aiDraftScope);
+    setAiDraftStorageKey((k) => k + 1);
     toast.success(
       mode === 'replace'
         ? `Successfully replaced with ${mapped.length} test cases from AI.`
         : `Successfully added ${mapped.length} test cases from AI.`,
       { position: 'top-center' },
     );
+  };
+
+  const restoreSavedAiDraft = (saved: SavedAiTestcaseDraft) => {
+    setAiDraftResult(saved.draftResult);
+    setAiSheetOpen(true);
+    if (
+      saved.problemTitle &&
+      formData.title.trim() &&
+      saved.problemTitle !== formData.title.trim()
+    ) {
+      toast.info('Bản AI được lưu cho tiêu đề khác — vẫn xem được, hãy kiểm tra lại trước khi áp dụng.', {
+        position: 'top-center',
+      });
+    }
   };
 
   return (
@@ -471,6 +506,13 @@ export default function AdminProblemCreate() {
                   )}
                   AI Suggestions
                 </Button>
+                <AiTestcaseDraftReopenButton
+                  scope={aiDraftScope}
+                  locale="vi"
+                  disabled={aiDraftLoading || loading}
+                  refreshKey={aiDraftStorageKey}
+                  onRestore={restoreSavedAiDraft}
+                />
                 <Button
                   type="button"
                   variant="outline"

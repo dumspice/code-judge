@@ -34,6 +34,11 @@ import {
   LONG_STATEMENT_THRESHOLD,
 } from './ai-testcase-generation.constants';
 import {
+  buildPlaceholderWarningMessage,
+  findPlaceholderCaseIndexes,
+  problemNeedsFullIo,
+} from './ai-testcase-io-quality.util';
+import {
   AI_PROJECT_PROMPT_VERSION_DEFAULT,
   buildAiProjectTestcaseMessages,
   generatedProjectTestcaseSchema,
@@ -107,6 +112,7 @@ export interface GenerateDraftResult {
   truncationSuspected?: boolean;
   maxTokensUsed?: number;
   longStatementWarning?: boolean;
+  placeholderWarnings?: string[];
 }
 
 export interface GenerateProblemStatementResult {
@@ -220,7 +226,10 @@ export class AiTestcaseService {
     const longStatement = statementCharCount > LONG_STATEMENT_THRESHOLD;
     const requestedCases = Math.min(Math.max(input.maxTestCases ?? 10, 1), 25);
     const fastMode = this.resolveFastModeEnabled(statementCharCount, requestedCases);
-    const compactOutput = input.preferCompactOutput === true || longStatement;
+    const needsFullIo =
+      input.preferFullIoOutput === true ||
+      problemNeedsFullIo(input.statement, input.ioSpec);
+    const compactOutput = input.preferCompactOutput === true && !needsFullIo;
 
     const primaryProvider = input.provider ?? resolveAiDefaultProvider(this.config);
     const primaryModel = input.model ?? resolveAiDefaultModel(this.config, primaryProvider);
@@ -239,6 +248,7 @@ export class AiTestcaseService {
       statementExcerpt: longStatement ? input.statement.slice(0, 600) : undefined,
       omitExplanations: compactOutput || requestedCases > 6,
       compactOutput,
+      requireFullIo: needsFullIo,
     };
 
     const dtoForMessages =
@@ -250,7 +260,7 @@ export class AiTestcaseService {
         : input;
 
     const messages = buildAiTestcaseMessages(dtoForMessages, promptVersion, messageOptions);
-    const outputCap = this.resolveOutputCap(fastMode, longStatement);
+    const outputCap = this.resolveOutputCap(fastMode, longStatement, needsFullIo);
     const maxTokens = this.computeTestcaseMaxTokens(
       input.statement.length,
       requestedCases,
@@ -270,7 +280,7 @@ export class AiTestcaseService {
     });
 
     const maxCases = input.maxTestCases ?? 10;
-    const parseOutcome = await this.parseTestcaseOutputWithRetries({
+    let parseOutcome = await this.parseTestcaseOutputWithRetries({
       text: genResult.text,
       usedProvider: genResult.provider,
       usedModel: genResult.model,
@@ -278,7 +288,38 @@ export class AiTestcaseService {
       maxCases,
       outputCap,
       initialMaxTokens: maxTokens,
+      requireFullIo: needsFullIo,
     });
+
+    let placeholderWarnings: string[] = [];
+    if (parseOutcome.parsed) {
+      const placeholderIndexes = findPlaceholderCaseIndexes(parseOutcome.parsed.testCases);
+      if (placeholderIndexes.length > 0) {
+        placeholderWarnings = [buildPlaceholderWarningMessage(placeholderIndexes)];
+        if (needsFullIo) {
+          const retryOutcome = await this.retryDraftForFullIo({
+            messages,
+            usedProvider: genResult.provider,
+            usedModel: genResult.model,
+            maxCases,
+            outputCap,
+            maxTokens,
+          });
+          if (retryOutcome) {
+            const retryBad = retryOutcome.parsed
+              ? findPlaceholderCaseIndexes(retryOutcome.parsed.testCases)
+              : placeholderIndexes;
+            if (retryBad.length < placeholderIndexes.length) {
+              parseOutcome = retryOutcome;
+              placeholderWarnings =
+                retryBad.length > 0
+                  ? [buildPlaceholderWarningMessage(retryBad)]
+                  : [];
+            }
+          }
+        }
+      }
+    }
 
     return {
       provider: genResult.provider,
@@ -292,6 +333,7 @@ export class AiTestcaseService {
       truncationSuspected: parseOutcome.truncationSuspected,
       maxTokensUsed: parseOutcome.maxTokensUsed,
       longStatementWarning: longStatement,
+      placeholderWarnings: placeholderWarnings.length ? placeholderWarnings : undefined,
     };
   }
 
@@ -327,8 +369,13 @@ export class AiTestcaseService {
     return Math.min(Math.max(configuredMaxTokens, tokenFloor + inputBonus), outputCap);
   }
 
-  private resolveOutputCap(fastMode: boolean, longStatement: boolean): number {
-    if (fastMode) return 8192;
+  private resolveOutputCap(
+    fastMode: boolean,
+    longStatement: boolean,
+    needsFullIo = false,
+  ): number {
+    if (fastMode) return needsFullIo ? 12288 : 8192;
+    if (needsFullIo) return 32768;
     if (longStatement) return 24576;
     return 16384;
   }
@@ -368,6 +415,7 @@ export class AiTestcaseService {
     maxCases: number;
     outputCap: number;
     initialMaxTokens: number;
+    requireFullIo?: boolean;
   }): Promise<{
     text: string;
     parsed: GeneratedTestcaseOutput | null;
@@ -406,8 +454,13 @@ export class AiTestcaseService {
       }
 
       truncationSuspected = true;
-      const compactMessages = this.buildCompactRetryMessages(params.messages);
-      const retryBudget = Math.min(params.outputCap, Math.max(maxTokensUsed * 2, 6000));
+      const compactMessages = params.requireFullIo
+        ? this.buildFullIoRetryMessages(params.messages)
+        : this.buildCompactRetryMessages(params.messages);
+      const retryBudget = Math.min(
+        params.outputCap,
+        Math.max(maxTokensUsed * 2, params.requireFullIo ? 12000 : 6000),
+      );
       maxTokensUsed = retryBudget;
       try {
         const retryText = await this.generateWithRetry(
@@ -1476,12 +1529,64 @@ export class AiTestcaseService {
     messages: Array<{ role: 'system' | 'user'; content: string }>,
   ): Array<{ role: 'system' | 'user'; content: string }> {
     const compactInstruction =
-      '\nReturn valid compact JSON only (no markdown, no code fence, no explanation). Keep output concise.';
+      '\nReturn valid compact JSON only (no markdown, no code fence). Omit explanation fields; keep complete input and expectedOutput.';
     return messages.map((message, index) =>
       index === 0
         ? { ...message, content: `${message.content}${compactInstruction}` }
         : message,
     );
+  }
+
+  private buildFullIoRetryMessages(
+    messages: Array<{ role: 'system' | 'user'; content: string }>,
+  ): Array<{ role: 'system' | 'user'; content: string }> {
+    const fullIoInstruction =
+      '\nReturn valid JSON only. Every input and expectedOutput must be COMPLETE runnable data (all lines of grids/matrices). Forbidden: "...", "…", or labels like "100x100 grid". Use smaller dimensions if needed, but print every cell value.';
+    return messages.map((message, index) =>
+      index === 0
+        ? { ...message, content: `${message.content}${fullIoInstruction}` }
+        : message,
+    );
+  }
+
+  private async retryDraftForFullIo(params: {
+    messages: Array<{ role: 'system' | 'user'; content: string }>;
+    usedProvider: 'openai' | 'google';
+    usedModel: string;
+    maxCases: number;
+    outputCap: number;
+    maxTokens: number;
+  }): Promise<{
+    text: string;
+    parsed: GeneratedTestcaseOutput | null;
+    parseError?: string;
+    truncationSuspected: boolean;
+    maxTokensUsed: number;
+  } | null> {
+    const fullMessages = this.buildFullIoRetryMessages(params.messages);
+    const retryBudget = Math.min(params.outputCap, Math.max(params.maxTokens * 2, 14000));
+    try {
+      const retryText = await this.generateWithRetry(
+        params.usedProvider,
+        params.usedModel,
+        fullMessages,
+        0,
+        retryBudget,
+        1,
+      );
+      return this.parseTestcaseOutputWithRetries({
+        text: retryText,
+        usedProvider: params.usedProvider,
+        usedModel: params.usedModel,
+        messages: fullMessages,
+        maxCases: params.maxCases,
+        outputCap: params.outputCap,
+        initialMaxTokens: retryBudget,
+        requireFullIo: true,
+      });
+    } catch {
+      return null;
+    }
   }
 
   private buildFastModeMessages(

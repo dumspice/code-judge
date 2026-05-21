@@ -40,6 +40,7 @@ import { goldenSolutionsApi } from '@/services/golden-solutions.apis';
 import { ApiRequestError } from '@/services/api-client';
 import type { GenerateTestCasesDraftResult } from '@/services/problem.apis';
 import { toast } from 'sonner';
+import { isLikelyPlaceholderIoClient } from './ai-testcase-draft.shared';
 
 type Locale = 'vi' | 'en';
 
@@ -164,6 +165,10 @@ const COPY: Record<
     prompt: string;
     parseTitle: string;
     truncHint: string;
+    placeholderHint: string;
+    expandIo: string;
+    collapseIo: string;
+    ioChars: (n: number, lines: number) => string;
     genModeSummarized: string;
     genModeDirect: string;
     showRaw: string;
@@ -191,6 +196,11 @@ const COPY: Record<
     parseTitle: 'Parse',
     truncHint:
       'Phản hồi AI có thể bị cắt (thiếu token). Thử giảm số testcase gợi ý, điền ioSpec, hoặc rút gọn đề bài.',
+    placeholderHint:
+      'Một số test có input/output dạng "..." — không chạy được. Bật «Sinh đủ dữ liệu I/O» trong tùy chọn AI và sinh lại, hoặc dán đủ lưới/ma trận tay.',
+    expandIo: 'Mở rộng',
+    collapseIo: 'Thu gọn',
+    ioChars: (n, lines) => `${n.toLocaleString('vi-VN')} ký tự · ${lines} dòng`,
     genModeSummarized: 'Chế độ: tóm tắt đề dài rồi sinh testcase',
     genModeDirect: 'Chế độ: đề ngắn — sinh trực tiếp',
     showRaw: 'Xem raw JSON',
@@ -217,6 +227,11 @@ const COPY: Record<
     parseTitle: 'Parse',
     truncHint:
       'AI output may be truncated. Try fewer suggested cases, fill ioSpec, or shorten the statement.',
+    placeholderHint:
+      'Some tests use "..." placeholders — not runnable. Enable «Generate full I/O» in AI options and regenerate, or paste full grid data manually.',
+    expandIo: 'Expand',
+    collapseIo: 'Collapse',
+    ioChars: (n, lines) => `${n.toLocaleString()} chars · ${lines} lines`,
     genModeSummarized: 'Mode: summarized long statement, then generated tests',
     genModeDirect: 'Mode: direct generation',
     showRaw: 'Show raw JSON',
@@ -239,6 +254,57 @@ const COPY: Record<
 function previewCasesFingerprint(cases: PreviewCase[]): string {
   return JSON.stringify(
     cases.map((c) => ({ i: c.input, o: c.expectedOutput, h: c.isHidden, w: c.weight })),
+  );
+}
+
+function TestCaseIoBlock(props: {
+  label: string;
+  value: string;
+  emptyLabel: string;
+  expandLabel: string;
+  collapseLabel: string;
+  metaLabel: (chars: number, lines: number) => string;
+  suspectPlaceholder?: boolean;
+}) {
+  const { label, value, emptyLabel, expandLabel, collapseLabel, metaLabel, suspectPlaceholder } =
+    props;
+  const [expanded, setExpanded] = useState(false);
+  const text = value || '';
+  const lines = text ? text.split('\n').length : 0;
+  const large = text.length > 480 || lines > 14;
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-2 mb-0.5">
+        <p className="font-medium text-muted-foreground">{label}</p>
+        {text ? (
+          <span className="text-[10px] text-muted-foreground">{metaLabel(text.length, lines)}</span>
+        ) : null}
+        {suspectPlaceholder ? (
+          <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-800 dark:text-amber-200">
+            placeholder
+          </Badge>
+        ) : null}
+        {large ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 text-[10px] ml-auto"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? collapseLabel : expandLabel}
+          </Button>
+        ) : null}
+      </div>
+      <pre
+        className={`font-mono whitespace-pre-wrap break-words bg-muted/50 rounded p-2 overflow-y-auto ${
+          expanded ? 'max-h-[min(50vh,420px)]' : 'max-h-28'
+        }`}
+      >
+        {text || emptyLabel}
+      </pre>
+    </div>
   );
 }
 
@@ -618,6 +684,18 @@ export function AiTestCaseDraftSheet(props: {
                 <p className="text-xs text-amber-800 dark:text-amber-200">{t.truncHint}</p>
               ) : null}
 
+              {draftResult.placeholderWarnings?.length ? (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100 space-y-1"
+                >
+                  {draftResult.placeholderWarnings.map((w) => (
+                    <p key={w}>{w}</p>
+                  ))}
+                  <p className="opacity-90">{t.placeholderHint}</p>
+                </div>
+              ) : null}
+
               {draftResult.parseError ? (
                 <div
                   role="alert"
@@ -678,18 +756,24 @@ export function AiTestCaseDraftSheet(props: {
                           {tc.isHidden ? 'Hidden' : 'Public'} · weight {tc.weight}
                         </span>
                       </div>
-                      <div>
-                        <p className="font-medium text-muted-foreground mb-0.5">{t.input}</p>
-                        <pre className="font-mono whitespace-pre-wrap break-words bg-muted/50 rounded p-2 max-h-28 overflow-y-auto">
-                          {tc.input || t.emptyInput}
-                        </pre>
-                      </div>
-                      <div>
-                        <p className="font-medium text-muted-foreground mb-0.5">{t.output}</p>
-                        <pre className="font-mono whitespace-pre-wrap break-words bg-muted/50 rounded p-2 max-h-28 overflow-y-auto">
-                          {tc.expectedOutput || t.emptyInput}
-                        </pre>
-                      </div>
+                      <TestCaseIoBlock
+                        label={t.input}
+                        value={tc.input}
+                        emptyLabel={t.emptyInput}
+                        expandLabel={t.expandIo}
+                        collapseLabel={t.collapseIo}
+                        metaLabel={t.ioChars}
+                        suspectPlaceholder={isLikelyPlaceholderIoClient(tc.input)}
+                      />
+                      <TestCaseIoBlock
+                        label={t.output}
+                        value={tc.expectedOutput}
+                        emptyLabel={t.emptyInput}
+                        expandLabel={t.expandIo}
+                        collapseLabel={t.collapseIo}
+                        metaLabel={t.ioChars}
+                        suspectPlaceholder={isLikelyPlaceholderIoClient(tc.expectedOutput)}
+                      />
                     </div>
                   ))}
                 </div>

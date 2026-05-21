@@ -36,6 +36,8 @@ Quality requirements:
 - Ensure testcase count <= maxTestCases.
 - Use concise explanations if provided; omit the explanation field entirely when max_test_cases > 6 to avoid oversized JSON.
 - If spec is ambiguous, keep assumptions minimal in notes.
+- NEVER use "...", "…", or placeholders in input or expectedOutput — every case must be runnable as-is on stdin/stdout.
+- For grids/matrices: either print every line of the grid, or use smaller dimensions for hidden tests — never abbreviate with ellipsis.
 `;
 
 export type BuildAiTestcaseMessageOptions = {
@@ -45,8 +47,10 @@ export type BuildAiTestcaseMessageOptions = {
   statementExcerpt?: string;
   /** Force omit explanation fields on every testcase. */
   omitExplanations?: boolean;
-  /** Keep input/output strings short (one line when possible). */
+  /** Omit explanations only; do not shorten IO strings. */
   compactOutput?: boolean;
+  /** Ma trận/lưới — bắt buộc input/output đầy đủ. */
+  requireFullIo?: boolean;
 };
 
 export function buildAiTestcaseMessages(
@@ -97,8 +101,14 @@ export function buildAiTestcaseMessages(
     `max_test_cases: ${maxTestCases}`,
     'Require diversity: boundary, typical, edge.',
     ...(omitExplanations ? ['Omit explanation field on every test case.'] : []),
-    ...(options?.compactOutput
-      ? ['Keep each input and expectedOutput as short as possible (prefer single-line).']
+    ...(options?.requireFullIo
+      ? [
+          'FULL IO REQUIRED: input and expectedOutput must contain complete data (all lines of grids/matrices). Forbidden: "...", "…", or verbal shortcuts like "100x100 grid".',
+          'For very large stated dimensions, use smaller equivalent hidden tests (e.g. 5x5, 10x10) with full cell values, not placeholders.',
+        ]
+      : []),
+    ...(options?.compactOutput && !options?.requireFullIo
+      ? ['Omit explanation fields only; keep input and expectedOutput complete and valid.']
       : []),
     '</generation_constraints>',
   );

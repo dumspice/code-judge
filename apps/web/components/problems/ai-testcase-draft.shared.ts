@@ -46,10 +46,27 @@ export type AiGenOptionsState = {
   provider: '' | 'openai' | 'google';
   model: string;
   maxSuggestions: number;
+  preferFullIoOutput: boolean;
   revisionSummary: string;
   revisionFeedback: string;
   revisionValidatorLines: string;
 };
+
+/** Đồng bộ regex với core-api problemNeedsFullIo */
+export function problemNeedsFullIoForAi(statement: string, ioSpec?: string): boolean {
+  const blob = `${statement}\n${ioSpec ?? ''}`;
+  return /(\d+\s*[x×]\s*\d+|\bgrid\b|lưới|ma\s*trận|\bmatrix\b|\bboard\b|bảng\s*\d|maze|đồ\s*thị\s*lưới)/i.test(
+    blob,
+  );
+}
+
+export function isLikelyPlaceholderIoClient(value: string): boolean {
+  const t = value.trim();
+  if (!t) return false;
+  if (/^(\.{2,}|…+)$/u.test(t)) return true;
+  if (/\.\.\./u.test(t) && !t.includes('\n') && t.length < 120) return true;
+  return false;
+}
 
 export const defaultAiGenOptions: AiGenOptionsState = {
   ioSpec: '',
@@ -57,6 +74,7 @@ export const defaultAiGenOptions: AiGenOptionsState = {
   provider: '',
   model: '',
   maxSuggestions: 10,
+  preferFullIoOutput: true,
   revisionSummary: '',
   revisionFeedback: '',
   revisionValidatorLines: '',
@@ -130,7 +148,16 @@ export function buildGenerateTestCasesDraftDto(input: {
       : {}),
     ...(input.aiGenOptions.provider ? { provider: input.aiGenOptions.provider } : {}),
     ...(input.aiGenOptions.model.trim() ? { model: input.aiGenOptions.model.trim() } : {}),
-    ...(longStatement ? { preferCompactOutput: true } : {}),
+    ...(input.aiGenOptions.preferFullIoOutput ||
+    problemNeedsFullIoForAi(
+      buildStatementPayloadForAi({
+        description: input.description,
+        statementMd: input.statementMd,
+      }),
+      input.aiGenOptions.ioSpec.trim() || undefined,
+    )
+      ? { preferFullIoOutput: true }
+      : {}),
     ...(revision ? { revision } : {}),
   };
 }

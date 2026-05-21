@@ -107,6 +107,7 @@ export interface GenerateTestCasesDraftDto {
   provider?: 'openai' | 'google';
   model?: string;
   preferCompactOutput?: boolean;
+  preferFullIoOutput?: boolean;
   revision?: {
     promptVersionUsed?: string;
     previousOutputSummary?: string;
@@ -172,6 +173,7 @@ export interface GenerateTestCasesDraftResult {
   truncationSuspected?: boolean;
   maxTokensUsed?: number;
   longStatementWarning?: boolean;
+  placeholderWarnings?: string[];
 }
 
 export interface UpdateProblemDto {
