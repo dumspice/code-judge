@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { GenerateAiTestcaseDto } from './dto/generate-ai-testcase.dto';
+import type { TestgenBrief } from './ai-testcase-brief.prompt';
 
 export const generatedTestcaseSchema = z.object({
   testCases: z.array(
@@ -35,10 +36,30 @@ Quality requirements:
 - Ensure testcase count <= maxTestCases.
 - Use concise explanations if provided; omit the explanation field entirely when max_test_cases > 6 to avoid oversized JSON.
 - If spec is ambiguous, keep assumptions minimal in notes.
+- NEVER use "...", "…", or placeholders in input or expectedOutput — every case must be runnable as-is on stdin/stdout.
+- For grids/matrices: either print every line of the grid, or use smaller dimensions for hidden tests — never abbreviate with ellipsis.
 `;
 
-export function buildAiTestcaseMessages(input: GenerateAiTestcaseDto, promptVersion: string) {
+export type BuildAiTestcaseMessageOptions = {
+  /** Brief extracted from a long statement — replaces full statement in prompt. */
+  testgenBrief?: TestgenBrief;
+  /** First ~600 chars of statement when using brief (optional context). */
+  statementExcerpt?: string;
+  /** Force omit explanation fields on every testcase. */
+  omitExplanations?: boolean;
+  /** Omit explanations only; do not shorten IO strings. */
+  compactOutput?: boolean;
+  /** Ma trận/lưới — bắt buộc input/output đầy đủ. */
+  requireFullIo?: boolean;
+};
+
+export function buildAiTestcaseMessages(
+  input: GenerateAiTestcaseDto,
+  promptVersion: string,
+  options?: BuildAiTestcaseMessageOptions,
+) {
   const maxTestCases = input.maxTestCases ?? 10;
+  const omitExplanations = options?.omitExplanations ?? maxTestCases > 6;
   const supportedLanguages = input.supportedLanguages?.length
     ? input.supportedLanguages.join(', ')
     : 'not specified';
@@ -51,10 +72,27 @@ export function buildAiTestcaseMessages(input: GenerateAiTestcaseDto, promptVers
     `Time limit (ms): ${input.timeLimitMs ?? 'not specified'}`,
     `Memory limit (MB): ${input.memoryLimitMb ?? 'not specified'}`,
     `Supported languages: ${supportedLanguages}`,
-    'Statement:',
-    input.statement,
-    '</problem_context>',
-    '',
+  ];
+
+  if (options?.testgenBrief) {
+    parts.push(
+      '<testgen_brief>',
+      JSON.stringify(options.testgenBrief),
+      '</testgen_brief>',
+    );
+    if (options.statementExcerpt?.trim()) {
+      parts.push(
+        '<statement_excerpt>',
+        options.statementExcerpt.trim().slice(0, 600),
+        '</statement_excerpt>',
+      );
+    }
+  } else {
+    parts.push('Statement:', input.statement);
+  }
+
+  parts.push('</problem_context>', '');
+  parts.push(
     '<io_spec>',
     input.ioSpec ?? 'UNKNOWN',
     '</io_spec>',
@@ -62,8 +100,18 @@ export function buildAiTestcaseMessages(input: GenerateAiTestcaseDto, promptVers
     '<generation_constraints>',
     `max_test_cases: ${maxTestCases}`,
     'Require diversity: boundary, typical, edge.',
+    ...(omitExplanations ? ['Omit explanation field on every test case.'] : []),
+    ...(options?.requireFullIo
+      ? [
+          'FULL IO REQUIRED: input and expectedOutput must contain complete data (all lines of grids/matrices). Forbidden: "...", "…", or verbal shortcuts like "100x100 grid".',
+          'For very large stated dimensions, use smaller equivalent hidden tests (e.g. 5x5, 10x10) with full cell values, not placeholders.',
+        ]
+      : []),
+    ...(options?.compactOutput && !options?.requireFullIo
+      ? ['Omit explanation fields only; keep input and expectedOutput complete and valid.']
+      : []),
     '</generation_constraints>',
-  ];
+  );
 
   if (input.supplementaryText?.trim()) {
     parts.push('', '<supplementary_document_optional>', input.supplementaryText, '</supplementary_document_optional>');

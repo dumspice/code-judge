@@ -109,12 +109,49 @@ export interface GenerateTestCasesDraftDto {
   supplementaryText?: string;
   provider?: 'openai' | 'google';
   model?: string;
+  preferCompactOutput?: boolean;
+  preferFullIoOutput?: boolean;
   revision?: {
     promptVersionUsed?: string;
     previousOutputSummary?: string;
     userFeedback?: string;
     validatorIssues?: string[];
   };
+}
+
+export interface GenerateProblemStatementDto {
+  topic: string;
+  difficulty?: string;
+  locale?: 'vi' | 'en';
+  supplementaryText?: string;
+  existingTitle?: string;
+  existingStatement?: string;
+  provider?: 'openai' | 'google';
+  model?: string;
+  revision?: {
+    userFeedback?: string;
+    previousOutputSummary?: string;
+  };
+}
+
+export interface GeneratedProblemStatementParsed {
+  title: string;
+  description: string;
+  statementMd: string;
+  ioSpec: string;
+  suggestedDifficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+  suggestedTimeLimitMs?: number;
+  suggestedMemoryLimitMb?: number;
+  notes?: string;
+}
+
+export interface GenerateProblemStatementResult {
+  provider: 'openai' | 'google';
+  model: string;
+  promptVersion: string;
+  raw: string;
+  parsed: GeneratedProblemStatementParsed | null;
+  parseError?: string;
 }
 
 export interface GenerateTestCasesDraftResult {
@@ -134,6 +171,12 @@ export interface GenerateTestCasesDraftResult {
     revisionNotes?: string;
   } | null;
   parseError?: string;
+  statementCharCount?: number;
+  generationMode?: 'direct' | 'summarized';
+  truncationSuspected?: boolean;
+  maxTokensUsed?: number;
+  longStatementWarning?: boolean;
+  placeholderWarnings?: string[];
 }
 
 export interface UpdateProblemDto {
@@ -245,6 +288,17 @@ export const problemsApi = {
     options?: RequestInit,
   ): Promise<GenerateTestCasesDraftResult> {
     return apiFetch('/problems/generate-test-cases-draft', {
+      ...options,
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async generateStatementDraft(
+    dto: GenerateProblemStatementDto,
+    options?: RequestInit,
+  ): Promise<GenerateProblemStatementResult> {
+    return apiFetch('/problems/generate-statement-draft', {
       ...options,
       method: 'POST',
       body: dto,

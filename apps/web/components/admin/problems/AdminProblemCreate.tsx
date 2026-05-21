@@ -42,8 +42,16 @@ import {
 } from '@/services/problem.apis';
 import { ApiRequestError } from '@/services/api-client';
 import { toast } from 'sonner';
+import { AiGenerateProblemModal } from '@/components/problems/AiGenerateProblemModal';
 import { AiTestCaseAdvancedOptions } from '@/components/problems/AiTestCaseAdvancedOptions';
 import { AiTestCaseDraftSheet } from '@/components/problems/AiTestCaseDraftSheet';
+import { AiTestcaseDraftReopenButton } from '@/components/problems/AiTestcaseDraftReopenButton';
+import {
+  aiTestcaseDraftStorageScope,
+  clearSavedAiTestcaseDraft,
+  saveSavedAiTestcaseDraft,
+  type SavedAiTestcaseDraft,
+} from '@/lib/ai-testcase-draft-storage';
 import { ProblemTagPicker } from '@/components/problems/ProblemTagPicker';
 import {
   defaultAiGenOptions,
@@ -51,6 +59,8 @@ import {
   buildGenerateTestCasesDraftDto,
   type AiGenOptionsState,
 } from '@/components/problems/ai-testcase-draft.shared';
+
+const SUPPORTED_LANGUAGES = ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'] as const;
 
 type AdminProblemFormValues = CreateAdminProblemDto & { dueAt?: string };
 
@@ -72,7 +82,7 @@ export default function AdminProblemCreate() {
     timeLimitMs: 1000,
     memoryLimitMb: 256,
     isPublished: true,
-    supportedLanguages: ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'],
+    supportedLanguages: Array.from(SUPPORTED_LANGUAGES),
     maxTestCases: 100,
     testCases: [],
     dueAt: undefined,
@@ -82,10 +92,14 @@ export default function AdminProblemCreate() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const [aiProblemModalOpen, setAiProblemModalOpen] = useState(false);
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
   const [aiDraftLoading, setAiDraftLoading] = useState(false);
   const [aiDraftResult, setAiDraftResult] = useState<GenerateTestCasesDraftResult | null>(null);
   const [aiGenOptions, setAiGenOptions] = useState<AiGenOptionsState>(defaultAiGenOptions);
+  const [aiDraftStorageKey, setAiDraftStorageKey] = useState(0);
+
+  const aiDraftScope = aiTestcaseDraftStorageScope(editId);
 
   useEffect(() => {
     if (editId) {
@@ -107,7 +121,7 @@ export default function AdminProblemCreate() {
         timeLimitMs: data.timeLimitMs,
         memoryLimitMb: data.memoryLimitMb,
         isPublished: data.isPublished,
-        supportedLanguages: data.supportedLanguages ?? ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'],
+        supportedLanguages: data.supportedLanguages ?? Array.from(SUPPORTED_LANGUAGES),
         maxTestCases: data.maxTestCases,
         testCases: (data.testCases ?? []).map(
           ({ id, problemId, orderIndex, createdAt, updatedAt, ...rest }: any) => rest,
@@ -277,11 +291,28 @@ export default function AdminProblemCreate() {
       setAiDraftResult(res);
       setAiSheetOpen(true);
       const mapped = mapAiDraftToFormTestCases(res.parsed);
+      if (mapped.length > 0 || res.raw) {
+        saveSavedAiTestcaseDraft(aiDraftScope, {
+          savedAt: new Date().toISOString(),
+          problemTitle: formData.title.trim(),
+          draftResult: res,
+          previewCases: mapped,
+        });
+        setAiDraftStorageKey((k) => k + 1);
+      }
+      if (res.generationMode === 'summarized') {
+        toast.info('Long statement — server summarized it before generating test cases.', {
+          position: 'top-center',
+        });
+      }
       if (res.parseError && mapped.length === 0) {
         toast.warning(
-          'AI returned a response but failed to parse the test cases. Please check the details in the panel.',
+          res.truncationSuspected
+            ? 'AI output was truncated. Try fewer suggested cases or fill ioSpec.'
+            : 'AI returned a response but failed to parse the test cases. See the panel for details.',
           {
             position: 'top-center',
+            description: res.parseError,
           },
         );
       } else if (mapped.length === 0) {
@@ -312,12 +343,28 @@ export default function AdminProblemCreate() {
       testCases: mode === 'replace' ? mapped : [...(prev.testCases ?? []), ...mapped],
     }));
     setAiSheetOpen(false);
+    clearSavedAiTestcaseDraft(aiDraftScope);
+    setAiDraftStorageKey((k) => k + 1);
     toast.success(
       mode === 'replace'
         ? `Successfully replaced with ${mapped.length} test cases from AI.`
         : `Successfully added ${mapped.length} test cases from AI.`,
       { position: 'top-center' },
     );
+  };
+
+  const restoreSavedAiDraft = (saved: SavedAiTestcaseDraft) => {
+    setAiDraftResult(saved.draftResult);
+    setAiSheetOpen(true);
+    if (
+      saved.problemTitle &&
+      formData.title.trim() &&
+      saved.problemTitle !== formData.title.trim()
+    ) {
+      toast.info('Bản AI được lưu cho tiêu đề khác — vẫn xem được, hãy kiểm tra lại trước khi áp dụng.', {
+        position: 'top-center',
+      });
+    }
   };
 
   return (
@@ -371,8 +418,18 @@ export default function AdminProblemCreate() {
         {/* Left Column - Main Details */}
         <div className="lg:col-span-2 space-y-8">
           <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
-            <CardHeader className="border-b ">
+            <CardHeader className="border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-xl">Basic Information</CardTitle>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="rounded-lg shrink-0"
+                onClick={() => setAiProblemModalOpen(true)}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                AI Generate Problem
+              </Button>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
               <div className="space-y-2">
@@ -560,6 +617,13 @@ export default function AdminProblemCreate() {
                   )}
                   AI Suggestions
                 </Button>
+                <AiTestcaseDraftReopenButton
+                  scope={aiDraftScope}
+                  locale="vi"
+                  disabled={aiDraftLoading || loading}
+                  refreshKey={aiDraftStorageKey}
+                  onRestore={restoreSavedAiDraft}
+                />
                 <Button
                   type="button"
                   variant="outline"
@@ -579,6 +643,8 @@ export default function AdminProblemCreate() {
                 maxTestCasesForProblem={formData.maxTestCases ?? 100}
                 locale="vi"
                 idPrefix="admin-"
+                problemDescription={formData.description}
+                problemStatementMd={formData.statementMd}
               />
 
               <div className="space-y-4">
@@ -718,52 +784,55 @@ export default function AdminProblemCreate() {
             </CardHeader>
             <CardContent className="p-6 space-y-6">
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Difficulty</Label>
-                  <Select
-                    value={formData.difficulty}
-                    onValueChange={(value: any) => setFormData({ ...formData, difficulty: value })}
-                  >
-                    <SelectTrigger className="rounded-xl border-gray-200 h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="EASY">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                          <span>Easy</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="MEDIUM">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                          <span>Medium</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="HARD">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                          <span>Hard</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">Mode</Label>
-                  <Select
-                    value={formData.mode}
-                    onValueChange={(value: any) => setFormData({ ...formData, mode: value })}
-                  >
-                    <SelectTrigger className="rounded-xl border-gray-200 h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALGO">Algorithmic</SelectItem>
-                      <SelectItem value="PROJECT">Project Based</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Difficulty</Label>
+                    <Select
+                      value={formData.difficulty}
+                      onValueChange={(value: any) =>
+                        setFormData({ ...formData, difficulty: value })
+                      }
+                    >
+                      <SelectTrigger className="rounded-xl border-gray-200 h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EASY">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            <span>Easy</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="MEDIUM">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                            <span>Medium</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="HARD">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                            <span>Hard</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Mode</Label>
+                    <Select
+                      value={formData.mode}
+                      onValueChange={(value: any) => setFormData({ ...formData, mode: value })}
+                    >
+                      <SelectTrigger className="rounded-xl border-gray-200 h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALGO">Algorithmic</SelectItem>
+                        <SelectItem value="PROJECT">Project Based</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 pt-2">
@@ -826,25 +895,11 @@ export default function AdminProblemCreate() {
                     <Languages className="w-4 h-4 text-gray-400" /> Supported Languages
                   </Label>
                   <div className="flex flex-wrap gap-1.5">
-                    {['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'].map((lang) => {
-                      const isSelected = formData.supportedLanguages?.includes(lang);
-                      return (
-                        <Badge
-                          key={lang}
-                          variant={isSelected ? 'default' : 'outline'}
-                          className={`cursor-pointer transition-all hover:scale-105 active:scale-95 ${isSelected ? 'bg-black' : 'text-gray-400'}`}
-                          onClick={() => {
-                            const current = formData.supportedLanguages || [];
-                            const next = isSelected
-                              ? current.filter((l) => l !== lang)
-                              : [...current, lang];
-                            setFormData({ ...formData, supportedLanguages: next });
-                          }}
-                        >
-                          {lang}
-                        </Badge>
-                      );
-                    })}
+                    {SUPPORTED_LANGUAGES.map((lang) => (
+                      <Badge key={lang} variant="default" className="bg-black text-white">
+                        {lang}
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -852,6 +907,37 @@ export default function AdminProblemCreate() {
           </Card>
         </div>
       </div>
+
+      <AiGenerateProblemModal
+        open={aiProblemModalOpen}
+        onOpenChange={setAiProblemModalOpen}
+        locale="en"
+        existingTitle={formData.title}
+        existingStatement={formData.statementMd}
+        defaultDifficulty={formData.difficulty}
+        onApply={(payload) => {
+          setFormData((prev) => ({
+            ...prev,
+            title: payload.title,
+            description: payload.description,
+            statementMd: payload.statementMd,
+            ...(payload.difficulty ? { difficulty: payload.difficulty } : {}),
+            ...(payload.timeLimitMs ? { timeLimitMs: payload.timeLimitMs } : {}),
+            ...(payload.memoryLimitMb ? { memoryLimitMb: payload.memoryLimitMb } : {}),
+          }));
+          setAiGenOptions((prev) => ({ ...prev, ioSpec: payload.ioSpec }));
+          setErrors((prev) => {
+            const next = { ...prev };
+            delete next.title;
+            delete next.description;
+            delete next.statementMd;
+            return next;
+          });
+          toast.info('Problem draft applied. Use AI Suggestions below to generate test cases.', {
+            position: 'top-center',
+          });
+        }}
+      />
 
       <AiTestCaseDraftSheet
         open={aiSheetOpen}
@@ -861,6 +947,9 @@ export default function AdminProblemCreate() {
         onApplyReplace={() => applyAiTestCases('replace')}
         onApplyAppend={() => applyAiTestCases('append')}
         problemId={editId ?? undefined}
+        problemTitle={formData.title}
+        problemStatement={formData.statementMd}
+        ioSpec={aiGenOptions.ioSpec}
         locale="vi"
       />
     </div>
