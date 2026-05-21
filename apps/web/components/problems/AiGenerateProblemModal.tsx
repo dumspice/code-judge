@@ -170,9 +170,7 @@ export function AiGenerateProblemModal(props: {
         existingTitle: existingTitle?.trim() || undefined,
         existingStatement: existingStatement?.trim() || undefined,
         provider: provider === 'default' ? undefined : provider,
-        revision: revisionFeedback.trim()
-          ? { userFeedback: revisionFeedback.trim() }
-          : undefined,
+        revision: revisionFeedback.trim() ? { userFeedback: revisionFeedback.trim() } : undefined,
       });
       setResult(res);
       if (!res.parsed) {
@@ -183,7 +181,11 @@ export function AiGenerateProblemModal(props: {
       }
     } catch (err) {
       const msg =
-        err instanceof ApiRequestError ? err.body.message : err instanceof Error ? err.message : String(err);
+        err instanceof ApiRequestError
+          ? err.body.message
+          : err instanceof Error
+            ? err.message
+            : String(err);
       toast.error(msg, { position: 'top-center' });
     } finally {
       setBusy(false);
@@ -214,7 +216,7 @@ export function AiGenerateProblemModal(props: {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
-        className="flex h-[min(92vh,820px)] w-[min(96vw,720px)] max-w-none flex-col gap-0 p-0 sm:max-w-none"
+        className="flex h-[min(92vh,820px)] w-[min(96vw,720px)] max-w-none flex-col gap-0 p-4 sm:max-w-none"
       >
         <DialogHeader className="shrink-0 border-b px-5 py-4 text-left">
           <DialogTitle className="flex items-center gap-2">
@@ -338,14 +340,40 @@ export function AiGenerateProblemModal(props: {
         <DialogFooter className="shrink-0 flex-col gap-2 sm:flex-row sm:justify-between border-t px-5 py-4">
           <p className="text-xs text-muted-foreground sm:max-w-[55%]">{t.applyHint}</p>
           <div className="flex flex-wrap gap-2 justify-end">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="cursor-pointer"
+            >
               {locale === 'vi' ? 'Đóng' : 'Close'}
             </Button>
-            <Button type="button" variant="secondary" disabled={busy} onClick={() => void handleGenerate()}>
-              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              {busy ? t.generating : result ? (locale === 'vi' ? 'Sinh lại' : 'Regenerate') : t.generate}
+            <Button
+              type="button"
+              variant="outline"
+              className="cursor-pointer"
+              disabled={busy}
+              onClick={() => void handleGenerate()}
+            >
+              {busy ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              {busy
+                ? t.generating
+                : result
+                  ? locale === 'vi'
+                    ? 'Sinh lại'
+                    : 'Regenerate'
+                  : t.generate}
             </Button>
-            <Button type="button" disabled={!parsed || busy} onClick={handleApply}>
+            <Button
+              className="cursor-pointer"
+              type="button"
+              disabled={!parsed || busy}
+              onClick={handleApply}
+            >
               {t.apply}
             </Button>
           </div>

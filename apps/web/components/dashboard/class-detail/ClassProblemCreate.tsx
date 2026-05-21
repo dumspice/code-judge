@@ -395,11 +395,11 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                 type="button"
                 variant="secondary"
                 size="sm"
-                className="rounded-lg shrink-0"
+                className="rounded-lg shrink-0 cursor-pointer hover:scale-105 transition-transform"
                 onClick={() => setAiProblemModalOpen(true)}
               >
                 <Sparkles className="w-4 h-4 mr-2" />
-                AI tạo đề
+                AI generate problem
               </Button>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
@@ -788,7 +788,7 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
       <AiGenerateProblemModal
         open={aiProblemModalOpen}
         onOpenChange={setAiProblemModalOpen}
-        locale="vi"
+        locale="en"
         existingTitle={formData.title}
         existingStatement={formData.statementMd}
         defaultDifficulty={formData.difficulty}
