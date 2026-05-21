@@ -18,3 +18,5 @@ export * from './utils/required-env';
 export * from './utils/password';
 export * from './utils/paged-list';
 export * from './utils/excel-report';
+export * from './utils/resolve-ai-provider';
+export * from './utils/resolve-ai-llm-plans';

@@ -69,6 +69,9 @@ const lambdaClient = needsLambdaClient
 
 const useLambdaForJudge =
   judgeEngine === 'lambda' && Boolean(judgeLambdaFunctionName) && Boolean(lambdaClient);
+/** Python golden-verify: mặc định local trên worker (tránh Lambda timeout/cold start khi dev). */
+const goldenVerifyPreferLocalPython =
+  getOptionalEnv(process.env.GOLDEN_VERIFY_PREFER_LOCAL_PYTHON, 'true').toLowerCase() !== 'false';
 const judge0Url = getOptionalEnv(process.env.JUDGE0_URL, 'http://localhost:2358');
 
 if (judgeEngine === 'lambda' && !useLambdaForJudge) {
@@ -669,7 +672,12 @@ async function main() {
 
   const goldenWorker = new Worker(
     GOLDEN_VERIFY_QUEUE_NAME,
-    (job) => processGoldenVerifyJob(job, { lambdaClient, lambdaFunctionName }),
+    (job) =>
+      processGoldenVerifyJob(job, {
+        lambdaClient,
+        lambdaFunctionName,
+        preferLocalPython: goldenVerifyPreferLocalPython,
+      }),
     {
       connection,
       concurrency: 5,
@@ -687,6 +695,7 @@ async function main() {
   log.info(
     `listening queues=${JUDGE_SUBMISSIONS_QUEUE_NAME},${GOLDEN_VERIFY_QUEUE_NAME} redis=${redisUrl} ` +
       `submissionJudge=${useLambdaForJudge ? 'lambda' : judge0Url ? 'judge0' : 'stub'} ` +
+      `goldenPython=${goldenVerifyPreferLocalPython ? 'local' : 'lambda-if-configured'} ` +
       `(JUDGE_ENGINE=${judgeEngine})`,
   );
 }

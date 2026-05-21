@@ -34,8 +34,16 @@ import { CreateProblemDto, problemsApi, UpdateProblemDto } from '@/services/prob
 import type { GenerateTestCasesDraftResult } from '@/services/problem.apis';
 import { ApiRequestError } from '@/services/api-client';
 import { toast } from 'sonner';
+import { AiGenerateProblemModal } from '@/components/problems/AiGenerateProblemModal';
 import { AiTestCaseAdvancedOptions } from '@/components/problems/AiTestCaseAdvancedOptions';
 import { AiTestCaseDraftSheet } from '@/components/problems/AiTestCaseDraftSheet';
+import { AiTestcaseDraftReopenButton } from '@/components/problems/AiTestcaseDraftReopenButton';
+import {
+  aiTestcaseDraftStorageScope,
+  clearSavedAiTestcaseDraft,
+  saveSavedAiTestcaseDraft,
+  type SavedAiTestcaseDraft,
+} from '@/lib/ai-testcase-draft-storage';
 import { ProblemTagPicker } from '@/components/problems/ProblemTagPicker';
 import {
   AiGenOptionsState,
@@ -73,10 +81,14 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const [aiProblemModalOpen, setAiProblemModalOpen] = useState(false);
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
   const [aiDraftLoading, setAiDraftLoading] = useState(false);
   const [aiDraftResult, setAiDraftResult] = useState<GenerateTestCasesDraftResult | null>(null);
   const [aiGenOptions, setAiGenOptions] = useState<AiGenOptionsState>(defaultAiGenOptions);
+  const [aiDraftStorageKey, setAiDraftStorageKey] = useState(0);
+
+  const aiDraftScope = aiTestcaseDraftStorageScope(editId);
 
   useEffect(() => {
     if (editId) {
@@ -256,11 +268,28 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
       setAiDraftResult(res);
       setAiSheetOpen(true);
       const mapped = mapAiDraftToFormTestCases(res.parsed);
+      if (mapped.length > 0 || res.raw) {
+        saveSavedAiTestcaseDraft(aiDraftScope, {
+          savedAt: new Date().toISOString(),
+          problemTitle: formData.title.trim(),
+          draftResult: res,
+          previewCases: mapped,
+        });
+        setAiDraftStorageKey((k) => k + 1);
+      }
+      if (res.generationMode === 'summarized') {
+        toast.info('Long statement — summarized on the server before generating test cases.', {
+          position: 'top-center',
+        });
+      }
       if (res.parseError && mapped.length === 0) {
         toast.warning(
-          'AI responded but test cases could not be parsed. See the panel for details.',
+          res.truncationSuspected
+            ? 'AI output was truncated. Try fewer suggested cases or fill ioSpec.'
+            : 'AI responded but test cases could not be parsed. See the panel for details.',
           {
             position: 'top-center',
+            description: res.parseError,
           },
         );
       } else if (mapped.length === 0) {
@@ -291,12 +320,28 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
       testCases: mode === 'replace' ? mapped : [...(prev.testCases ?? []), ...mapped],
     }));
     setAiSheetOpen(false);
+    clearSavedAiTestcaseDraft(aiDraftScope);
+    setAiDraftStorageKey((k) => k + 1);
     toast.success(
       mode === 'replace'
         ? `Replaced with ${mapped.length} AI test case(s).`
         : `Appended ${mapped.length} AI test case(s).`,
       { position: 'top-center' },
     );
+  };
+
+  const restoreSavedAiDraft = (saved: SavedAiTestcaseDraft) => {
+    setAiDraftResult(saved.draftResult);
+    setAiSheetOpen(true);
+    if (
+      saved.problemTitle &&
+      formData.title.trim() &&
+      saved.problemTitle !== formData.title.trim()
+    ) {
+      toast.info('Saved draft was for a different title — review before applying.', {
+        position: 'top-center',
+      });
+    }
   };
 
   return (
@@ -344,8 +389,18 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         {/* Left Column - Main Details */}
         <div className="lg:col-span-2 space-y-8">
           <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
-            <CardHeader className="border-b ">
+            <CardHeader className="border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-xl">Basic Information</CardTitle>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="rounded-lg shrink-0"
+                onClick={() => setAiProblemModalOpen(true)}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                AI tạo đề
+              </Button>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
               <div className="space-y-2">
@@ -433,6 +488,13 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                   )}
                   Suggest with AI
                 </Button>
+                <AiTestcaseDraftReopenButton
+                  scope={aiDraftScope}
+                  locale="en"
+                  disabled={aiDraftLoading || loading}
+                  refreshKey={aiDraftStorageKey}
+                  onRestore={restoreSavedAiDraft}
+                />
                 <Button
                   type="button"
                   variant="outline"
@@ -452,6 +514,8 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
                 maxTestCasesForProblem={formData.maxTestCases ?? 100}
                 locale="en"
                 idPrefix="class-"
+                problemDescription={formData.description}
+                problemStatementMd={formData.statementMd}
               />
 
               <div className="space-y-4">
@@ -721,6 +785,34 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         </div>
       </div>
 
+      <AiGenerateProblemModal
+        open={aiProblemModalOpen}
+        onOpenChange={setAiProblemModalOpen}
+        locale="vi"
+        existingTitle={formData.title}
+        existingStatement={formData.statementMd}
+        defaultDifficulty={formData.difficulty}
+        onApply={(payload) => {
+          setFormData((prev) => ({
+            ...prev,
+            title: payload.title,
+            description: payload.description,
+            statementMd: payload.statementMd,
+            ...(payload.difficulty ? { difficulty: payload.difficulty } : {}),
+            ...(payload.timeLimitMs ? { timeLimitMs: payload.timeLimitMs } : {}),
+            ...(payload.memoryLimitMb ? { memoryLimitMb: payload.memoryLimitMb } : {}),
+          }));
+          setAiGenOptions((prev) => ({ ...prev, ioSpec: payload.ioSpec }));
+          setErrors((prev) => {
+            const next = { ...prev };
+            delete next.title;
+            delete next.description;
+            delete next.statementMd;
+            return next;
+          });
+        }}
+      />
+
       <AiTestCaseDraftSheet
         open={aiSheetOpen}
         onOpenChange={setAiSheetOpen}
@@ -729,6 +821,9 @@ export default function ClassProblemCreate({ classId }: { classId: string }) {
         onApplyReplace={() => applyAiTestCases('replace')}
         onApplyAppend={() => applyAiTestCases('append')}
         problemId={editId ?? undefined}
+        problemTitle={formData.title}
+        problemStatement={formData.statementMd}
+        ioSpec={aiGenOptions.ioSpec}
         locale="en"
       />
     </div>

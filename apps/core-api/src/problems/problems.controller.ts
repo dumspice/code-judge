@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { CurrentUser, Public, Roles } from '../common';
+import { GenerateAiProblemStatementDto } from '../ai-testcase/dto/generate-ai-problem-statement.dto';
 import { GenerateAiTestcaseDto } from '../ai-testcase/dto/generate-ai-testcase.dto';
 import { GenerateAiProjectTestcaseDto } from '../ai-testcase/dto/generate-ai-project-testcase.dto';
 import { AiTestcaseService } from '../ai-testcase/ai-testcase.service';
@@ -86,6 +87,15 @@ export class ProblemsController {
   @Post('generate-test-cases-draft')
   async generateTestCasesDraft(@Body() dto: GenerateAiTestcaseDto) {
     return this.aiTestcaseService.generateDraft(dto);
+  }
+
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary: 'AI sinh đề bài (title, mô tả, statement markdown, ioSpec) từ ý tưởng — chưa lưu DB',
+  })
+  @Post('generate-statement-draft')
+  async generateStatementDraft(@Body() dto: GenerateAiProblemStatementDto) {
+    return this.aiTestcaseService.generateProblemStatement(dto);
   }
 
   @ApiBearerAuth('JWT')
