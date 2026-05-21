@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { GenerateAiTestcaseDto } from './dto/generate-ai-testcase.dto';
+import type { TestgenBrief } from './ai-testcase-brief.prompt';
 
 export const generatedTestcaseSchema = z.object({
   testCases: z.array(
@@ -37,8 +38,24 @@ Quality requirements:
 - If spec is ambiguous, keep assumptions minimal in notes.
 `;
 
-export function buildAiTestcaseMessages(input: GenerateAiTestcaseDto, promptVersion: string) {
+export type BuildAiTestcaseMessageOptions = {
+  /** Brief extracted from a long statement — replaces full statement in prompt. */
+  testgenBrief?: TestgenBrief;
+  /** First ~600 chars of statement when using brief (optional context). */
+  statementExcerpt?: string;
+  /** Force omit explanation fields on every testcase. */
+  omitExplanations?: boolean;
+  /** Keep input/output strings short (one line when possible). */
+  compactOutput?: boolean;
+};
+
+export function buildAiTestcaseMessages(
+  input: GenerateAiTestcaseDto,
+  promptVersion: string,
+  options?: BuildAiTestcaseMessageOptions,
+) {
   const maxTestCases = input.maxTestCases ?? 10;
+  const omitExplanations = options?.omitExplanations ?? maxTestCases > 6;
   const supportedLanguages = input.supportedLanguages?.length
     ? input.supportedLanguages.join(', ')
     : 'not specified';
@@ -51,10 +68,27 @@ export function buildAiTestcaseMessages(input: GenerateAiTestcaseDto, promptVers
     `Time limit (ms): ${input.timeLimitMs ?? 'not specified'}`,
     `Memory limit (MB): ${input.memoryLimitMb ?? 'not specified'}`,
     `Supported languages: ${supportedLanguages}`,
-    'Statement:',
-    input.statement,
-    '</problem_context>',
-    '',
+  ];
+
+  if (options?.testgenBrief) {
+    parts.push(
+      '<testgen_brief>',
+      JSON.stringify(options.testgenBrief),
+      '</testgen_brief>',
+    );
+    if (options.statementExcerpt?.trim()) {
+      parts.push(
+        '<statement_excerpt>',
+        options.statementExcerpt.trim().slice(0, 600),
+        '</statement_excerpt>',
+      );
+    }
+  } else {
+    parts.push('Statement:', input.statement);
+  }
+
+  parts.push('</problem_context>', '');
+  parts.push(
     '<io_spec>',
     input.ioSpec ?? 'UNKNOWN',
     '</io_spec>',
@@ -62,8 +96,12 @@ export function buildAiTestcaseMessages(input: GenerateAiTestcaseDto, promptVers
     '<generation_constraints>',
     `max_test_cases: ${maxTestCases}`,
     'Require diversity: boundary, typical, edge.',
+    ...(omitExplanations ? ['Omit explanation field on every test case.'] : []),
+    ...(options?.compactOutput
+      ? ['Keep each input and expectedOutput as short as possible (prefer single-line).']
+      : []),
     '</generation_constraints>',
-  ];
+  );
 
   if (input.supplementaryText?.trim()) {
     parts.push('', '<supplementary_document_optional>', input.supplementaryText, '</supplementary_document_optional>');

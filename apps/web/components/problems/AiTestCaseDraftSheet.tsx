@@ -25,7 +25,17 @@ import {
 import { useAuthStore } from '@/store/auth-store';
 import { uploadGoldenSolutionForProblem } from '@/lib/golden-upload';
 import { readSourceFileAsUtf8Text } from '@/lib/read-source-file';
-import { aiTestcaseApi, type VerifyTestcasesWithGoldenResult } from '@/services/ai-testcase.apis';
+import {
+  aiTestcaseApi,
+  type GoldenVerifyFailureDiagnosis,
+  type VerifyTestcasesWithGoldenResult,
+} from '@/services/ai-testcase.apis';
+import { GoldenVerifyDiagnosisModal } from '@/components/problems/GoldenVerifyDiagnosisModal';
+import {
+  loadSavedGoldenVerifyDiagnosis,
+  saveSavedGoldenVerifyDiagnosis,
+  type SavedGoldenVerifyDiagnosis,
+} from '@/lib/golden-verify-diagnosis-storage';
 import { goldenSolutionsApi } from '@/services/golden-solutions.apis';
 import { ApiRequestError } from '@/services/api-client';
 import type { GenerateTestCasesDraftResult } from '@/services/problem.apis';
@@ -46,6 +56,8 @@ type GoldenCopy = {
   languageLabel: string;
   storedUsesDbLang: string;
   saveFirstHint: string;
+  draftVerifyBanner: string;
+  storedNeedsProblemId: string;
   inlineLabel: string;
   inlineFileLabel: string;
   inlineFileHint: string;
@@ -84,7 +96,11 @@ const GOLDEN_COPY: Record<Locale, GoldenCopy> = {
     storedUsesDbLang:
       'Chế độ golden trên server: ngôn ngữ lấy từ bản ghi đã upload (không phụ thuộc ô chọn bên trên).',
     saveFirstHint:
-      'Chưa có problemId: lưu bài một lần để upload file golden lên MinIO. Hoặc (ADMIN) dán mã golden bên dưới và verify không cần lưu trước.',
+      'Chưa lưu bài: dán mã golden bên dưới để verify ngay. Upload golden lên MinIO cần lưu bài một lần (có problemId).',
+    draftVerifyBanner:
+      'Verify nháp: test từ AI (chưa lưu đề) được gửi thẳng lên server — không cần problemId. Bấm «Đồng bộ test từ preview», dán golden, rồi «Chạy golden & kiểm tra».',
+    storedNeedsProblemId:
+      'Chế độ golden trên server cần lưu bài trước — dùng "Dán mã" để verify khi đang tạo mới.',
     inlineLabel: 'Mã golden',
     inlineFileLabel: 'Tải file mã (tuỳ chọn)',
     inlineFileHint: 'Chọn .py, .java, .cpp, … — nội dung sẽ điền vào ô bên dưới để verify (không lưu MinIO).',
@@ -112,7 +128,11 @@ const GOLDEN_COPY: Record<Locale, GoldenCopy> = {
     storedUsesDbLang:
       'Server golden mode: language comes from the uploaded record (not the selector above).',
     saveFirstHint:
-      'No problemId yet: save once to upload a golden file. Or (ADMIN) paste golden code below and verify without saving first.',
+      'Problem not saved yet: paste golden code below to verify now. Uploading golden to the server requires saving the problem first.',
+    draftVerifyBanner:
+      'Draft verify: AI-generated tests (problem not saved yet) are sent directly to the API — no problemId. Sync from preview, paste golden code, then run verify.',
+    storedNeedsProblemId:
+      'Server golden mode requires a saved problem — use "Paste code" while creating a new problem.',
     inlineLabel: 'Golden source',
     inlineFileLabel: 'Load code from file (optional)',
     inlineFileHint:
@@ -143,6 +163,11 @@ const COPY: Record<
     provider: string;
     prompt: string;
     parseTitle: string;
+    truncHint: string;
+    genModeSummarized: string;
+    genModeDirect: string;
+    showRaw: string;
+    hideRaw: string;
     notesTitle: string;
     revNotesTitle: string;
     emptyFiltered: string;
@@ -164,6 +189,12 @@ const COPY: Record<
     provider: 'Provider:',
     prompt: 'Prompt:',
     parseTitle: 'Parse',
+    truncHint:
+      'Phản hồi AI có thể bị cắt (thiếu token). Thử giảm số testcase gợi ý, điền ioSpec, hoặc rút gọn đề bài.',
+    genModeSummarized: 'Chế độ: tóm tắt đề dài rồi sinh testcase',
+    genModeDirect: 'Chế độ: đề ngắn — sinh trực tiếp',
+    showRaw: 'Xem raw JSON',
+    hideRaw: 'Ẩn raw',
     notesTitle: 'Ghi chú AI',
     revNotesTitle: 'Ghi chú revision',
     emptyFiltered:
@@ -184,6 +215,12 @@ const COPY: Record<
     provider: 'Provider:',
     prompt: 'Prompt:',
     parseTitle: 'Parse',
+    truncHint:
+      'AI output may be truncated. Try fewer suggested cases, fill ioSpec, or shorten the statement.',
+    genModeSummarized: 'Mode: summarized long statement, then generated tests',
+    genModeDirect: 'Mode: direct generation',
+    showRaw: 'Show raw JSON',
+    hideRaw: 'Hide raw',
     notesTitle: 'AI notes',
     revNotesTitle: 'Revision notes',
     emptyFiltered:
@@ -214,6 +251,9 @@ export function AiTestCaseDraftSheet(props: {
   onApplyAppend: () => void;
   /** Khi đã lưu problem — cho upload golden và quyền verify inline (creator). */
   problemId?: string;
+  problemTitle?: string;
+  problemStatement?: string;
+  ioSpec?: string;
   locale?: Locale;
 }) {
   const {
@@ -224,13 +264,15 @@ export function AiTestCaseDraftSheet(props: {
     onApplyReplace,
     onApplyAppend,
     problemId,
+    problemTitle,
+    problemStatement,
+    ioSpec,
     locale = 'vi',
   } = props;
   const t = COPY[locale];
   const g = GOLDEN_COPY[locale];
 
   const user = useAuthStore((s) => s.user);
-  const isAdmin = user?.role === 'ADMIN';
 
   const [editableCases, setEditableCases] = useState<Array<{ input: string; expectedOutput: string }>>([]);
   const [goldenMode, setGoldenMode] = useState<'inline' | 'stored'>('inline');
@@ -239,6 +281,12 @@ export function AiTestCaseDraftSheet(props: {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [verifyResult, setVerifyResult] = useState<VerifyTestcasesWithGoldenResult | null>(null);
+  const [diagnoseBusy, setDiagnoseBusy] = useState(false);
+  const [diagnosisModalOpen, setDiagnosisModalOpen] = useState(false);
+  const [showRawJson, setShowRawJson] = useState(false);
+  const [lastSavedDiagnosis, setLastSavedDiagnosis] = useState<SavedGoldenVerifyDiagnosis | null>(null);
+
+  const diagnosisStorageScope = problemId ?? 'draft';
   /** Session upload OK in this sheet */
   const [sessionUploadOk, setSessionUploadOk] = useState(false);
   /** Listed goldens with object key on server */
@@ -259,7 +307,11 @@ export function AiTestCaseDraftSheet(props: {
     if (!open) return;
     syncFromPreview();
     setVerifyResult(null);
-  }, [open, previewKey, syncFromPreview]);
+    setLastSavedDiagnosis(loadSavedGoldenVerifyDiagnosis(diagnosisStorageScope));
+    if (!problemId) {
+      setGoldenMode('inline');
+    }
+  }, [open, previewKey, syncFromPreview, problemId, diagnosisStorageScope]);
 
   useEffect(() => {
     if (!open || !problemId) {
@@ -295,16 +347,31 @@ export function AiTestCaseDraftSheet(props: {
   }, [problemId]);
 
   useEffect(() => {
+    if (!open) return;
+    setLastSavedDiagnosis(loadSavedGoldenVerifyDiagnosis(diagnosisStorageScope));
+  }, [open, diagnosisStorageScope]);
+
+  useEffect(() => {
     setSessionUploadOk(false);
     setVerifyResult(null);
   }, [goldenLanguage]);
 
-  const canShowInline = isAdmin || Boolean(problemId);
+  /** Dán mã golden: mọi user đã đăng nhập (khớp API verify nháp). */
+  const canShowInline = Boolean(user);
   const canUploadFile = Boolean(problemId);
   const storedGoldenUsable = sessionUploadOk || serverGoldenReady;
 
   const filteredCasesForVerify = editableCases.filter(
     (c) => c.input.trim() !== '' && c.expectedOutput.trim() !== '',
+  );
+
+  const verifyIndexToEditableIndex = useMemo(
+    () =>
+      editableCases
+        .map((c, i) => ({ c, i }))
+        .filter(({ c }) => c.input.trim() !== '' && c.expectedOutput.trim() !== '')
+        .map(({ i }) => i),
+    [editableCases],
   );
 
   const canRunVerify =
@@ -379,11 +446,22 @@ export function AiTestCaseDraftSheet(props: {
       const res = await aiTestcaseApi.verifyTestcasesWithGolden(body);
       setVerifyResult(res);
       if (res.summary.failed > 0) {
+        const infraFail = res.results.some(
+          (r) =>
+            !r.passed &&
+            (r.verdict === 'RUNTIME_ERROR' || r.verdict === 'PYTHON_NOT_FOUND') &&
+            (r.stderr?.includes('Lambda') ||
+              r.stderr?.includes('Worker không có Lambda') ||
+              r.stderr?.includes('Không tìm thấy Python')),
+        );
         toast.warning(
           locale === 'vi'
-            ? `${res.summary.passed}/${res.summary.total} đúng`
-            : `${res.summary.passed}/${res.summary.total} passed`,
-          { position: 'top-center', description: g.verifyWorkerHint },
+            ? `${res.summary.passed}/${res.summary.total} đúng — xem chi tiết từng test bên dưới`
+            : `${res.summary.passed}/${res.summary.total} passed — see per-test details below`,
+          {
+            position: 'top-center',
+            description: infraFail ? g.verifyWorkerHint : undefined,
+          },
         );
       } else {
         toast.success(
@@ -399,6 +477,98 @@ export function AiTestCaseDraftSheet(props: {
       toast.error(msg, { position: 'top-center', description: g.verifyWorkerHint });
     } finally {
       setVerifyBusy(false);
+    }
+  };
+
+  const handleAnalyzeFailures = async () => {
+    if (!verifyResult || verifyResult.summary.failed === 0) return;
+    setDiagnoseBusy(true);
+    setDiagnosisModalOpen(true);
+    try {
+      const res = await aiTestcaseApi.analyzeGoldenVerifyFailures({
+        problemId,
+        title: problemTitle?.trim() || undefined,
+        statement: problemStatement?.trim() || undefined,
+        ioSpec: ioSpec?.trim() || undefined,
+        language: verifyResult.language,
+        testCases: filteredCasesForVerify.map((c) => ({
+          input: c.input.trimEnd(),
+          expectedOutput: c.expectedOutput.trimEnd(),
+        })),
+        verifyResult,
+      });
+      const saved: SavedGoldenVerifyDiagnosis = {
+        savedAt: new Date().toISOString(),
+        verifySummary: { ...verifyResult.summary },
+        language: verifyResult.language,
+        diagnosis: res,
+      };
+      setLastSavedDiagnosis(saved);
+      saveSavedGoldenVerifyDiagnosis(diagnosisStorageScope, saved);
+      if (!res.structured) {
+        toast.warning(
+          locale === 'vi' ? 'AI trả về nhưng parse JSON thất bại.' : 'AI responded but JSON parse failed.',
+          { position: 'top-center', description: res.parseError },
+        );
+      }
+    } catch (err) {
+      const msg =
+        err instanceof ApiRequestError ? err.body.message : err instanceof Error ? err.message : String(err);
+      toast.error(msg, { position: 'top-center' });
+    } finally {
+      setDiagnoseBusy(false);
+    }
+  };
+
+  const applySuggestionAtVerifyIndex = (
+    verifyIndex: number,
+    fix: { input?: string; expectedOutput?: string } | undefined,
+  ) => {
+    if (!fix) return;
+    const editableIndex = verifyIndexToEditableIndex[verifyIndex];
+    if (editableIndex === undefined) return;
+    setEditableCases((prev) =>
+      prev.map((row, j) =>
+        j === editableIndex
+          ? {
+              input: fix.input !== undefined ? fix.input : row.input,
+              expectedOutput: fix.expectedOutput !== undefined ? fix.expectedOutput : row.expectedOutput,
+            }
+          : row,
+      ),
+    );
+    toast.success(locale === 'vi' ? `Đã áp dụng gợi ý test #${verifyIndex + 1}` : `Applied suggestion for test #${verifyIndex + 1}`, {
+      position: 'top-center',
+    });
+  };
+
+  const applyAllSuggestions = (structured: GoldenVerifyFailureDiagnosis) => {
+    let count = 0;
+    setEditableCases((prev) => {
+      const next = [...prev];
+      for (const d of structured.caseDiagnoses) {
+        if (!d.suggestedFix) continue;
+        const editableIndex = verifyIndexToEditableIndex[d.index];
+        if (editableIndex === undefined) continue;
+        const row = next[editableIndex]!;
+        next[editableIndex] = {
+          input: d.suggestedFix.input !== undefined ? d.suggestedFix.input : row.input,
+          expectedOutput:
+            d.suggestedFix.expectedOutput !== undefined ? d.suggestedFix.expectedOutput : row.expectedOutput,
+        };
+        count++;
+      }
+      return next;
+    });
+    if (count === 0) {
+      toast.info(locale === 'vi' ? 'Không có gợi ý để áp dụng.' : 'No suggestions to apply.', {
+        position: 'top-center',
+      });
+    } else {
+      toast.success(
+        locale === 'vi' ? `Đã áp dụng ${count} gợi ý` : `Applied ${count} suggestion(s)`,
+        { position: 'top-center' },
+      );
     }
   };
 
@@ -426,7 +596,27 @@ export function AiTestCaseDraftSheet(props: {
                   <span className="font-medium text-foreground">{t.prompt}</span>{' '}
                   {draftResult.promptVersion}
                 </p>
+                {draftResult.statementCharCount !== undefined ? (
+                  <p>
+                    {locale === 'vi' ? 'Độ dài đề' : 'Statement length'}:{' '}
+                    {draftResult.statementCharCount.toLocaleString()}
+                    {draftResult.maxTokensUsed
+                      ? ` · maxTokens≈${draftResult.maxTokensUsed}`
+                      : ''}
+                  </p>
+                ) : null}
+                {draftResult.generationMode ? (
+                  <p>
+                    {draftResult.generationMode === 'summarized'
+                      ? t.genModeSummarized
+                      : t.genModeDirect}
+                  </p>
+                ) : null}
               </div>
+
+              {draftResult.truncationSuspected && draftResult.parseError ? (
+                <p className="text-xs text-amber-800 dark:text-amber-200">{t.truncHint}</p>
+              ) : null}
 
               {draftResult.parseError ? (
                 <div
@@ -435,6 +625,22 @@ export function AiTestCaseDraftSheet(props: {
                 >
                   <p className="font-medium">{t.parseTitle}</p>
                   <p className="mt-1 whitespace-pre-wrap break-words">{draftResult.parseError}</p>
+                  {draftResult.raw ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 h-7 text-xs"
+                      onClick={() => setShowRawJson((v) => !v)}
+                    >
+                      {showRawJson ? t.hideRaw : t.showRaw}
+                    </Button>
+                  ) : null}
+                  {showRawJson && draftResult.raw ? (
+                    <pre className="mt-2 max-h-40 overflow-auto rounded bg-background/80 p-2 text-[10px] font-mono">
+                      {draftResult.raw.slice(0, 8000)}
+                    </pre>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -489,12 +695,12 @@ export function AiTestCaseDraftSheet(props: {
                 </div>
               )}
 
-              {!problemId && !isAdmin ? (
-                <p className="text-xs text-muted-foreground border-t pt-3">{g.saveFirstHint}</p>
-              ) : null}
-
-              {previewCases.length > 0 ? (
-                <div className="space-y-3 border-t pt-4">
+              <div className="space-y-3 border-t pt-4">
+                  {!problemId ? (
+                    <p className="text-xs text-emerald-900 dark:text-emerald-100 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2.5 py-2 leading-relaxed">
+                      {g.draftVerifyBanner}
+                    </p>
+                  ) : null}
                   <div>
                     <h3 className="text-sm font-semibold">{g.goldenTitle}</h3>
                     <p className="text-xs text-muted-foreground mt-1">{g.goldenHint}</p>
@@ -525,12 +731,6 @@ export function AiTestCaseDraftSheet(props: {
 
                   {goldenMode === 'stored' && problemId ? (
                     <p className="text-xs text-muted-foreground">{g.storedUsesDbLang}</p>
-                  ) : null}
-
-                  {!problemId && isAdmin ? (
-                    <p className="text-xs text-amber-700 dark:text-amber-200 bg-amber-500/10 rounded-md px-2 py-1.5">
-                      {g.saveFirstHint}
-                    </p>
                   ) : null}
 
                   <div className="flex flex-wrap gap-2">
@@ -600,7 +800,7 @@ export function AiTestCaseDraftSheet(props: {
                       </div>
                     </div>
                   ) : goldenMode === 'stored' && !problemId ? (
-                    <p className="text-xs text-muted-foreground">{g.saveFirstHint}</p>
+                    <p className="text-xs text-muted-foreground">{g.storedNeedsProblemId}</p>
                   ) : null}
 
                   <div className="flex flex-wrap gap-2">
@@ -722,8 +922,23 @@ export function AiTestCaseDraftSheet(props: {
                       </div>
                     </div>
                   ) : null}
+
+                  {(verifyResult?.summary.failed ?? 0) > 0 || lastSavedDiagnosis ? (
+                    <GoldenVerifyDiagnosisModal
+                      locale={locale}
+                      open={diagnosisModalOpen}
+                      onOpenChange={setDiagnosisModalOpen}
+                      lastSaved={lastSavedDiagnosis}
+                      canAnalyze={Boolean(verifyResult && verifyResult.summary.failed > 0)}
+                      diagnoseBusy={diagnoseBusy}
+                      verifyBusy={verifyBusy}
+                      onAnalyze={handleAnalyzeFailures}
+                      onRecheck={handleVerify}
+                      onApplySuggestion={applySuggestionAtVerifyIndex}
+                      onApplyAllSuggestions={applyAllSuggestions}
+                    />
+                  ) : null}
                 </div>
-              ) : null}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">{t.noData}</p>

@@ -35,6 +35,11 @@ export const EnvKeys = {
   AI_DEFAULT_MODEL_OPENAI: 'AI_DEFAULT_MODEL_OPENAI',
   /** Default Google model name. */
   AI_DEFAULT_MODEL_GOOGLE: 'AI_DEFAULT_MODEL_GOOGLE',
+  /**
+   * Danh sách model Google dự phòng (phẩy), thử sau khi primary hoặc khi 429/quota.
+   * VD: gemini-3.1-flash-lite,gemini-2.5-flash-lite,gemini-3-flash
+   */
+  AI_FALLBACK_MODELS_GOOGLE: 'AI_FALLBACK_MODELS_GOOGLE',
   /** Prompt version identifier for auditing/revision. */
   AI_PROMPT_VERSION: 'AI_PROMPT_VERSION',
   /** Prompt version for PROJECT hidden-test generation. */

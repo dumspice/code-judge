@@ -62,6 +62,16 @@ export const defaultAiGenOptions: AiGenOptionsState = {
   revisionValidatorLines: '',
 };
 
+/** Đồng bộ với core-api LONG_STATEMENT_THRESHOLD */
+export const LONG_STATEMENT_WARN_CHARS = 4000;
+
+export function statementLengthForAi(form: {
+  description?: string;
+  statementMd?: string;
+}): number {
+  return buildStatementPayloadForAi(form).length;
+}
+
 export function buildGenerateTestCasesDraftDto(input: {
   title: string;
   description?: string;
@@ -75,10 +85,16 @@ export function buildGenerateTestCasesDraftDto(input: {
   previousDraft: GenerateTestCasesDraftResult | null;
 }): GenerateTestCasesDraftDto {
   const maxCap = Math.min(input.maxTestCasesForProblem ?? 100, 25);
-  const maxForAi = Math.min(
-    Math.max(Math.min(input.aiGenOptions.maxSuggestions || 10, 25), 1),
-    maxCap,
-  );
+  const stmtLen = statementLengthForAi({
+    description: input.description,
+    statementMd: input.statementMd,
+  });
+  const longStatement = stmtLen > LONG_STATEMENT_WARN_CHARS;
+  let maxSuggestions = Math.min(input.aiGenOptions.maxSuggestions || 10, 25);
+  if (longStatement) {
+    maxSuggestions = Math.min(maxSuggestions, 8);
+  }
+  const maxForAi = Math.min(Math.max(maxSuggestions, 1), maxCap);
   const difficultyKey = input.difficulty as keyof typeof DIFFICULTY_AI_LABEL;
   const validatorIssues = input.aiGenOptions.revisionValidatorLines
     .split('\n')
@@ -114,6 +130,7 @@ export function buildGenerateTestCasesDraftDto(input: {
       : {}),
     ...(input.aiGenOptions.provider ? { provider: input.aiGenOptions.provider } : {}),
     ...(input.aiGenOptions.model.trim() ? { model: input.aiGenOptions.model.trim() } : {}),
+    ...(longStatement ? { preferCompactOutput: true } : {}),
     ...(revision ? { revision } : {}),
   };
 }

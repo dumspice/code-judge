@@ -12,6 +12,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Sparkles } from 'lucide-react';
 import type { AiGenOptionsState } from './ai-testcase-draft.shared';
+import { AiStatementLengthHint } from './AiStatementLengthHint';
 
 type Locale = 'vi' | 'en';
 
@@ -96,9 +97,18 @@ export function AiTestCaseAdvancedOptions(props: {
   maxTestCasesForProblem: number;
   locale?: Locale;
   idPrefix?: string;
+  problemDescription?: string;
+  problemStatementMd?: string;
 }) {
-  const { aiGenOptions, setAiGenOptions, maxTestCasesForProblem, locale = 'vi', idPrefix = '' } =
-    props;
+  const {
+    aiGenOptions,
+    setAiGenOptions,
+    maxTestCasesForProblem,
+    locale = 'vi',
+    idPrefix = '',
+    problemDescription,
+    problemStatementMd,
+  } = props;
   const t = COPY[locale];
   const cap = Math.min(maxTestCasesForProblem ?? 100, 25);
 
@@ -114,6 +124,12 @@ export function AiTestCaseAdvancedOptions(props: {
         </span>
       </summary>
       <div className="border-t border-violet-200/60 dark:border-violet-800/40 px-4 py-4 space-y-4 text-sm">
+        <AiStatementLengthHint
+          description={problemDescription}
+          statementMd={problemStatementMd}
+          ioSpec={aiGenOptions.ioSpec}
+          locale={locale}
+        />
         <div className="space-y-2">
           <Label htmlFor={`${idPrefix}ai-io-spec`} className="text-xs font-semibold text-foreground">
             {t.ioSpec}

@@ -87,6 +87,8 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
   const latestHintRequestRef = useRef<string | null>(null);
   const hintCachedSubmissionRef = useRef<string | null>(null);
   const processedSubmissionsRef = useRef<Set<string>>(new Set());
+  /** Submission đang chờ kết quả (run/submit) — bỏ qua socket của người khác (contest broadcast). */
+  const pendingSubmissionIdRef = useRef<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const { socket } = useSocket();
 
@@ -316,13 +318,21 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
 
   useEffect(() => {
     if (socket) {
+      const isPendingSubmissionEvent = (data: { submissionId?: string }) => {
+        const id = data.submissionId;
+        if (!id || !pendingSubmissionIdRef.current) return false;
+        return id === pendingSubmissionIdRef.current;
+      };
+
       const handleFinished = (data: any) => {
+        if (!isPendingSubmissionEvent(data)) return;
         if (data.submissionId) {
           if (processedSubmissionsRef.current.has(data.submissionId)) {
             return;
           }
           processedSubmissionsRef.current.add(data.submissionId);
         }
+        pendingSubmissionIdRef.current = null;
         setIsRunning(false);
         setIsSubmitting(false);
         if (data.submissionId) {
@@ -354,12 +364,14 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
       };
 
       const handleFailed = (data: any) => {
+        if (!isPendingSubmissionEvent(data)) return;
         if (data.submissionId) {
           if (processedSubmissionsRef.current.has(data.submissionId)) {
             return;
           }
           processedSubmissionsRef.current.add(data.submissionId);
         }
+        pendingSubmissionIdRef.current = null;
         setIsRunning(false);
         setIsSubmitting(false);
         if (data.submissionId) {
@@ -515,6 +527,7 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
     setHintPulse(false);
     latestHintRequestRef.current = null;
     hintCachedSubmissionRef.current = null;
+    pendingSubmissionIdRef.current = null;
 
     try {
       const submissionId = `sub-${Math.random().toString(36).slice(2, 10)}-${Date.now()}`;
@@ -557,6 +570,7 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
         sourceCodeObjectKey: presign.objectKey,
         isDryRun,
       });
+      pendingSubmissionIdRef.current = created.submissionId;
       setLastSubmissionId(created.submissionId);
 
     } catch (error: any) {
