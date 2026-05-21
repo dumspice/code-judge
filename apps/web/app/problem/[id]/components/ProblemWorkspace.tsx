@@ -12,6 +12,8 @@ import ConsolePanel from './ConsolePanel';
 import AiHintDrawer, { type HintUiState } from './AiHintDrawer';
 import AiHintFab from './AiHintFab';
 import { useSocket } from '@/providers/socket-provider';
+import { useSubmissionRealtime } from '@/hooks/useSubmissionRealtime';
+import type { SubmissionRealtimePayload } from '@/lib/realtime-events';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -86,9 +88,8 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
   const [hintPulse, setHintPulse] = useState(false);
   const latestHintRequestRef = useRef<string | null>(null);
   const hintCachedSubmissionRef = useRef<string | null>(null);
-  const processedSubmissionsRef = useRef<Set<string>>(new Set());
   const [isDarkMode, setIsDarkMode] = useState(true);
-  const { socket } = useSocket();
+  const { socket, joinSubmission } = useSocket();
 
   const [contest, setContest] = useState<Contest | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -314,35 +315,42 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
     loadSubmissions();
   }, [loadSubmissions]);
 
-  useEffect(() => {
-    if (socket) {
-      const handleFinished = (data: any) => {
-        if (data.submissionId) {
-          if (processedSubmissionsRef.current.has(data.submissionId)) {
-            return;
-          }
-          processedSubmissionsRef.current.add(data.submissionId);
-        }
-        setIsRunning(false);
-        setIsSubmitting(false);
-        if (data.submissionId) {
-          setLastSubmissionId(data.submissionId);
-        }
-        setResult({
-          status: data.status,
-          testsPassed: data.testsPassed ?? 0,
-          testsTotal: data.testsTotal ?? 0,
-          runtimeMs: data.runtimeMs,
-          memoryMb: data.memoryMb,
-          errorMessage: data.error,
-          language: data.language,
-          caseResults: data.caseResults,
-        });
+  const applySubmissionResult = useCallback(
+    (data: SubmissionRealtimePayload) => {
+      setIsRunning(false);
+      setIsSubmitting(false);
+      if (data.submissionId) {
+        setLastSubmissionId(data.submissionId);
+      }
+      setResult({
+        status: data.status,
+        testsPassed: data.testsPassed ?? 0,
+        testsTotal: data.testsTotal ?? 0,
+        runtimeMs: data.runtimeMs ?? undefined,
+        memoryMb: data.memoryMb ?? undefined,
+        errorMessage: data.error ?? undefined,
+        language: data.language,
+        caseResults: data.caseResults as SubmissionResult['caseResults'],
+      });
+      if (!data.isDryRun) {
+        loadSubmissions();
+      }
+    },
+    [loadSubmissions],
+  );
 
-        if (!data.isDryRun) {
-          loadSubmissions();
+  useSubmissionRealtime(
+    socket,
+    user && problem
+      ? {
+          userId: user.id,
+          problemId: problem.id,
+          contestId: contestId ?? null,
         }
-
+      : null,
+    {
+      onFinished: (data) => {
+        applySubmissionResult(data);
         if (data.status === 'Accepted') {
           setHintDrawerOpen(false);
           setHintPulse(false);
@@ -357,44 +365,14 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
           setHintPulse(true);
           toast.error(data.status, { description: data.error || 'Some test cases failed.' });
         }
-      };
-
-      const handleFailed = (data: any) => {
-        if (data.submissionId) {
-          if (processedSubmissionsRef.current.has(data.submissionId)) {
-            return;
-          }
-          processedSubmissionsRef.current.add(data.submissionId);
-        }
-        setIsRunning(false);
-        setIsSubmitting(false);
-        if (data.submissionId) {
-          setLastSubmissionId(data.submissionId);
-        }
-        setResult({
-          status: 'Error',
-          testsPassed: data.testsPassed ?? 0,
-          testsTotal: data.testsTotal ?? 0,
-          errorMessage: data.error || 'Judging failed',
-          language: data.language,
-          caseResults: data.caseResults,
-        });
-        if (!data.isDryRun) {
-          loadSubmissions();
-        }
+      },
+      onFailed: (data) => {
+        applySubmissionResult({ ...data, status: 'Error' });
         setHintPulse(true);
         toast.error('Error', { description: data.error || 'Judging failed' });
-      };
-
-      socket.on('submission:finished', handleFinished);
-      socket.on('submission:failed', handleFailed);
-
-      return () => {
-        socket.off('submission:finished', handleFinished);
-        socket.off('submission:failed', handleFailed);
-      };
-    }
-  }, [socket, loadSubmissions]);
+      },
+    },
+  );
 
   const fetchHint = useCallback(
     async (problemId: string, submissionId: string, options?: { force?: boolean }) => {
@@ -565,6 +543,7 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
         isDryRun,
       });
       setLastSubmissionId(created.submissionId);
+      joinSubmission(created.submissionId);
 
       toast.info(isDryRun ? 'Running Code' : 'Submission Received', {
         description: isDryRun

@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { SOCKET_EVENTS } from '../common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubmissionGateway } from '../realtime/submission.gateway';
 import { JUDGE_QUEUE_EVENTS } from './tokens';
@@ -25,16 +26,22 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
 
       const submission = await this.prisma.submission.findUnique({
         where: { id: jobId },
-        select: { userId: true, status: true },
+        select: { userId: true, problemId: true, contestId: true, status: true },
       });
       if (!submission) return;
 
-      this.realtime.emitToUser(submission.userId, 'submission:progress', {
+      const payload = {
         submissionId: jobId,
+        userId: submission.userId,
+        problemId: submission.problemId,
+        contestId: submission.contestId ?? null,
         status: submission.status,
         progressPct: data?.pct ?? null,
         logChunk: data?.log ?? null,
-      });
+      };
+
+      this.realtime.emitToUser(submission.userId, SOCKET_EVENTS.SUBMISSION_PROGRESS, payload);
+      this.realtime.emitToSubmission(jobId, SOCKET_EVENTS.SUBMISSION_PROGRESS, payload);
     });
 
     this.queueEvents.on('completed', async (event: { jobId: string }) => {
@@ -98,6 +105,8 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
 
       const payload = {
         submissionId: jobId,
+        userId: submission.userId,
+        problemId: submission.problemId,
         status: submission.status,
         score: submission.score ?? null,
         runtimeMs: submission.runtimeMs ?? null,
@@ -112,12 +121,17 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
         caseResults: sanitizedCaseResults,
       };
 
-      // Emit to private room for the submitter
-      this.realtime.emitToUser(submission.userId, 'submission:finished', payload);
+      this.realtime.emitToUser(submission.userId, SOCKET_EVENTS.SUBMISSION_FINISHED, payload);
+      this.realtime.emitToSubmission(jobId, SOCKET_EVENTS.SUBMISSION_FINISHED, payload);
 
-      // Emit to ALL if it's a contest submission (for leaderboards)
       if (submission.contestId) {
-        this.realtime.emitToAll('submission:finished', payload);
+        this.realtime.emitContestLeaderboardUpdated(submission.contestId, {
+          contestId: submission.contestId,
+          submissionId: jobId,
+          userId: submission.userId,
+          problemId: submission.problemId,
+          status: submission.status,
+        });
       }
     });
 
@@ -177,6 +191,8 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
 
       const payload = {
         submissionId: jobId,
+        userId: submission.userId,
+        problemId: submission.problemId,
         status: submission.status,
         error: submission.error ?? failedReason ?? 'Unknown error',
         contestId: submission.contestId ?? null,
@@ -187,10 +203,17 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
         caseResults: sanitizedCaseResults,
       };
 
-      this.realtime.emitToUser(submission.userId, 'submission:failed', payload);
+      this.realtime.emitToUser(submission.userId, SOCKET_EVENTS.SUBMISSION_FAILED, payload);
+      this.realtime.emitToSubmission(jobId, SOCKET_EVENTS.SUBMISSION_FAILED, payload);
 
       if (submission.contestId) {
-        this.realtime.emitToAll('submission:failed', payload);
+        this.realtime.emitContestLeaderboardUpdated(submission.contestId, {
+          contestId: submission.contestId,
+          submissionId: jobId,
+          userId: submission.userId,
+          problemId: submission.problemId,
+          status: submission.status,
+        });
       }
     });
 
@@ -201,4 +224,3 @@ export class BullMqEventsService implements OnModuleInit, OnModuleDestroy {
     this.queueEvents?.removeAllListeners?.();
   }
 }
-

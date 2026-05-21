@@ -89,10 +89,8 @@ Mọi endpoint HTTP trả về (hoặc lỗi) cùng một **envelope**:
 - Room: `user:<userId>`
 - Client truyền `userId` trong query khi connect.
 - Event contract (server emit):
-  - `submission:created` `{ submissionId, status }`
-  - `submission:progress` `{ submissionId, status, progressPct, logChunk }`
-  - `submission:finished` `{ submissionId, status, score, runtimeMs, memoryMb }`
-  - `submission:failed` `{ submissionId, status, error }`
+  - `submission:created` / `submission:progress` / `submission:finished` / `submission:failed` → room `user:<userId>` (and optional `submission:<submissionId>`)
+  - `contest:leaderboard:updated` → room `contest:<contestId>` (minimal payload for leaderboard refresh only)
 
 ## Web demo
 - Mở: `http://localhost:3001`

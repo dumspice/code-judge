@@ -1,9 +1,10 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState, use } from 'react';
+import { useCallback, useEffect, useState, use } from 'react';
 import { contestsApi } from '@/services/contest.apis';
 import { useSocket } from '@/providers/socket-provider';
+import { useContestLeaderboardRealtime } from '@/hooks/useContestLeaderboardRealtime';
 import { Badge } from '@/components/ui/badge';
 import {
   Table,
@@ -22,7 +23,7 @@ export default function LeaderboardPage({ params }: { params: Promise<{ contestI
   const [loading, setLoading] = useState(true);
   const { socket } = useSocket();
 
-  const loadLeaderboard = async () => {
+  const loadLeaderboard = useCallback(async () => {
     try {
       const result = await contestsApi.getLeaderboard(contestId);
       setData(result);
@@ -31,25 +32,13 @@ export default function LeaderboardPage({ params }: { params: Promise<{ contestI
     } finally {
       setLoading(false);
     }
-  };
+  }, [contestId]);
 
   useEffect(() => {
     loadLeaderboard();
+  }, [loadLeaderboard]);
 
-    if (socket) {
-      // Lắng nghe sự kiện kết quả bài nộp để cập nhật bảng xếp hạng
-      socket.on('submission:finished', (payload: any) => {
-        if (payload.contestId === contestId) {
-          console.log('Submission finished for this contest, reloading leaderboard...');
-          loadLeaderboard();
-        }
-      });
-
-      return () => {
-        socket.off('submission:finished');
-      };
-    }
-  }, [contestId, socket]);
+  useContestLeaderboardRealtime(socket, contestId, loadLeaderboard);
 
   if (loading) {
     return (

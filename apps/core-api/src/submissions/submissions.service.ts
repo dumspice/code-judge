@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
+import { SOCKET_EVENTS } from '../common';
 import { SubmissionGateway } from '../realtime/submission.gateway';
 import { JUDGE_QUEUE } from '../queues/tokens';
 import { JUDGE_JOB_MAX_ATTEMPTS } from '../common/constants/queue.constants';
@@ -117,11 +118,16 @@ export class SubmissionsService {
       },
     );
 
-    // Immediate feedback for UI.
-    this.realtime.emitToUser(dto.userId, 'submission:created', {
+    const createdPayload = {
       submissionId: submission.id,
+      userId: submission.userId,
+      problemId: submission.problemId,
+      contestId: submission.contestId ?? null,
       status: submission.status,
-    });
+    };
+
+    this.realtime.emitToUser(dto.userId, SOCKET_EVENTS.SUBMISSION_CREATED, createdPayload);
+    this.realtime.emitToSubmission(submission.id, SOCKET_EVENTS.SUBMISSION_CREATED, createdPayload);
 
     return submission;
   }
@@ -284,6 +290,8 @@ export class SubmissionsService {
         logs: true,
         caseResults: true,
         language: true,
+        contestId: true,
+        isDryRun: true,
         createdAt: true,
         updatedAt: true,
       },
