@@ -5,6 +5,10 @@
  */
 
 import { apiFetch } from './api-client';
+import type {
+  GenerateAiTemplatesDto,
+  GenerateTemplatesResult,
+} from './ai-testcase.apis';
 
 export interface Problem {
   id: string;
@@ -299,6 +303,32 @@ export const problemsApi = {
     options?: RequestInit,
   ): Promise<GenerateProblemStatementResult> {
     return apiFetch('/problems/generate-statement-draft', {
+      ...options,
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async generateCodeTemplates(
+    dto: GenerateAiTemplatesDto,
+    options?: RequestInit,
+  ): Promise<GenerateTemplatesResult> {
+    return apiFetch('/problems/generate-code-templates', {
+      ...options,
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async previewStarterTemplates(
+    dto: {
+      supportedLanguages?: string[];
+      templateCode?: Record<string, string>;
+      testCases?: Array<{ input: string }>;
+    },
+    options?: RequestInit,
+  ): Promise<Record<string, string>> {
+    return apiFetch('/problems/preview-starter-templates', {
       ...options,
       method: 'POST',
       body: dto,

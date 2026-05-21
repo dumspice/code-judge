@@ -24,6 +24,8 @@ const languageOptions = [
   { value: 'JAVASCRIPT', label: 'JavaScript', extension: 'js' },
   { value: 'JAVA', label: 'Java', extension: 'java' },
   { value: 'CPP', label: 'C++', extension: 'cpp' },
+  { value: 'GO', label: 'Go', extension: 'go' },
+  { value: 'RUST', label: 'Rust', extension: 'rs' },
 ];
 
 export default function SubmitPage() {

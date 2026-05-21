@@ -52,6 +52,9 @@ import {
   generatedProblemStatementSchema,
   type GeneratedProblemStatementOutput,
 } from './ai-problem-statement.prompt';
+import { GenerateAiTemplatesDto } from './dto/generate-ai-templates.dto';
+import { buildAiTemplatesMessages, generatedTemplatesSchema } from './ai-templates.prompt';
+import { sanitizeTemplateComments } from './template-comment-sanitizer.util';
 import { GenerateAiProjectTestcaseDto } from './dto/generate-ai-project-testcase.dto';
 import { GenerateAndSaveAiTestcaseDto } from './dto/generate-and-save-ai-testcase.dto';
 import { QuickGenerateAiTestcaseDto } from './dto/quick-generate-ai-testcase.dto';
@@ -204,6 +207,63 @@ export class AiTestcaseService {
       raw: text,
       parsed,
       parseError,
+    };
+  }
+
+  // New method to generate starter code templates via AI
+  async generateTemplates(
+    input: GenerateAiTemplatesDto,
+  ): Promise<{ provider: 'openai' | 'google'; model: string; raw: string; parsed: Record<string, string> | null; parseError?: string }> {
+    const primaryProvider = input.provider ?? resolveAiDefaultProvider(this.config);
+    const primaryModel = input.model ?? resolveAiDefaultModel(this.config, primaryProvider);
+    const maxTokens = Math.min(
+      Math.max(Number(this.config.get<string>(EnvKeys.AI_MAX_TOKENS) ?? 4096), 4096),
+      16384,
+    );
+    const configuredTemp = Number(this.config.get<string>(EnvKeys.AI_TEMPERATURE) ?? 0.3);
+    /** Starter templates: giữ temperature thấp để tránh sinh nhầm lời giải đầy đủ. */
+    const temperature = Math.min(configuredTemp, 0.15);
+
+    const messages = buildAiTemplatesMessages(input);
+    const plans = buildAiLlmPlans(this.config, {
+      provider: primaryProvider,
+      model: primaryModel,
+    });
+
+    let text: string;
+    let usedProvider: 'openai' | 'google';
+    let usedModel: string;
+    try {
+      const run = await this.runLlmPlans(plans, messages, temperature, maxTokens, 2);
+      text = run.text;
+      usedProvider = run.provider;
+      usedModel = run.model;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new ServiceUnavailableException(detail);
+    }
+
+    let parsed: Record<string, string> | null = null;
+    let parseError: string | undefined;
+    try {
+      const json = JSON.parse(this.extractFirstJsonObject(text) ?? text) as unknown;
+      parsed = generatedTemplatesSchema.parse(json) as Record<string, string>;
+      const locale = input.locale === 'en' ? 'en' : 'vi';
+      const sanitized: Record<string, string> = {};
+      for (const [lang, code] of Object.entries(parsed)) {
+        sanitized[lang] = sanitizeTemplateComments(code, locale, lang);
+      }
+      parsed = sanitized;
+    } catch (error) {
+      parseError = error instanceof Error ? error.message : 'Unknown parse error';
+    }
+
+    return {
+      provider: usedProvider,
+      model: usedModel,
+      raw: text,
+      parsed,
+      ...(parseError ? { parseError } : {}),
     };
   }
 

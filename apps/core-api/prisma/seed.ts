@@ -12,7 +12,14 @@
  */
 import 'dotenv/config';
 import * as bcrypt from 'bcryptjs';
-import { Difficulty, PrismaClient, ProblemMode, ProblemVisibility, SubmissionStatus, SubmissionContext, ContestStatus, ClassRole, ClassEnrollmentStatus } from '@prisma/client';
+import {
+  Difficulty,
+  Prisma,
+  PrismaClient,
+  ProblemVisibility,
+  Role,
+  SubmissionStatus,
+} from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -43,7 +50,7 @@ const SEED_IDS = {
   contestFuture: 'seed-contest-future-cup',
 } as const;
 
-const SUPPORTED_LANGUAGES = ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA'];
+const SUPPORTED_LANGUAGES = ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'];
 
 // --- Problem Definitions ---
 
@@ -63,11 +70,8 @@ type SeedProblemDef = {
   tagSlugs: string[];
   visibility: ProblemVisibility;
   testCases: SeedTestCase[];
-<<<<<<< HEAD
   templateCode?: Record<string, string>;
-=======
   goldenSolutions?: { language: string; source: string }[];
->>>>>>> a2a65002d351913dcf00cddd221ac39b4a115ea7
 };
 
 const SEED_PROBLEMS: SeedProblemDef[] = [
@@ -89,9 +93,9 @@ const SEED_PROBLEMS: SeedProblemDef[] = [
       { language: 'JAVASCRIPT', source: 'console.log("Hello, Code-Judge!");' },
     ],
     templateCode: {
-      PYTHON: "# Viết logic tính tổng hai số\n\ndef solve(first_num: int, second_num: int) -> int:\n    # Viết logic của bạn ở đây\n    return first_num + second_num\n",
-      CPP: "// Viết logic tính tổng hai số\n#include <iostream>\n\nusing namespace std;\n\nint solve(int first_num, int second_num) {\n    // Viết logic của bạn ở đây\n    return first_num + second_num;\n}\n",
-      JAVASCRIPT: "/**\n * @param {number} first_num\n * @param {number} second_num\n * @return {number}\n */\nfunction solve(first_num, second_num) {\n    // Viết logic của bạn ở đây\n    return first_num + second_num;\n}\n"
+      PYTHON: '# In ra đúng chuỗi yêu cầu\n\ndef solve() -> None:\n    # Viết logic của bạn ở đây\n    pass\n',
+      CPP: '// In ra đúng chuỗi yêu cầu\n#include <iostream>\nusing namespace std;\n\nvoid solve() {\n    // Viết logic của bạn ở đây\n}\n',
+      JAVASCRIPT: 'function solve() {\n    // Viết logic của bạn ở đây\n}\n',
     }
   },
   {
@@ -112,9 +116,12 @@ const SEED_PROBLEMS: SeedProblemDef[] = [
       { language: 'PYTHON', source: 'import sys\nlines = sys.stdin.readlines()\nprint(int(lines[0]) + int(lines[1]))' },
     ],
     templateCode: {
-      PYTHON: "# Viết logic tìm số lớn hơn\n\ndef solve(x: int, y: int) -> int:\n    # Viết logic của bạn ở đây\n    return max(x, y)\n",
-      CPP: "// Viết logic tìm số lớn hơn\n#include <iostream>\n#include <algorithm>\n\nusing namespace std;\n\nint solve(int x, int y) {\n    // Viết logic của bạn ở đây\n    return max(x, y);\n}\n",
-      JAVASCRIPT: "/**\n * @param {number} x\n * @param {number} y\n * @return {number}\n */\nfunction solve(x, y) {\n    // Viết logic của bạn ở đây\n    return Math.max(x, y);\n}\n"
+      PYTHON:
+        'import sys\n\n\ndef solve(a: int, b: int) -> int:\n    # Viết logic của bạn ở đây\n    pass\n\n\nif __name__ == "__main__":\n    lines = sys.stdin.read().strip().splitlines()\n    a = int(lines[0])\n    b = int(lines[1])\n    result = solve(a, b)\n    if result is not None:\n        print(result)\n',
+      CPP:
+        '#include <iostream>\nusing namespace std;\n\nint solve(int a, int b) {\n    // Viết logic của bạn ở đây\n    return 0;\n}\n\nint main() {\n    int a, b;\n    cin >> a >> b;\n    cout << solve(a, b) << endl;\n    return 0;\n}\n',
+      JAVASCRIPT:
+        'const fs = require("fs");\n\nfunction solve(a, b) {\n    // Viết logic của bạn ở đây\n}\n\nconst input = fs.readFileSync(0, "utf8").trim().split(/\\s+/);\nconst a = parseInt(input[0], 10);\nconst b = parseInt(input[1], 10);\nconst result = solve(a, b);\nif (result !== undefined) console.log(result);\n',
     }
   },
   {
@@ -164,28 +171,23 @@ const SEED_PROBLEMS: SeedProblemDef[] = [
   },
 ];
 
+/** Problem IDs từ seed script cũ (không theo prefix `seed-prob-*`). */
+const LEGACY_SEED_IDS = [
+  'seed-problem-algo',
+  'seed-problem-easy-02',
+  'seed-problem-med-01',
+  'seed-problem-med-02',
+  'seed-problem-hard-01',
+  'seed-problem-contest-only',
+] as const;
+
 // --- Seeding Logic ---
 
 async function wipeSeedArtifacts(): Promise<void> {
   const seedPrefix = { startsWith: SEED_PREFIX };
-  const whereClause = {
-    OR: [
-      { id: seedPrefix },
-      { userId: seedPrefix },
-      { problemId: seedPrefix },
-      { contestId: seedPrefix },
-      { classRoomId: seedPrefix },
-      { classAssignmentId: seedPrefix },
-      { creatorId: seedPrefix },
-      { createdById: seedPrefix },
-      { ownerId: seedPrefix },
-      { email: { startsWith: 'seed-' } },
-      { slug: { startsWith: 'seed-' } },
-    ],
-  };
 
-<<<<<<< HEAD
-  // 1. Fetch all problem IDs that are scheduled for deletion to bypass Prisma relation filter limitations in deleteMany
+  console.info('Cleaning up existing seed data...');
+
   const problemsToDelete = await prisma.problem.findMany({
     where: {
       OR: [
@@ -199,7 +201,7 @@ async function wipeSeedArtifacts(): Promise<void> {
   const problemIds = problemsToDelete.map((p) => p.id);
 
   await prisma.codeSimilarityFinding.deleteMany({
-    where: { contestId: seedPrefix },
+    where: { OR: [{ contestId: seedPrefix }, { id: seedPrefix }] },
   });
   await prisma.submission.deleteMany({
     where: {
@@ -217,10 +219,7 @@ async function wipeSeedArtifacts(): Promise<void> {
   await prisma.contestParticipant.deleteMany({ where: { id: seedPrefix } });
   await prisma.contestProblem.deleteMany({
     where: {
-      OR: [
-        { contestId: seedPrefix },
-        { problemId: { in: problemIds } },
-      ],
+      OR: [{ contestId: seedPrefix }, { problemId: { in: problemIds } }],
     },
   });
   await prisma.classAssignment.deleteMany({
@@ -235,44 +234,20 @@ async function wipeSeedArtifacts(): Promise<void> {
   await prisma.aiGenerationJob.deleteMany({ where: { id: seedPrefix } });
   await prisma.goldenSolution.deleteMany({
     where: {
-      OR: [
-        { id: seedPrefix },
-        { problemId: { in: problemIds } },
-      ],
+      OR: [{ id: seedPrefix }, { problemId: { in: problemIds } }],
     },
   });
   await prisma.testCase.deleteMany({
     where: {
-      OR: [
-        { id: seedPrefix },
-        { problemId: { in: problemIds } },
-      ],
+      OR: [{ id: seedPrefix }, { problemId: { in: problemIds } }],
     },
   });
   await prisma.problemTag.deleteMany({
-    where: {
-      problemId: { in: problemIds },
-    },
+    where: { problemId: { in: problemIds } },
   });
   await prisma.problem.deleteMany({
-    where: {
-      id: { in: problemIds },
-    },
+    where: { id: { in: problemIds } },
   });
-=======
-  console.info('Cleaning up existing seed data...');
-  await prisma.codeSimilarityFinding.deleteMany({ where: { OR: [{ contestId: seedPrefix }, { id: seedPrefix }] } });
-  await prisma.submission.deleteMany({ where: { OR: [{ id: seedPrefix }, { userId: seedPrefix }, { problemId: seedPrefix }, { contestId: seedPrefix }] } });
-  await prisma.reportExport.deleteMany({ where: { id: seedPrefix } });
-  await prisma.contestParticipant.deleteMany({ where: { id: seedPrefix } });
-  await prisma.contestProblem.deleteMany({ where: { OR: [{ contestId: seedPrefix }, { problemId: seedPrefix }] } });
-  await prisma.classAssignment.deleteMany({ where: { id: seedPrefix } });
-  await prisma.aiGenerationJob.deleteMany({ where: { id: seedPrefix } });
-  await prisma.goldenSolution.deleteMany({ where: { id: seedPrefix } });
-  await prisma.testCase.deleteMany({ where: { id: seedPrefix } });
-  await prisma.problemTag.deleteMany({ where: { problem: { id: seedPrefix } } });
-  await prisma.problem.deleteMany({ where: { id: seedPrefix } });
->>>>>>> a2a65002d351913dcf00cddd221ac39b4a115ea7
   await prisma.classInvite.deleteMany({ where: { id: seedPrefix } });
   await prisma.classEnrollment.deleteMany({ where: { OR: [{ id: seedPrefix }, { classRoomId: seedPrefix }] } });
   await prisma.classRoom.deleteMany({ where: { id: seedPrefix } });
@@ -281,251 +256,14 @@ async function wipeSeedArtifacts(): Promise<void> {
   await prisma.user.deleteMany({ where: { OR: [{ id: seedPrefix }, { email: { startsWith: 'seed-' } }] } });
 }
 
-<<<<<<< HEAD
-function problemRows(problems: SeedProblemDef[]) {
-  return problems.map((p) => ({
-    id: p.id,
-    slug: p.slug,
-    title: p.title,
-    description: p.description,
-    statementMd: p.statementMd,
-    difficulty: p.difficulty,
-    mode: p.mode ?? 'ALGO',
-    timeLimitMs: p.difficulty === 'HARD' ? 2000 : 1000,
-    memoryLimitMb: 256,
-    isPublished: true,
-    visibility: p.visibility,
-    supportedLanguages: SUPPORTED_LANGUAGES,
-    maxTestCases: 100,
-    creatorId: SEED_IDS.instructor,
-    templateCode: (p.templateCode ?? null) as any,
-  }));
-}
-
-async function insertProblemsWithTestCases(
-  problems: SeedProblemDef[],
-  tagBySlug: Map<string, string>,
-): Promise<void> {
-  if (problems.length === 0) return;
-
-  await prisma.problem.createMany({ data: problemRows(problems) });
-
-  const problemTags: { problemId: string; tagId: string }[] = [];
-  for (const p of problems) {
-    for (const slug of p.tagSlugs) {
-      const tagId = tagBySlug.get(slug);
-      if (tagId) {
-        problemTags.push({ problemId: p.id, tagId });
-      }
-    }
-  }
-  if (problemTags.length > 0) {
-    await prisma.problemTag.createMany({ data: problemTags });
-  }
-
-  await prisma.testCase.createMany({
-    data: problems.flatMap((p) =>
-      p.testCases.map((tc, index) => ({
-        id: tc.id,
-        problemId: p.id,
-        orderIndex: index + 1,
-        input: tc.input,
-        expectedOutput: tc.expectedOutput,
-        isHidden: tc.isHidden,
-        weight: 1,
-      })),
-    ),
-  });
-}
-
-async function seedContestProblems(): Promise<void> {
-  const tagBySlug = new Map(
-    (await prisma.tag.findMany()).map((t) => [t.slug, t.id] as const),
-  );
-  await insertProblemsWithTestCases(SEED_CONTEST_PROBLEMS, tagBySlug);
-}
-
-async function seedClassrooms(now: Date): Promise<void> {
-  await prisma.classRoom.createMany({
-    data: [
-      {
-        id: SEED_IDS.classCpp,
-        ownerId: SEED_IDS.instructor,
-        name: 'CPP 101 (Seed)',
-        description: 'Lớp seed — C++ cơ bản.',
-        academicYear: '2026-2027',
-        classCode: 'SEEDCPP101',
-        isActive: true,
-      },
-      {
-        id: SEED_IDS.classWeb,
-        ownerId: SEED_IDS.instructor,
-        name: 'Web 102 (Seed)',
-        description: 'Lớp seed — Web.',
-        academicYear: '2026-2027',
-        classCode: 'SEEDWEB102',
-        isActive: true,
-      },
-    ],
-  });
-
-  await prisma.classEnrollment.createMany({
-    data: [
-      {
-        classRoomId: SEED_IDS.classCpp,
-        userId: SEED_IDS.instructor,
-        role: 'OWNER',
-        status: 'ACTIVE',
-        joinedAt: now,
-      },
-      {
-        classRoomId: SEED_IDS.classCpp,
-        userId: SEED_IDS.student,
-        role: 'MEMBER',
-        status: 'ACTIVE',
-        joinedAt: now,
-      },
-      {
-        classRoomId: SEED_IDS.classCpp,
-        userId: SEED_IDS.student2,
-        role: 'MEMBER',
-        status: 'ACTIVE',
-        joinedAt: now,
-      },
-      {
-        classRoomId: SEED_IDS.classWeb,
-        userId: SEED_IDS.instructor,
-        role: 'OWNER',
-        status: 'ACTIVE',
-        joinedAt: now,
-      },
-      {
-        classRoomId: SEED_IDS.classWeb,
-        userId: SEED_IDS.student,
-        role: 'MEMBER',
-        status: 'ACTIVE',
-        joinedAt: now,
-      },
-    ],
-  });
-}
-
-async function seedClassAssignments(now: Date, dueAt: Date): Promise<void> {
-  const tagBySlug = new Map(
-    (await prisma.tag.findMany()).map((t) => [t.slug, t.id] as const),
-  );
-  await insertProblemsWithTestCases(SEED_CLASS_PROBLEMS, tagBySlug);
-
-  await prisma.classAssignment.createMany({
-    data: SEED_CLASS_ASSIGNMENTS.map((a) => ({
-      id: a.id,
-      classRoomId: a.classRoomId,
-      problemId: a.problem.id,
-      title: a.title,
-      description: a.description,
-      dueAt,
-      publishedAt: now,
-    })),
-  });
-}
-
-async function seedContestsAndRelated(now: Date): Promise<Date> {
-  const day = 24 * 60 * 60 * 1000;
-  const winterStart = new Date(now.getTime() - day);
-  const winterEnd = new Date(now.getTime() + 7 * day);
-  const springStart = new Date(now.getTime() + 7 * day);
-  const springEnd = new Date(now.getTime() + 14 * day);
-  const pastStart = new Date(now.getTime() - 30 * day);
-  const pastEnd = new Date(now.getTime() - 7 * day);
-
-  await prisma.contest.createMany({
-    data: [
-      {
-        id: SEED_IDS.contestWinter,
-        title: 'Winter Challenge 2026 (Seed)',
-        description: 'Contest đang diễn ra — dùng để test leaderboard & submit.',
-        slug: 'winter-seed-2026',
-        passwordHash: null,
-        startAt: winterStart,
-        endAt: winterEnd,
-        status: 'RUNNING',
-        testFeedbackPolicy: 'SUMMARY_ONLY',
-        maxSubmissionsPerProblem: 50,
-        createdById: SEED_IDS.instructor,
-      },
-      {
-        id: SEED_IDS.contestSpring,
-        title: 'Spring Open 2026 (Seed)',
-        description: 'Contest sắp diễn ra.',
-        slug: 'spring-seed-2026',
-        passwordHash: null,
-        startAt: springStart,
-        endAt: springEnd,
-        status: 'PUBLISHED',
-        testFeedbackPolicy: 'VERBOSE',
-        maxSubmissionsPerProblem: 30,
-        createdById: SEED_IDS.instructor,
-      },
-      {
-        id: SEED_IDS.contestPast,
-        title: 'Past Mock Contest (Seed)',
-        description: 'Contest đã kết thúc.',
-        slug: 'past-mock-seed-2026',
-        passwordHash: null,
-        startAt: pastStart,
-        endAt: pastEnd,
-        status: 'ENDED',
-        testFeedbackPolicy: 'SUMMARY_ONLY',
-        maxSubmissionsPerProblem: 10,
-        createdById: SEED_IDS.instructor,
-      },
-    ],
-  });
-
-  await prisma.contestProblem.createMany({
-    data: [
-      { contestId: SEED_IDS.contestWinter, problemId: 'seed-problem-algo', orderIndex: 1, points: 100 },
-      { contestId: SEED_IDS.contestWinter, problemId: 'seed-problem-med-01', orderIndex: 2, points: 200 },
-      { contestId: SEED_IDS.contestWinter, problemId: 'seed-problem-hard-01', orderIndex: 3, points: 300 },
-      { contestId: SEED_IDS.contestWinter, problemId: 'seed-problem-contest-only', orderIndex: 4, points: 150 },
-      { contestId: SEED_IDS.contestSpring, problemId: 'seed-problem-easy-02', orderIndex: 1, points: 100 },
-      { contestId: SEED_IDS.contestSpring, problemId: 'seed-problem-med-02', orderIndex: 2, points: 200 },
-      { contestId: SEED_IDS.contestPast, problemId: 'seed-problem-algo', orderIndex: 1, points: 100 },
-    ],
-  });
-
-  await prisma.contestParticipant.createMany({
-    data: [
-      { id: 'seed-cpart-winter-student', contestId: SEED_IDS.contestWinter, userId: SEED_IDS.student },
-      { id: 'seed-cpart-winter-student2', contestId: SEED_IDS.contestWinter, userId: SEED_IDS.student2 },
-      { id: 'seed-cpart-winter-instructor', contestId: SEED_IDS.contestWinter, userId: SEED_IDS.instructor },
-      { id: 'seed-cpart-spring-student', contestId: SEED_IDS.contestSpring, userId: SEED_IDS.student },
-    ],
-  });
-
-  await prisma.classAssignment.create({
-    data: {
-      id: SEED_IDS.assignmentContestWinter,
-      classRoomId: SEED_IDS.classCpp,
-      contestId: SEED_IDS.contestWinter,
-      title: 'Contest Winter 2026 (Seed)',
-      description: 'Assignment gắn contest — không trỏ problemId.',
-      dueAt: winterEnd,
-      publishedAt: now,
-    },
-  });
-
-  return winterEnd;
-}
-
 async function seedUsers() {
-  const users = [
-    { id: SEED_IDS.admin, name: 'System Admin', email: 'seed-admin@codejudge.io', role: 'ADMIN', emailVerified: true, isActive: true, passwordHash },
-    { id: SEED_IDS.instructor, name: 'Dr. Algorithm', email: 'seed-instructor@codejudge.io', role: 'CLIENT', emailVerified: true, isActive: true, passwordHash },
-    { id: SEED_IDS.student1, name: 'Alice Smith', email: 'seed-student1@codejudge.io', role: 'CLIENT', emailVerified: true, isActive: true, passwordHash },
-    { id: SEED_IDS.student2, name: 'Bob Johnson', email: 'seed-student2@codejudge.io', role: 'CLIENT', emailVerified: true, isActive: true, passwordHash },
-    { id: SEED_IDS.student3, name: 'Charlie Brown', email: 'seed-student3@codejudge.io', role: 'CLIENT', emailVerified: true, isActive: true, passwordHash },
-    { id: SEED_IDS.student4, name: 'Diana Prince', email: 'seed-student4@codejudge.io', role: 'CLIENT', emailVerified: true, isActive: true, passwordHash },
+  const users: Prisma.UserCreateManyInput[] = [
+    { id: SEED_IDS.admin, name: 'System Admin', email: 'seed-admin@codejudge.io', role: Role.ADMIN, emailVerified: true, isActive: true, passwordHash },
+    { id: SEED_IDS.instructor, name: 'Dr. Algorithm', email: 'seed-instructor@codejudge.io', role: Role.CLIENT, emailVerified: true, isActive: true, passwordHash },
+    { id: SEED_IDS.student1, name: 'Alice Smith', email: 'seed-student1@codejudge.io', role: Role.CLIENT, emailVerified: true, isActive: true, passwordHash },
+    { id: SEED_IDS.student2, name: 'Bob Johnson', email: 'seed-student2@codejudge.io', role: Role.CLIENT, emailVerified: true, isActive: true, passwordHash },
+    { id: SEED_IDS.student3, name: 'Charlie Brown', email: 'seed-student3@codejudge.io', role: Role.CLIENT, emailVerified: true, isActive: true, passwordHash },
+    { id: SEED_IDS.student4, name: 'Diana Prince', email: 'seed-student4@codejudge.io', role: Role.CLIENT, emailVerified: true, isActive: true, passwordHash },
   ];
 
   // Generate 1000 test users
@@ -534,7 +272,7 @@ async function seedUsers() {
       id: `${SEED_PREFIX}user-${i}`,
       name: `Student ${i}`,
       email: `seed-student${i}@codejudge.io`,
-      role: 'CLIENT',
+      role: Role.CLIENT,
       emailVerified: true,
       isActive: true,
       passwordHash,

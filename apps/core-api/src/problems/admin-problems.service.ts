@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateAdminProblemDto } from './dto/create-admin-problem.dto';
 import { buildUniqueProblemSlug } from './problem-slug.util';
 import { replaceProblemTags } from './problem-tag-sync.util';
+import { resolveTemplateCode, withResolvedTemplateCode } from './default-template-code.util';
 
 @Injectable()
 export class AdminProblemsService {
@@ -12,6 +13,11 @@ export class AdminProblemsService {
   async create(dto: CreateAdminProblemDto, creatorId: string): Promise<Problem> {
     const slug = await buildUniqueProblemSlug(this.prisma.problem, dto.title);
     const supportedLanguages = dto.supportedLanguages ?? [];
+    const templateCode = resolveTemplateCode(
+      supportedLanguages,
+      dto.templateCode,
+      dto.testCases,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const problem = await tx.problem.create({
@@ -27,7 +33,7 @@ export class AdminProblemsService {
           isPublished: dto.isPublished ?? true,
           visibility: ProblemVisibility.PUBLIC,
           supportedLanguages: supportedLanguages.length > 0 ? supportedLanguages : undefined,
-          templateCode: dto.templateCode ?? undefined,
+          templateCode,
           maxTestCases: dto.maxTestCases ?? 100,
           creatorId,
         },
@@ -50,13 +56,14 @@ export class AdminProblemsService {
         await replaceProblemTags(tx, problem.id, dto.tagIds);
       }
 
-      return tx.problem.findUniqueOrThrow({
+      const full = await tx.problem.findUniqueOrThrow({
         where: { id: problem.id },
         include: {
           tags: { include: { tag: true } },
           testCases: { orderBy: { orderIndex: 'asc' } },
         },
       });
+      return withResolvedTemplateCode(full);
     });
   }
 }

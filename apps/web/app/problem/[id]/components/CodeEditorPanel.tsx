@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Play, Send, Moon, Sun, Settings, ChevronDown, LayoutDashboard } from 'lucide-react';
 import { Problem } from '@/services/problem.apis';
 import { cn } from '@/lib/utils';
+import { getProblemSupportedLanguages, monacoLanguageId } from '@/lib/supported-languages';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -41,10 +42,10 @@ export default function CodeEditorPanel({
   
   const [isEditorReady, setIsEditorReady] = useState(false);
 
-  const supportedLanguages = useMemo(() => Array.from(new Set([
-    ...(problem.supportedLanguages || []),
-    'PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'
-  ])), [problem.supportedLanguages]);
+  const supportedLanguages = useMemo(
+    () => getProblemSupportedLanguages(problem.supportedLanguages),
+    [problem.supportedLanguages],
+  );
 
   const handleEditorWillMount = (monacoInstance: any) => {
     monacoInstance.editor.defineTheme('premium-dark', {
@@ -151,7 +152,7 @@ export default function CodeEditorPanel({
         )}
         <MonacoEditor
           height="100%"
-          language={language.toLowerCase()}
+          language={monacoLanguageId(language)}
           value={code}
           onChange={(value) => setCode(value || '')}
           theme={isDarkMode ? 'premium-dark' : 'light'}
