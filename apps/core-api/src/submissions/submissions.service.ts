@@ -278,16 +278,20 @@ export class SubmissionsService {
     }
 
     const isOwner = submission.userId === user.userId;
-    const isAuthorized =
-      isOwner ||
-      user.role === Role.ADMIN ||
-      (await this.canManageProblem(submission.problem, user.userId, user.role));
+    const canManage = await this.canManageProblem(
+      submission.problem,
+      user.userId,
+      user.role,
+    );
+    const canView =
+      isOwner || user.role === Role.ADMIN || canManage;
 
-    if (!isOwner && !isAuthorized) {
+    if (!canView) {
       throw new ForbiddenException('Không có quyền xem submission này');
     }
 
-    const canSeeHiddenOutputs = isAuthorized;
+    /** Students may view their submission but must not see hidden testcase I/O (SEC-SUB-02). */
+    const canSeeHiddenOutputs = user.role === Role.ADMIN || canManage;
 
     // Process caseResults and dynamically map isHidden from the database to bypass worker lag
     if (submission.caseResults) {

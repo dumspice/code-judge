@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Classroom, getClassroomDetail } from '@/services/classroom.apis';
-import { Copy } from 'lucide-react';
+import { CopyButton } from '@/components/shared/copy-button';
 import { AssignmentPost } from '@/components/dashboard/class-detail/assignment-post';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -75,9 +75,7 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
             <h2 className="font-semibold text-gray-900 mb-2">Class code</h2>
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">{classroom.classCode}</p>
-              <Button className="cursor-pointer" variant="outline" size="icon">
-                <Copy className="w-4 h-4" />
-              </Button>
+              <CopyButton value={classroom.classCode} />
             </div>
           </div>
 
