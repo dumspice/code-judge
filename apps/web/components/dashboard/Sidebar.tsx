@@ -213,7 +213,7 @@ export default function Sidebar() {
                 'flex items-center w-full h-12 px-3 border-l-2 border-transparent transition-all duration-200 text-gray-500',
                 'hover:text-primary hover:border-primary',
                 pathname === '/dashboard/archived'
-                  ? 'border-primary text-primary bg-slate-100 dark:bg-slate-800 font-semibold'
+                  ? 'border-primary text-primary dark:bg-slate-800 font-semibold'
                   : '',
               )}
             >

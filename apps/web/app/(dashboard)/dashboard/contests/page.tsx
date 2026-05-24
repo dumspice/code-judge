@@ -78,8 +78,8 @@ export default async function ContestsPage({ searchParams }: PageProps) {
     <div className="mx-auto max-w-7xl space-y-6">
       <div className="flex flex-col justify-between gap-6 pb-8">
         <div className="space-y-4">
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">Public Contests</h1>
-          <p className="text-lg text-primary/70 max-w-xl">
+          <h1 className="text-4xl font-extrabold tracking-tight text-white">Public Contests</h1>
+          <p className="text-lg text-primary/70 max-w-2xl leading-relaxed">
             Compete with others, solve challenging problems, and climb the leaderboard.
           </p>
         </div>

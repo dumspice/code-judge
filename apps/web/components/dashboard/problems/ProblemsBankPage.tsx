@@ -230,13 +230,13 @@ export default function ProblemsBankPage() {
     <div className="mx-auto max-w-7xl space-y-6">
       <div>
         <div className="flex items-center gap-4">
-          <h1 className="text-4xl font-semibold tracking-tight">Problem Bank</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight text-white">Problem Bank</h1>
           <p className="bg-primary text-muted py-1 px-2 rounded-full text-sm font-semibold">
             {total > 0 ? `${total} problems` : null}
           </p>
         </div>
         <div className="flex items-center gap-2 mt-2">
-          <p className="text-muted-foreground text-lg text-primary/70">
+          <p className="text-lg text-primary/70 max-w-2xl leading-relaxed">
             Practice and master programming with our curated collection of public problems. Filter
             by difficulty, topics, or status to find your next challenge.{' '}
           </p>

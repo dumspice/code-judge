@@ -40,7 +40,7 @@ export default function DashboardHeader() {
           <div className="relative">
             <Button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="rounded-full w-10 h-10 cursor-pointer hover:bg-gray-700"
+              className="rounded-full w-10 h-10 cursor-pointer hover:bg-primary/20 hover:border-primary hover:text-primary"
             >
               <Plus className="w-5 h-5" />
             </Button>
