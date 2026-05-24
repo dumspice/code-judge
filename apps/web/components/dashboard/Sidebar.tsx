@@ -19,6 +19,7 @@ import { useSidebarStore } from '@/store/sidebar-store';
 import { useAuthStore } from '@/store/auth-store';
 import { useClassroomStore } from '@/store/classroom-store';
 import Link from 'next/link';
+import { Button } from '../ui/button';
 
 const menuItems = [
   { icon: Home, label: 'Classroom', path: '/dashboard' },
@@ -54,8 +55,8 @@ export default function Sidebar() {
       href={item.path}
       key={key}
       className={cn(
-        'flex items-center h-12 px-3 rounded-xl hover:bg-slate-100 cursor-pointer text-gray-600 hover:text-blue-600 transition-colors',
-        pathname === item.path ? 'bg-slate-100 text-blue-600' : '',
+        'flex items-center h-12 px-3 hover:border-l-3 hover:border-primary cursor-pointer text-gray-500 hover:text-primary transition-colors',
+        pathname === item.path ? 'border-l-2 border-primary text-primary' : '',
       )}
     >
       {item.icon ? (
@@ -109,7 +110,7 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-16 h-[calc(100vh-64px)] bg-white border-r border-gray-200 transition-all duration-300 ease-in-out group shadow-sm z-40 flex flex-col',
+        'fixed left-0 top-16 h-[calc(100vh-64px)] bg-slate-900 transition-all duration-300 ease-in-out group shadow-sm z-40 flex flex-col hover:bg-slate-900',
         isOpen ? 'w-64' : 'w-[72px] hover:w-64',
       )}
     >
@@ -123,7 +124,7 @@ export default function Sidebar() {
         <div className="flex flex-col gap-1">
           <button
             onClick={() => setIsTeachingExpanded(!isTeachingExpanded)}
-            className="flex items-center justify-between w-full h-12 px-3 rounded-xl hover:bg-slate-100 text-gray-700 cursor-pointer"
+            className="flex items-center justify-between w-full h-12 px-3 hover:border-l-2 hover:border-primary hover:text-primary text-gray-500 cursor-pointer"
           >
             <div className="flex items-center">
               <Users className="w-6 h-6 min-w-[24px]" />
@@ -149,7 +150,7 @@ export default function Sidebar() {
           {isTeachingExpanded && (
             <div className="flex flex-col gap-1">
               {teachingList.length === 0 ? (
-                <div className="hidden px-3 text-sm text-gray-400 group-hover:block">
+                <div className="hidden px-3 text-sm text-primary group-hover:block">
                   No classrooms
                 </div>
               ) : (
@@ -165,7 +166,7 @@ export default function Sidebar() {
         <div className="flex flex-col gap-1">
           <button
             onClick={() => setIsEnrolledExpanded(!isEnrolledExpanded)}
-            className="flex items-center justify-between w-full h-12 px-3 rounded-xl hover:bg-slate-100 text-gray-700 cursor-pointer"
+            className="flex items-center justify-between w-full h-12 px-3 hover:border-l-2 hover:border-primary hover:text-primary text-gray-500 cursor-pointer"
           >
             <div className="flex items-center">
               <GraduationCap className="w-6 h-6 min-w-[24px]" />
@@ -209,22 +210,25 @@ export default function Sidebar() {
             <Link
               href="/dashboard/archived"
               className={cn(
-                'flex items-center flex-1 h-12 px-3 rounded-xl hover:bg-slate-100 text-gray-700',
-                pathname === '/dashboard/archived' ? 'bg-slate-100 text-blue-600 w-4' : '',
+                'flex items-center w-full h-12 px-3 border-l-2 border-transparent transition-all duration-200 text-gray-500',
+                'hover:text-primary hover:border-primary',
+                pathname === '/dashboard/archived'
+                  ? 'border-primary text-primary bg-slate-100 dark:bg-slate-800 font-semibold'
+                  : '',
               )}
             >
               <Archive
                 className={cn(
                   'w-6 h-6 min-w-[24px]',
-                  pathname === '/dashboard/archived' ? 'text-blue-600' : 'text-gray-400',
+                  pathname === '/dashboard/archived' ? 'text-primary' : 'text-gray-500',
                 )}
               />
               <span
                 className={cn(
-                  'ml-4 font-medium cursor-pointer',
+                  'ml-4 font-medium cursor-pointer ',
                   isOpen ? 'opacity-100' : 'opacity-0 invisible',
                   'group-hover:opacity-100 group-hover:visible',
-                  pathname === '/dashboard/archived' ? 'text-blue-600' : 'text-gray-500',
+                  pathname === '/dashboard/archived' ? 'text-primary' : 'text-gray-500',
                 )}
               >
                 Archived classes

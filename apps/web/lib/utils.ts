@@ -26,3 +26,22 @@ export function utcIsoToDateTimeLocal(value: string): string {
   const timezoneOffsetMs = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
 }
+
+export const formatDuration = (ms: number) => {
+  const totalSeconds = Math.floor(ms / 1000);
+
+  const days = Math.floor(totalSeconds / (60 * 60 * 24));
+  const hours = Math.floor((totalSeconds % (60 * 60 * 24)) / (60 * 60));
+  const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+};
