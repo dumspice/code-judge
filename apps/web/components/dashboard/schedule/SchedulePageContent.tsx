@@ -116,7 +116,7 @@ export default function SchedulePageContent({ filter }: { filter?: string }) {
                   {format(day, 'EEE', { locale: enUS })}
                 </span>
                 <span
-                  className={`text-2xl font-light mt-1 flex items-center justify-center h-8 w-8 rounded-full ${isSameDay(day, new Date()) ? 'text-primary-foreground font-bold bg-primary' : 'text-muted-foreground'}`}
+                  className={`text-2xl font-light mt-1 flex items-center justify-center h-10 w-10 rounded-full ${isSameDay(day, new Date()) ? 'text-primary-foreground font-bold bg-primary' : 'text-muted-foreground'}`}
                 >
                   {format(day, 'd')}
                 </span>
