@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ProblemTagSlugFilter } from '@/components/problems/ProblemTagSlugFilter';
+import ProblemCard from './ProblemCard';
 
 const PAGE_SIZE = 4;
 
@@ -317,65 +318,7 @@ export default function ProblemsBankPage() {
               </div>
             ) : (
               items.map((p) => {
-                const diffColor =
-                  p.difficulty === 'EASY'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : p.difficulty === 'MEDIUM'
-                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                      : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
-
-                return (
-                  <div
-                    key={p.id}
-                    className="flex flex-col justify-between p-5 bg-slate-900/50 border border-primary/20 hover:border hover:border-primary/50 rounded-2xl shadow-sm transition-all duration-200"
-                  >
-                    {/* PHẦN TRÊN: Tiêu đề + Độ khó */}
-                    <div>
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <h3 className="font-semibold text-slate-200 text-2xl line-clamp-1">
-                          {p.title}
-                        </h3>
-                        <span
-                          className={`text-[11px] font-bold tracking-wider px-2.5 py-0.5 rounded border uppercase ${diffColor}`}
-                        >
-                          {p.difficulty}
-                        </span>
-                      </div>
-
-                      {/* DANH SÁCH TAGS */}
-                      {p.tags && p.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mb-4">
-                          {p.tags.map((t) => (
-                            <Badge
-                              key={t.tag.id}
-                              variant="secondary"
-                              className="text-[11px] py-0.5 px-2 bg-slate-800 text-primary hover:bg-slate-700 font-normal cursor-pointer transition-colors border-none"
-                              onClick={() => setTagSlug(t.tag.slug)}
-                            >
-                              {t.tag.name}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-muted-foreground text-sm mt-2 line-clamp-3">
-                      {p.description}
-                    </div>
-                    {/* PHẦN DƯỚI: Nút Solve */}
-                    <div className="flex items-center mt-4 pt-3">
-                      {/* Nút Solve thiết kế chuẩn theo hình gốc */}
-                      <Button
-                        size="sm"
-                        asChild
-                        className="bg-slate-800 w-full hover:bg-slate-700 text-slate-200 font-semibold px-5 rounded-xl h-9 border-none transition-colors"
-                      >
-                        <Link href={`/problem/${p.id}`}>
-                          <p className="font-semibold">Solve</p>
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                );
+                return <ProblemCard key={p.id} problem={p} onTagClick={setTagSlug} />;
               })
             )}
           </div>
