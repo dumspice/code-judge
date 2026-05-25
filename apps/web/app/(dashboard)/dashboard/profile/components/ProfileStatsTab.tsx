@@ -72,19 +72,19 @@ export function ProfileStatsTab({ stats, loading, error }: ProfileStatsTabProps)
             label="Easy"
             solved={stats.byDifficulty.easy.solved}
             attempted={stats.byDifficulty.easy.attempted}
-            colorClass="bg-green-600"
+            colorClass="bg-emerald-500"
           />
           <DifficultyBar
             label="Medium"
             solved={stats.byDifficulty.medium.solved}
             attempted={stats.byDifficulty.medium.attempted}
-            colorClass="bg-yellow-500"
+            colorClass="bg-amber-500"
           />
           <DifficultyBar
             label="Hard"
             solved={stats.byDifficulty.hard.solved}
             attempted={stats.byDifficulty.hard.attempted}
-            colorClass="bg-red-600"
+            colorClass="bg-rose-500"
           />
         </div>
       </div>
