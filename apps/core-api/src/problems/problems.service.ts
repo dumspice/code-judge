@@ -4,7 +4,15 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Difficulty, ProblemMode, ProblemVisibility, Prisma, Problem, Role } from '@prisma/client';
+import {
+  Difficulty,
+  ProblemMode,
+  ProblemVisibility,
+  Prisma,
+  Problem,
+  Role,
+  SubmissionStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
@@ -13,8 +21,6 @@ import { ProblemVisibilityService } from './problem-visibility.service';
 import { replaceProblemTags } from './problem-tag-sync.util';
 import { resolveTemplateCode, withResolvedTemplateCode } from './default-template-code.util';
 
-import { MailerService } from '../mail/mail.service';
-import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 
 const PROBLEM_LIST_INCLUDE = {
@@ -31,8 +37,6 @@ const PROBLEM_DETAIL_INCLUDE = {
 export class ProblemsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly mailerService: MailerService,
-    private readonly configService: ConfigService,
     private readonly visibilityService: ProblemVisibilityService,
   ) {}
 
@@ -84,7 +88,7 @@ export class ProblemsService {
       }
 
       // Create ClassAssignment automatically
-      const assignment = await tx.classAssignment.create({
+      await tx.classAssignment.create({
         data: {
           classRoomId,
           title: problem.title,
@@ -93,43 +97,7 @@ export class ProblemsService {
           publishedAt: new Date(),
           dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
         },
-        include: {
-          classRoom: {
-            include: {
-              enrollments: {
-                where: { status: 'ACTIVE', role: 'MEMBER' },
-                include: { user: { select: { email: true } } },
-              },
-            },
-          },
-        },
       });
-
-      // Send email notification (async)
-      const memberEmails = assignment.classRoom.enrollments
-        .map((e: any) => e.user.email)
-        .filter((email: string | null): email is string => !!email);
-
-      console.log(
-        `[ProblemsService] Found ${memberEmails.length} members to notify for problem "${problem.title}" in class "${assignment.classRoom.name}"`,
-      );
-
-      if (memberEmails.length > 0 && problem.visibility !== 'CONTEST_ONLY') {
-        const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3001';
-        this.mailerService
-          .sendAssignmentNotification({
-            to: memberEmails,
-            classroomName: assignment.classRoom.name,
-            type: 'problem',
-            title: problem.title,
-            description: problem.description ?? undefined,
-            dueAt: dto.dueAt ? new Date(dto.dueAt).toLocaleString() : undefined,
-            url: `${frontendUrl}/dashboard/${classRoomId}/classwork`,
-          })
-          .catch((err) =>
-            console.error('[ProblemsService] Failed to send assignment notification emails:', err),
-          );
-      }
 
       if (dto.tagIds !== undefined) {
         await replaceProblemTags(tx, problem.id, dto.tagIds);
@@ -147,17 +115,23 @@ export class ProblemsService {
     });
   }
 
-  async findAll(query: {
+  /** Base scope for public problem bank (published + PUBLIC visibility only). */
+  buildPublicBankBaseWhere(): Prisma.ProblemWhereInput {
+    return {
+      isPublished: true,
+      ...this.visibilityService.getPublicProblemBankVisibilityFilter(),
+    };
+  }
+
+  /** List filters: base bank + search / difficulty / mode / tag / classRoom. */
+  buildPublicBankWhere(query: {
     search?: string;
-    page?: number;
-    limit?: number;
     classRoomId?: string;
     difficulty?: string;
     mode?: string;
     tagId?: string;
     tagSlug?: string;
-  }) {
-    const { page, limit, skip } = this.normalizeListPagination(query.page, query.limit);
+  }): Prisma.ProblemWhereInput {
     const search = query.search?.trim();
     const difficultyFilter =
       query.difficulty === 'EASY' || query.difficulty === 'MEDIUM' || query.difficulty === 'HARD'
@@ -166,15 +140,13 @@ export class ProblemsService {
     const modeFilter =
       query.mode === 'ALGO' || query.mode === 'PROJECT' ? { mode: query.mode as ProblemMode } : {};
 
-    // If classRoomId is provided (class context), show all problems including PRIVATE
-    // Otherwise (public bank), only show PUBLIC problems
     const visibilityFilter = query.classRoomId
-      ? {} // No visibility filter for class context
-      : this.visibilityService.getPublicProblemBankVisibilityFilter(); // visibility: PUBLIC for public bank
+      ? {}
+      : this.visibilityService.getPublicProblemBankVisibilityFilter();
 
-    const where: Prisma.ProblemWhereInput = {
+    return {
       isPublished: true,
-      ...visibilityFilter,
+      ...(query.classRoomId ? {} : visibilityFilter),
       ...difficultyFilter,
       ...modeFilter,
       ...(query.classRoomId ? { assignments: { some: { classRoomId: query.classRoomId } } } : {}),
@@ -190,6 +162,56 @@ export class ProblemsService {
           }
         : {}),
     };
+  }
+
+  /** User progress across the entire public problem bank (ignores list filters). */
+  async getBankProgress(userId: string) {
+    const where = this.buildPublicBankBaseWhere();
+    const solvedWhere: Prisma.ProblemWhereInput = {
+      ...where,
+      submissions: {
+        some: {
+          userId,
+          status: SubmissionStatus.Accepted,
+          isDryRun: false,
+        },
+      },
+    };
+
+    const [total, solved, solvedGroups] = await Promise.all([
+      this.prisma.problem.count({ where }),
+      this.prisma.problem.count({ where: solvedWhere }),
+      this.prisma.problem.groupBy({
+        by: ['difficulty'],
+        where: solvedWhere,
+        _count: { _all: true },
+      }),
+    ]);
+
+    const byDifficulty = {
+      EASY: 0,
+      MEDIUM: 0,
+      HARD: 0,
+    };
+    for (const row of solvedGroups) {
+      byDifficulty[row.difficulty] = row._count._all;
+    }
+
+    return { total, solved, byDifficulty };
+  }
+
+  async findAll(query: {
+    search?: string;
+    page?: number;
+    limit?: number;
+    classRoomId?: string;
+    difficulty?: string;
+    mode?: string;
+    tagId?: string;
+    tagSlug?: string;
+  }) {
+    const { page, limit, skip } = this.normalizeListPagination(query.page, query.limit);
+    const where = this.buildPublicBankWhere(query);
 
     const [items, total] = await Promise.all([
       this.prisma.problem.findMany({
