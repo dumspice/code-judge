@@ -10,6 +10,7 @@ import { Problem, problemsApi } from '@/services/problem.apis';
 import { useDebounce } from '@/hooks/use-debounce';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import ProblemCard from '../problems/ProblemCard';
 
 export default function ClassworkList({
   classId,
@@ -88,7 +89,7 @@ export default function ClassworkList({
         {canManage && (
           <Link
             href={`/dashboard/${classId}/classwork/create`}
-            className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all hover:scale-105 active:scale-95"
+            className="flex items-center gap-2 bg-primary hover:bg-primary/80 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all hover:scale-105 active:scale-95"
           >
             <Plus className="w-5 h-5" />
             Create Problem
@@ -109,16 +110,16 @@ export default function ClassworkList({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredProblems.length > 0 ? (
           filteredProblems.map((problem) => (
-            <AssignmentItem
+            <ProblemCard
               key={problem.id}
-              {...problem}
+              problem={problem}
               onEdit={handleEdit}
               onDelete={handleDelete}
               showActions={canManage}
             />
           ))
         ) : (
-          <div className="col-span-full flex flex-col items-center justify-center py-20 bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-200 text-gray-400">
+          <div className="col-span-full flex flex-col items-center justify-center py-20 bg-slate-900/50 rounded-3xl border-2 border-dashed border-primary/80 text-gray-400">
             <h2 className="text-xl font-medium">No assignments found.</h2>
             <p className="text-sm">Create your first problem to get started.</p>
           </div>

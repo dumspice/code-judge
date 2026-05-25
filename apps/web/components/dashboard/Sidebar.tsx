@@ -118,7 +118,7 @@ export default function Sidebar() {
         {/* MAIN MENU */}
         {menuItems.map((item, index) => renderItem(item, index))}
 
-        <div className="my-1 border-t border-gray-200" />
+        <div className="my-1 border-t border-primary" />
 
         {/* TEACHING */}
         <div className="flex flex-col gap-1">
@@ -160,7 +160,7 @@ export default function Sidebar() {
           )}
         </div>
 
-        <div className="my-1 border-t border-gray-200" />
+        <div className="my-1 border-t border-primary" />
 
         {/* ENROLLED */}
         <div className="flex flex-col gap-1">
@@ -202,7 +202,7 @@ export default function Sidebar() {
           )}
         </div>
 
-        <div className="my-1 border-t border-gray-200" />
+        <div className="my-1 border-t border-primary" />
 
         {/* ARCHIVED */}
         <div className="flex flex-col gap-1">

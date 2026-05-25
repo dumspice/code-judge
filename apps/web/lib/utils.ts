@@ -45,3 +45,11 @@ export const formatDuration = (ms: number) => {
 
   return `${minutes}m ${seconds}s`;
 };
+
+export const getDifficultyColor = (difficulty: string) => {
+  return difficulty === 'EASY'
+    ? 'bg-emerald-500/10 text-emerald-400'
+    : difficulty === 'MEDIUM'
+      ? 'bg-amber-500/10 text-amber-400'
+      : 'bg-red-500/10 text-red-400';
+};
