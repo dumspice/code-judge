@@ -5,7 +5,9 @@ import { CurrentUser, Roles } from '../common';
 import type { RequestUser } from '../common/interfaces/request-user.interface';
 import { GenerateAiProblemStatementDto } from './dto/generate-ai-problem-statement.dto';
 import { GenerateAiTestcaseDto } from './dto/generate-ai-testcase.dto';
+import { GenerateAiTemplatesDto } from './dto/generate-ai-templates.dto';
 import { GenerateAiProjectTestcaseDto } from './dto/generate-ai-project-testcase.dto';
+
 import { AiTestcaseService } from './ai-testcase.service';
 import { QuickGenerateAiTestcaseDto } from './dto/quick-generate-ai-testcase.dto';
 import { GenerateAndSaveAiTestcaseDto } from './dto/generate-and-save-ai-testcase.dto';
@@ -118,14 +120,15 @@ export class AiTestcaseController {
     return this.aiTestcaseService.testGenerateProjectSample({ ...body, sample: 'fullstack' });
   }
 
+  @Roles(Role.ADMIN)
   @ApiOperation({
-    summary:
-      'Sinh testcase và ghi DB — ALGO: input/output; PROJECT: testManifest + file bundle trong job. JWT creator/admin.',
+    summary: 'Generate starter code templates for multiple languages (AI)',
   })
-  @Post('generate-and-save')
-  async generateAndSave(@CurrentUser() user: RequestUser, @Body() dto: GenerateAndSaveAiTestcaseDto) {
-    return this.aiTestcaseService.generateAndSave(dto, user);
+  @Post('generate-templates')
+  async generateTemplates(@Body() dto: GenerateAiTemplatesDto) {
+    return this.aiTestcaseService.generateTemplates(dto);
   }
+
 
   @ApiOperation({
     summary:

@@ -230,6 +230,7 @@ model Problem {
   isPublished        Boolean
   visibility         ProblemVisibility
   supportedLanguages Json?
+  templateCode       Json?
   maxTestCases       Int
   creatorId          String?
   createdAt          DateTime          @default(now())

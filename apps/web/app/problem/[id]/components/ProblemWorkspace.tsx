@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import { Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
 import { contestsApi, Contest } from '@/services/contest.apis';
 import { getClassroomDetail } from '@/services/classroom.apis';
+import { getProblemSupportedLanguages, submissionFileExtension } from '@/lib/supported-languages';
 
 // 1. CHUẨN HÓA TYPE THEO SCHEMA
 export type ProblemType = {
@@ -75,6 +76,7 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
   const [problem, setProblem] = useState<Problem | null>(null);
   const [loadingProblem, setLoadingProblem] = useState(true);
   const [code, setCode] = useState('');
+  const [language, setLanguage] = useState<string>('PYTHON');
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [result, setResult] = useState<SubmissionResult | null>(null);
@@ -157,8 +159,10 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
           }
         }
 
+        const lang = resolveEditorLanguage(data, language);
         setProblem(data);
-        setCode('');
+        setLanguage(lang);
+        setCode(getSavedOrTemplateCode(data, lang));
         setResult(null);
       } catch (err: any) {
         console.error('Failed to fetch problem:', err);
@@ -474,30 +478,21 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
     });
   }, [contestId, problem?.id, lastSubmissionId, fetchHint, hintState]);
 
-  // Initialize code from localStorage or default
-  useEffect(() => {
-    if (!problem) return;
-    const saved = localStorage.getItem(`code-${problem.id}`);
-    if (saved) {
-      setCode(saved);
-    } else {
-      const lang = problem.supportedLanguages?.[0]?.toLowerCase();
-      if (lang === 'python') setCode('# Write your code here\n');
-      else if (lang === 'javascript' || lang === 'typescript') setCode('// Write your code here\n');
-      else if (lang === 'cpp')
-        setCode('#include <iostream>\nusing namespace std;\n\nint main() {\n  return 0;\n}\n');
-      else if (lang === 'go' || lang === 'golang')
-        setCode('package main\nimport "fmt"\n\nfunc main() {\n  \n}\n');
-      else if (lang === 'rust' || lang === 'rs') setCode('fn main() {\n    \n}\n');
-      else setCode('');
-    }
-  }, [problem?.id, problem?.supportedLanguages]);
+  const handleLanguageChange = useCallback(
+    (newLang: string) => {
+      if (!problem) return;
+      const lang = newLang.trim().toUpperCase();
+      setLanguage(lang);
+      setCode(getSavedOrTemplateCode(problem, lang));
+    },
+    [problem],
+  );
 
-  // Save code to localStorage
+  // Save code to localStorage specific to problem and language
   useEffect(() => {
     if (!problem || !code) return;
-    localStorage.setItem(`code-${problem.id}`, code);
-  }, [code, problem?.id]);
+    localStorage.setItem(`code-${problem.id}-${language.toUpperCase()}`, code);
+  }, [code, problem?.id, language]);
 
   const [activeTab, setActiveTab] = useState<'description' | 'submissions'>('description');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -540,22 +535,7 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
     try {
       const submissionId = `sub-${Math.random().toString(36).slice(2, 10)}-${Date.now()}`;
       const optionLang = language.toUpperCase();
-      const ext =
-        optionLang === 'PYTHON'
-          ? 'py'
-          : optionLang === 'JAVASCRIPT'
-            ? 'js'
-            : optionLang === 'TYPESCRIPT'
-              ? 'ts'
-              : optionLang === 'JAVA'
-                ? 'java'
-                : optionLang === 'GO'
-                  ? 'go'
-                  : optionLang === 'RUST'
-                    ? 'rs'
-                    : optionLang === 'CPP'
-                      ? 'cpp'
-                      : 'txt';
+      const ext = submissionFileExtension(optionLang);
 
       const presign = await storageApi.presignUpload({
         resourceKind: 'submission-source',
@@ -821,6 +801,8 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
                 problem={problem}
                 code={code}
                 setCode={setCode}
+                language={language}
+                setLanguage={handleLanguageChange}
                 isRunning={isRunning || isSubmitting}
                 isSubmitting={isSubmitting}
                 onSubmit={handleSubmit}
@@ -858,4 +840,32 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
       )}
     </div>
   );
+}
+
+function resolveEditorLanguage(problem: Problem, preferred: string): string {
+  const supported = getProblemSupportedLanguages(problem.supportedLanguages);
+  if (supported.length === 0) return preferred.trim().toUpperCase();
+  const key = preferred.trim().toUpperCase();
+  return supported.includes(key) ? key : supported[0];
+}
+
+function getSavedOrTemplateCode(problem: Problem, language: string): string {
+  const lang = language.trim().toUpperCase();
+  const saved = localStorage.getItem(`code-${problem.id}-${lang}`);
+  if (saved) return saved;
+  return getTemplateForLanguage(problem, lang);
+}
+
+/** Starter code từ `problem.templateCode` (backend). Không tự sinh driver/I/O phía client. */
+function getTemplateForLanguage(problem: Problem, language: string): string {
+  const lang = language.toUpperCase();
+
+  if (problem.templateCode && typeof problem.templateCode === 'object') {
+    const dbTemplate = (problem.templateCode as Record<string, string>)[lang];
+    if (dbTemplate?.trim()) {
+      return dbTemplate;
+    }
+  }
+
+  return `// Chưa có starter template cho ${lang}. Vui lòng liên hệ giảng viên.\n`;
 }

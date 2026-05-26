@@ -19,6 +19,7 @@ import { UpdateProblemDto } from './dto/update-problem.dto';
 import { buildUniqueProblemSlug } from './problem-slug.util';
 import { ProblemVisibilityService } from './problem-visibility.service';
 import { replaceProblemTags } from './problem-tag-sync.util';
+import { resolveTemplateCode, withResolvedTemplateCode } from './default-template-code.util';
 
 import * as jwt from 'jsonwebtoken';
 
@@ -47,6 +48,11 @@ export class ProblemsService {
     await this.ensureUserCanCreateProblemInClass(classRoomId, creatorId, role);
     const slug = await buildUniqueProblemSlug(this.prisma.problem, dto.title);
     const supportedLanguages = dto.supportedLanguages ?? [];
+    const templateCode = resolveTemplateCode(
+      supportedLanguages,
+      dto.templateCode,
+      dto.testCases,
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const problem = await tx.problem.create({
@@ -62,6 +68,7 @@ export class ProblemsService {
           isPublished: dto.isPublished ?? true,
           visibility: this.visibilityService.getVisibilityForCreate(dto, classRoomId),
           supportedLanguages: supportedLanguages.length > 0 ? supportedLanguages : undefined,
+          templateCode,
           maxTestCases: dto.maxTestCases ?? 100,
           creatorId,
         },
@@ -96,7 +103,15 @@ export class ProblemsService {
         await replaceProblemTags(tx, problem.id, dto.tagIds);
       }
 
-      return problem;
+      const testCases =
+        dto.testCases && dto.testCases.length > 0
+          ? dto.testCases
+          : await tx.testCase.findMany({
+              where: { problemId: problem.id },
+              orderBy: { orderIndex: 'asc' },
+            });
+
+      return withResolvedTemplateCode({ ...problem, testCases });
     });
   }
 
@@ -290,7 +305,7 @@ export class ProblemsService {
       });
     }
 
-    return problem;
+    return withResolvedTemplateCode(problem);
   }
 
   async update(problemId: string, dto: UpdateProblemDto, updaterId: string, role?: Role) {
@@ -329,6 +344,38 @@ export class ProblemsService {
     );
 
     return this.prisma.$transaction(async (tx) => {
+      const existingTemplateRow = await tx.problem.findUnique({
+        where: { id: problemId },
+        select: { supportedLanguages: true, templateCode: true },
+      });
+
+      const testCasesForTemplate =
+        dto.testCases ??
+        (await tx.testCase.findMany({
+          where: { problemId },
+          orderBy: { orderIndex: 'asc' },
+          select: { input: true },
+        }));
+
+      const supportedLanguagesForTemplate =
+        dto.supportedLanguages ??
+        (Array.isArray(existingTemplateRow?.supportedLanguages)
+          ? (existingTemplateRow.supportedLanguages as string[])
+          : undefined);
+
+      const shouldResolveTemplate =
+        dto.templateCode !== undefined || dto.supportedLanguages !== undefined;
+
+      const resolvedTemplateCode = shouldResolveTemplate
+        ? resolveTemplateCode(
+            supportedLanguagesForTemplate,
+            dto.templateCode !== undefined
+              ? dto.templateCode
+              : existingTemplateRow?.templateCode,
+            testCasesForTemplate,
+          )
+        : undefined;
+
       const data: any = {
         ...(dto.title !== undefined ? { title: dto.title } : {}),
         ...(dto.description !== undefined ? { description: dto.description } : {}),
@@ -341,6 +388,9 @@ export class ProblemsService {
         ...(dto.visibility !== undefined ? { visibility: enforcedVisibility } : {}),
         ...(dto.supportedLanguages !== undefined
           ? { supportedLanguages: dto.supportedLanguages }
+          : {}),
+        ...(resolvedTemplateCode !== undefined
+          ? { templateCode: resolvedTemplateCode }
           : {}),
         ...(dto.maxTestCases !== undefined ? { maxTestCases: dto.maxTestCases } : {}),
         slug,
@@ -383,7 +433,17 @@ export class ProblemsService {
         await replaceProblemTags(tx, problemId, dto.tagIds);
       }
 
-      return updatedProblem;
+      const testCasesAfterUpdate =
+        dto.testCases ??
+        (await tx.testCase.findMany({
+          where: { problemId },
+          orderBy: { orderIndex: 'asc' },
+        }));
+
+      return withResolvedTemplateCode({
+        ...updatedProblem,
+        testCases: testCasesAfterUpdate,
+      });
     });
   }
 

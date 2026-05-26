@@ -5,6 +5,10 @@
  */
 
 import { apiFetch } from './api-client';
+import type {
+  GenerateAiTemplatesDto,
+  GenerateTemplatesResult,
+} from './ai-testcase.apis';
 
 export interface Problem {
   id: string;
@@ -19,6 +23,7 @@ export interface Problem {
   isPublished: boolean;
   visibility: 'PRIVATE' | 'PUBLIC' | 'CONTEST_ONLY';
   supportedLanguages: string[] | null;
+  templateCode: Record<string, string> | null;
   maxTestCases: number;
   creatorId: string | null;
   createdAt: string;
@@ -71,6 +76,7 @@ export interface CreateProblemDto {
     weight?: number;
   }>;
   tagIds?: string[];
+  templateCode?: Record<string, string> | null;
 }
 
 /** POST /problems/admin — không `classRoomId`; backend không tạo ClassAssignment. */
@@ -92,6 +98,7 @@ export interface CreateAdminProblemDto {
     weight?: number;
   }>;
   tagIds?: string[];
+  templateCode?: Record<string, string> | null;
 }
 
 export interface GenerateTestCasesDraftDto {
@@ -196,6 +203,7 @@ export interface UpdateProblemDto {
     weight?: number;
   }>;
   tagIds?: string[];
+  templateCode?: Record<string, string> | null;
 }
 
 export type PaginatedProblems = {
@@ -310,6 +318,32 @@ export const problemsApi = {
     options?: RequestInit,
   ): Promise<GenerateProblemStatementResult> {
     return apiFetch('/problems/generate-statement-draft', {
+      ...options,
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async generateCodeTemplates(
+    dto: GenerateAiTemplatesDto,
+    options?: RequestInit,
+  ): Promise<GenerateTemplatesResult> {
+    return apiFetch('/problems/generate-code-templates', {
+      ...options,
+      method: 'POST',
+      body: dto,
+    });
+  },
+
+  async previewStarterTemplates(
+    dto: {
+      supportedLanguages?: string[];
+      templateCode?: Record<string, string>;
+      testCases?: Array<{ input: string }>;
+    },
+    options?: RequestInit,
+  ): Promise<Record<string, string>> {
+    return apiFetch('/problems/preview-starter-templates', {
       ...options,
       method: 'POST',
       body: dto,

@@ -6,12 +6,15 @@ import { CurrentUser, Public, Roles } from '../common';
 import { GenerateAiProblemStatementDto } from '../ai-testcase/dto/generate-ai-problem-statement.dto';
 import { GenerateAiTestcaseDto } from '../ai-testcase/dto/generate-ai-testcase.dto';
 import { GenerateAiProjectTestcaseDto } from '../ai-testcase/dto/generate-ai-project-testcase.dto';
+import { GenerateAiTemplatesDto } from '../ai-testcase/dto/generate-ai-templates.dto';
 import { AiTestcaseService } from '../ai-testcase/ai-testcase.service';
 import { CreateAdminProblemDto } from './dto/create-admin-problem.dto';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
+import { PreviewStarterTemplatesDto } from './dto/preview-starter-templates.dto';
 import { AdminProblemsService } from './admin-problems.service';
 import { ProblemsService } from './problems.service';
+import { resolveTemplateCode } from './default-template-code.util';
 
 /**
  * REST `problems`.
@@ -106,6 +109,26 @@ export class ProblemsController {
   @Post('generate-statement-draft')
   async generateStatementDraft(@Body() dto: GenerateAiProblemStatementDto) {
     return this.aiTestcaseService.generateProblemStatement(dto);
+  }
+
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary:
+      'AI sinh starter code template theo ngôn ngữ (chưa lưu DB). User đã đăng nhập; dùng khi soạn đề.',
+  })
+  @Post('generate-code-templates')
+  async generateCodeTemplates(@Body() dto: GenerateAiTemplatesDto) {
+    return this.aiTestcaseService.generateTemplates(dto);
+  }
+
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary:
+      'Xem trước boilerplate starter (PYTHON/JS/CPP/JAVA/GO/RUST) theo test case — chưa lưu DB',
+  })
+  @Post('preview-starter-templates')
+  previewStarterTemplates(@Body() dto: PreviewStarterTemplatesDto) {
+    return resolveTemplateCode(dto.supportedLanguages, dto.templateCode, dto.testCases);
   }
 
   @ApiBearerAuth('JWT')

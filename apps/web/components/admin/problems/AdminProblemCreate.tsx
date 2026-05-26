@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
 import {
   Select,
   SelectContent,
@@ -29,7 +30,6 @@ import {
   Loader2,
   Sparkles,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import {
   CreateAdminProblemDto,
@@ -40,6 +40,9 @@ import {
 import { ApiRequestError } from '@/services/api-client';
 import { toast } from 'sonner';
 import { AiGenerateProblemModal } from '@/components/problems/AiGenerateProblemModal';
+import { GenerateCodeTemplatesButton } from '@/components/problems/GenerateCodeTemplatesButton';
+import { SupportedLanguagesPicker } from '@/components/problems/SupportedLanguagesPicker';
+import { StarterTemplateMonacoField } from '@/components/problems/StarterTemplateMonacoField';
 import { AiTestCaseAdvancedOptions } from '@/components/problems/AiTestCaseAdvancedOptions';
 import { AiTestCaseDraftSheet } from '@/components/problems/AiTestCaseDraftSheet';
 import { AiTestcaseDraftReopenButton } from '@/components/problems/AiTestcaseDraftReopenButton';
@@ -57,7 +60,9 @@ import {
   type AiGenOptionsState,
 } from '@/components/problems/ai-testcase-draft.shared';
 
-const SUPPORTED_LANGUAGES = ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'] as const;
+import { SUPPORTED_LANGUAGES } from '@/lib/supported-languages';
+import { useSupportedLanguagesWithTemplates } from '@/hooks/use-supported-languages-with-templates';
+import { fillMissingDefaultTemplates } from '@/lib/starter-template-defaults';
 
 type AdminProblemFormValues = CreateAdminProblemDto & { dueAt?: string };
 
@@ -68,6 +73,7 @@ export default function AdminProblemCreate() {
 
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(!!editId);
+  const [activeTemplateLang, setActiveTemplateLang] = useState<string>('PYTHON');
 
   const [formData, setFormData] = useState<AdminProblemFormValues>({
     title: '',
@@ -83,6 +89,16 @@ export default function AdminProblemCreate() {
     testCases: [],
     dueAt: undefined,
     tagIds: [],
+    templateCode: {},
+  });
+
+  const { handleLanguagesChange, loading: langPickerLoading } = useSupportedLanguagesWithTemplates({
+    supportedLanguages: formData.supportedLanguages ?? [],
+    templateCode: (formData.templateCode as Record<string, string>) ?? {},
+    testCases: formData.testCases,
+    activeTemplateLang,
+    setActiveTemplateLang,
+    onUpdate: (patch) => setFormData((prev) => ({ ...prev, ...patch })),
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -104,6 +120,31 @@ export default function AdminProblemCreate() {
     }
   }, [editId]);
 
+  useEffect(() => {
+    if (editId) return;
+    let cancelled = false;
+    fillMissingDefaultTemplates({
+      supportedLanguages: formData.supportedLanguages ?? [],
+      templateCode: (formData.templateCode as Record<string, string>) ?? {},
+      testCases: formData.testCases,
+    })
+      .then((result) => {
+        if (!cancelled) {
+          setFormData((prev) => ({
+            ...prev,
+            supportedLanguages: result.supportedLanguages,
+            templateCode: result.templateCode,
+          }));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // Chỉ seed boilerplate lần đầu khi tạo bài mới (đã chọn sẵn 6 ngôn ngữ).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId]);
+
   const loadProblem = async (id: string) => {
     try {
       const data = await problemsApi.findById(id);
@@ -123,7 +164,11 @@ export default function AdminProblemCreate() {
         ),
         dueAt: data.assignments?.[0]?.dueAt ?? undefined,
         tagIds: (data.tags ?? []).map((t: any) => t.tag.id),
+        templateCode: data.templateCode ?? {},
       });
+      if (data.supportedLanguages && data.supportedLanguages.length > 0) {
+        setActiveTemplateLang(data.supportedLanguages[0]);
+      }
     } catch (error) {
       console.error('Failed to load problem:', error);
       const msg = error instanceof ApiRequestError ? error.body.message : 'Failed to load problem.';
@@ -352,9 +397,12 @@ export default function AdminProblemCreate() {
       formData.title.trim() &&
       saved.problemTitle !== formData.title.trim()
     ) {
-      toast.info('Bản AI được lưu cho tiêu đề khác — vẫn xem được, hãy kiểm tra lại trước khi áp dụng.', {
-        position: 'top-center',
-      });
+      toast.info(
+        'Bản AI được lưu cho tiêu đề khác — vẫn xem được, hãy kiểm tra lại trước khi áp dụng.',
+        {
+          position: 'top-center',
+        },
+      );
     }
   };
 
@@ -368,7 +416,7 @@ export default function AdminProblemCreate() {
               Back to List
             </Link>
           </Button>
-            <div>
+          <div>
             <h1 className="text-3xl font-bold tracking-tight">
               {editId ? 'Admin — Edit Problem' : 'Admin — Create Problem'}
             </h1>
@@ -479,6 +527,75 @@ export default function AdminProblemCreate() {
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.statementMd}</p>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Starter Code Templates Card */}
+          <Card className="border-none shadow-xl bg-white/80 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="border-b flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle className="text-xl">
+                  Starter Code Templates (Mẫu code khởi đầu)
+                </CardTitle>
+                <CardDescription>
+                  AI chỉ sinh khung đọc input và hàm solve trống — học viên tự viết logic. Để trống
+                  sẽ dùng boilerplate mặc định khi làm bài.
+                </CardDescription>
+              </div>
+              <GenerateCodeTemplatesButton
+                className="shrink-0 rounded-lg"
+                title={formData.title ?? ''}
+                statementMd={formData.statementMd ?? ''}
+                supportedLanguages={formData.supportedLanguages ?? []}
+                onGenerated={(templates) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    templateCode: { ...(prev.templateCode ?? {}), ...templates },
+                  }))
+                }
+              />
+            </CardHeader>
+            <CardContent className="p-6">
+              {!formData.supportedLanguages || formData.supportedLanguages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 border border-dashed border-gray-200 rounded-xl bg-gray-50/50 text-gray-400 text-sm">
+                  <Languages className="w-10 h-10 mb-2 opacity-25" />
+                  <p>Please select supported languages in Configuration first</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Language Tab List */}
+                  <div className="flex flex-wrap gap-2 border-b border-gray-100 pb-3">
+                    {formData.supportedLanguages.map((lang) => {
+                      const isActive = activeTemplateLang === lang;
+                      return (
+                        <button
+                          key={lang}
+                          type="button"
+                          onClick={() => setActiveTemplateLang(lang)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wider transition-all duration-200 ${
+                            isActive
+                              ? 'bg-black text-white shadow-sm'
+                              : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                          }`}
+                        >
+                          {lang}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeTemplateLang && (
+                    <StarterTemplateMonacoField
+                      language={activeTemplateLang}
+                      templateCode={(formData.templateCode as Record<string, string>) ?? {}}
+                      testCases={formData.testCases}
+                      onTemplateChange={(templateCode) =>
+                        setFormData((prev) => ({ ...prev, templateCode }))
+                      }
+                    />
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -781,17 +898,13 @@ export default function AdminProblemCreate() {
                   />
                 </div>
 
-                <div className="space-y-3 pt-4 border-t">
-                  <Label className="text-sm font-semibold flex items-center gap-2">
-                    <Languages className="w-4 h-4 text-gray-400" /> Supported Languages
-                  </Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SUPPORTED_LANGUAGES.map((lang) => (
-                      <Badge key={lang} variant="default" className="bg-black text-white">
-                        {lang}
-                      </Badge>
-                    ))}
-                  </div>
+                <div className="pt-4 border-t">
+                  <SupportedLanguagesPicker
+                    value={formData.supportedLanguages ?? []}
+                    onChange={(langs) => void handleLanguagesChange(langs)}
+                    disabled={langPickerLoading}
+                    hint="Bật thêm ngôn ngữ sẽ tự điền starter template mặc định."
+                  />
                 </div>
               </div>
             </CardContent>

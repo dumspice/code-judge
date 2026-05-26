@@ -84,4 +84,8 @@ export class CreateAdminProblemDto {
   @ArrayMaxSize(40)
   @IsUUID('4', { each: true })
   tagIds?: string[];
+
+  @ApiPropertyOptional({ example: { PYTHON: 'def solve(a, b):\n    pass' } })
+  @IsOptional()
+  templateCode?: Record<string, string>;
 }

@@ -238,6 +238,23 @@ export interface TestGenerateProjectSampleResult {
   }>;
 }
 
+export interface GenerateAiTemplatesDto {
+  title: string;
+  statement: string;
+  languages: string[];
+  provider?: 'openai' | 'google';
+  model?: string;
+  locale?: 'en' | 'vi';
+}
+
+export interface GenerateTemplatesResult {
+  provider: string;
+  model: string;
+  raw: string;
+  parsed: Record<string, string> | null;
+  parseError?: string;
+}
+
 export const aiTestcaseApi = {
   async verifyTestcasesWithGolden(
     body: VerifyTestcasesWithGoldenBody,
@@ -286,15 +303,12 @@ export const aiTestcaseApi = {
     });
   },
 
-  async explainProjectTestFile(body: {
-    filePath: string;
-    fileContent: string;
-    problemSummary?: string;
-    relatedTestsJson?: string;
-    provider?: 'openai' | 'google';
-    model?: string;
-  }): Promise<ExplainProjectTestFileResult> {
-    return apiFetch('/ai-testcase/explain-project-test-file', {
+  async generateTemplates(
+    body: GenerateAiTemplatesDto,
+    options?: RequestInit,
+  ): Promise<GenerateTemplatesResult> {
+    return apiFetch('/ai-testcase/generate-templates', {
+      ...options,
       method: 'POST',
       body,
     });

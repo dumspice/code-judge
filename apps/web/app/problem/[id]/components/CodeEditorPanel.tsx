@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Play, Send, Moon, Sun, Settings, ChevronDown, LayoutDashboard } from 'lucide-react';
 import { Problem } from '@/services/problem.apis';
 import { cn } from '@/lib/utils';
+import { getProblemSupportedLanguages, monacoLanguageId } from '@/lib/supported-languages';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -13,6 +14,8 @@ type CodeEditorPanelProps = {
   problem: Problem;
   code: string;
   setCode: (val: string) => void;
+  language: string;
+  setLanguage: (lang: string) => void;
   isRunning: boolean;
   isSubmitting?: boolean;
   onSubmit: (language: string, isDryRun?: boolean) => void;
@@ -26,6 +29,8 @@ export default function CodeEditorPanel({
   problem,
   code,
   setCode,
+  language,
+  setLanguage,
   isRunning,
   isSubmitting = false,
   onSubmit,
@@ -35,19 +40,12 @@ export default function CodeEditorPanel({
   submissionLimitText
 }: CodeEditorPanelProps) {
   
-  const [language, setLanguage] = useState('PYTHON');
   const [isEditorReady, setIsEditorReady] = useState(false);
 
-  const supportedLanguages = useMemo(() => Array.from(new Set([
-    ...(problem.supportedLanguages || []),
-    'PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'
-  ])), [problem.supportedLanguages]);
-
-  useEffect(() => {
-    if (supportedLanguages.length > 0) {
-      setLanguage(supportedLanguages[0]);
-    }
-  }, [problem.id]); // Only reset when switching to a different problem
+  const supportedLanguages = useMemo(
+    () => getProblemSupportedLanguages(problem.supportedLanguages),
+    [problem.supportedLanguages],
+  );
 
   const handleEditorWillMount = (monacoInstance: any) => {
     monacoInstance.editor.defineTheme('premium-dark', {
@@ -153,8 +151,9 @@ export default function CodeEditorPanel({
           </div>
         )}
         <MonacoEditor
+          key={`${problem.id}-${language}`}
           height="100%"
-          language={language.toLowerCase()}
+          language={monacoLanguageId(language)}
           value={code}
           onChange={(value) => setCode(value || '')}
           theme={isDarkMode ? 'premium-dark' : 'light'}
