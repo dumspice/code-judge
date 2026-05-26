@@ -301,6 +301,7 @@ export default function ContestDetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Status */}
             <div className="flex items-center justify-center gap-6 border border-border bg-card rounded-xl py-5">
+
               <div className="rounded-lg bg-amber-700/20 p-2">
                 <ChartNoAxesColumnIncreasing className="h-7 w-7 text-primary" />
               </div>
@@ -313,7 +314,7 @@ export default function ContestDetailPage() {
                       : currentStatus === 'RUNNING'
                         ? 'text-green-600'
                         : 'text-red-600'
-                  }`}
+                    }`}
                 >
                   {currentStatus === 'UPCOMING' && 'Starting Soon'}
                   {currentStatus === 'RUNNING' && 'Running'}
