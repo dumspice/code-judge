@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Play, Send, Moon, Sun, Settings, ChevronDown, LayoutDashboard } from 'lucide-react';
@@ -151,6 +151,7 @@ export default function CodeEditorPanel({
           </div>
         )}
         <MonacoEditor
+          key={`${problem.id}-${language}`}
           height="100%"
           language={monacoLanguageId(language)}
           value={code}

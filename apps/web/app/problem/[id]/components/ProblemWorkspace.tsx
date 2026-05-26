@@ -159,8 +159,10 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
           }
         }
 
+        const lang = resolveEditorLanguage(data, language);
         setProblem(data);
-        setCode('');
+        setLanguage(lang);
+        setCode(getSavedOrTemplateCode(data, lang));
         setResult(null);
       } catch (err: any) {
         console.error('Failed to fetch problem:', err);
@@ -476,27 +478,15 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
     });
   }, [contestId, problem?.id, lastSubmissionId, fetchHint, hintState]);
 
-  // Đồng bộ ngôn ngữ editor khi đổi bài — chỉ giữ ngôn ngữ nếu còn trong supportedLanguages
-  useEffect(() => {
-    if (!problem) return;
-    const supported = getProblemSupportedLanguages(problem.supportedLanguages);
-    if (supported.length === 0) return;
-    setLanguage((prev) => {
-      const key = prev.trim().toUpperCase();
-      return supported.includes(key) ? key : supported[0];
-    });
-  }, [problem?.id, problem?.supportedLanguages]);
-
-  // Load code from localStorage or default template when problem or language changes
-  useEffect(() => {
-    if (!problem) return;
-    const saved = localStorage.getItem(`code-${problem.id}-${language.toUpperCase()}`);
-    if (saved) {
-      setCode(saved);
-    } else {
-      setCode(getTemplateForLanguage(problem, language));
-    }
-  }, [problem?.id, language]);
+  const handleLanguageChange = useCallback(
+    (newLang: string) => {
+      if (!problem) return;
+      const lang = newLang.trim().toUpperCase();
+      setLanguage(lang);
+      setCode(getSavedOrTemplateCode(problem, lang));
+    },
+    [problem],
+  );
 
   // Save code to localStorage specific to problem and language
   useEffect(() => {
@@ -812,7 +802,7 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
                 code={code}
                 setCode={setCode}
                 language={language}
-                setLanguage={setLanguage}
+                setLanguage={handleLanguageChange}
                 isRunning={isRunning || isSubmitting}
                 isSubmitting={isSubmitting}
                 onSubmit={handleSubmit}
@@ -850,6 +840,20 @@ export default function ProblemWorkspace({ initialProblemId, contestId }: Proble
       )}
     </div>
   );
+}
+
+function resolveEditorLanguage(problem: Problem, preferred: string): string {
+  const supported = getProblemSupportedLanguages(problem.supportedLanguages);
+  if (supported.length === 0) return preferred.trim().toUpperCase();
+  const key = preferred.trim().toUpperCase();
+  return supported.includes(key) ? key : supported[0];
+}
+
+function getSavedOrTemplateCode(problem: Problem, language: string): string {
+  const lang = language.trim().toUpperCase();
+  const saved = localStorage.getItem(`code-${problem.id}-${lang}`);
+  if (saved) return saved;
+  return getTemplateForLanguage(problem, lang);
 }
 
 /** Starter code từ `problem.templateCode` (backend). Không tự sinh driver/I/O phía client. */
