@@ -12,6 +12,8 @@ export const generatedTestcaseSchema = z.object({
       explanation: z.string().optional(),
     }),
   ),
+  suggestedTimeLimitMs: z.number().int().min(100).max(300_000).optional(),
+  suggestedMemoryLimitMb: z.number().int().min(8).max(8192).optional(),
   notes: z.string().optional(),
   revisionNotes: z.string().optional(),
 });
@@ -25,6 +27,8 @@ The JSON must match this shape:
   "testCases": [
     { "input": "string", "expectedOutput": "string", "isHidden": boolean, "weight": number, "explanation"?: "string" }
   ],
+  "suggestedTimeLimitMs": number,
+  "suggestedMemoryLimitMb": number,
   "notes"?: "string",
   "revisionNotes"?: "string"
 }
@@ -38,6 +42,11 @@ Quality requirements:
 - If spec is ambiguous, keep assumptions minimal in notes.
 - NEVER use "...", "…", or placeholders in input or expectedOutput — every case must be runnable as-is on stdin/stdout.
 - For grids/matrices: either print every line of the grid, or use smaller dimensions for hidden tests — never abbreviate with ellipsis.
+- Always set suggestedTimeLimitMs and suggestedMemoryLimitMb for an online judge:
+  - Infer expected optimal complexity from constraints (e.g. n≤10^5 → O(n log n) ~ 1-2s C++ ref; n≤10^6 → ~2-4s; brute O(n^2) only if n≤5000 with tight limit).
+  - Hidden stress tests with large n need limits that accept the intended solution but reject typical brute force.
+  - EASY: often 500-2000ms, 128-256MB; MEDIUM: 1000-5000ms, 256-512MB; HARD: 2000-10000ms, 256-1024MB.
+  - Memory: account for arrays of size n (roughly 8*n bytes for int64 array) plus overhead — round up to 128/256/512/1024 MB tiers.
 `;
 
 export type BuildAiTestcaseMessageOptions = {
@@ -69,8 +78,8 @@ export function buildAiTestcaseMessages(
     '<problem_context>',
     `Title: ${input.title}`,
     `Difficulty: ${input.difficulty ?? 'not specified'}`,
-    `Time limit (ms): ${input.timeLimitMs ?? 'not specified'}`,
-    `Memory limit (MB): ${input.memoryLimitMb ?? 'not specified'}`,
+    `Current time limit (ms) on problem: ${input.timeLimitMs ?? 'not set — propose suitable limits'}`,
+    `Current memory limit (MB) on problem: ${input.memoryLimitMb ?? 'not set — propose suitable limits'}`,
     `Supported languages: ${supportedLanguages}`,
   ];
 
@@ -100,6 +109,7 @@ export function buildAiTestcaseMessages(
     '<generation_constraints>',
     `max_test_cases: ${maxTestCases}`,
     'Require diversity: boundary, typical, edge.',
+    'Return suggestedTimeLimitMs and suggestedMemoryLimitMs aligned with largest/hardest hidden test and stated constraints.',
     ...(omitExplanations ? ['Omit explanation field on every test case.'] : []),
     ...(options?.requireFullIo
       ? [

@@ -21,8 +21,11 @@ import { getClassroomPeople } from '@/services/classroom.apis';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useClassDetail } from '@/components/dashboard/class-detail/class-detail-context';
+import { ExportReportButton } from '@/components/dashboard/class-detail/export-report-button';
 
 export default function ContestDetailPage() {
+  const { canExportReports } = useClassDetail();
   const params = useParams();
   const rawContestId = params?.contestId;
   const rawClassId = params?.id;
@@ -203,6 +206,9 @@ export default function ContestDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-4">
+          {canExportReports && contestId && (
+            <ExportReportButton kind="contest" contestId={contestId} size="default" />
+          )}
           <Button variant="outline" size="lg" asChild className="border-2">
             <Link
               href={`/dashboard/${classId}/contests/${contestId}/leaderboard`}

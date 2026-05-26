@@ -10,6 +10,8 @@ import { Problem, problemsApi } from '@/services/problem.apis';
 import { useDebounce } from '@/hooks/use-debounce';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { useClassDetail } from '@/components/dashboard/class-detail/class-detail-context';
+import { ExportReportButton } from '@/components/dashboard/class-detail/export-report-button';
 
 export default function ClassworkList({
   classId,
@@ -22,6 +24,7 @@ export default function ClassworkList({
   isOwner: boolean;
   canManage: boolean;
 }) {
+  const { canExportReports } = useClassDetail();
   const router = useRouter();
   const [problems, setProblems] = useState<Problem[]>(initialProblems);
   const [search, setSearch] = useState('');
@@ -84,16 +87,20 @@ export default function ClassworkList({
   return (
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        {/* Only Owner of the Class has the access to create new problem */}
-        {canManage && (
-          <Link
-            href={`/dashboard/${classId}/classwork/create`}
-            className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all hover:scale-105 active:scale-95"
-          >
-            <Plus className="w-5 h-5" />
-            Create Problem
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canManage && (
+            <Link
+              href={`/dashboard/${classId}/classwork/create`}
+              className="flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg transition-all hover:scale-105 active:scale-95"
+            >
+              <Plus className="w-5 h-5" />
+              Create Problem
+            </Link>
+          )}
+          {canExportReports && (
+            <ExportReportButton kind="classroom" classRoomId={classId} />
+          )}
+        </div>
 
         <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-gray-200 shadow-sm w-full max-w-md">
           <Search className="w-4 h-4 text-gray-400" />
@@ -112,6 +119,8 @@ export default function ClassworkList({
             <AssignmentItem
               key={problem.id}
               {...problem}
+              classRoomId={classId}
+              canExportReport={canExportReports}
               onEdit={handleEdit}
               onDelete={handleDelete}
               showActions={canManage}

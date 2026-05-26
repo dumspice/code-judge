@@ -164,6 +164,8 @@ export interface GenerateTestCasesDraftResult {
       weight?: number;
       explanation?: string;
     }>;
+    suggestedTimeLimitMs?: number;
+    suggestedMemoryLimitMb?: number;
     notes?: string;
     revisionNotes?: string;
   } | null;
@@ -204,6 +206,23 @@ export type PaginatedProblems = {
   page: number;
   limit: number;
 };
+
+export interface CalibrateProblemLimitsResult {
+  problemId: string;
+  goldenLanguage: string;
+  memoryEnforced: boolean;
+  cases: Array<{
+    testCaseId: string;
+    orderIndex: number;
+    runtimeMs: number;
+    memoryMb: number;
+    verdict: string;
+  }>;
+  suggestedTimeLimitMs: number;
+  suggestedMemoryLimitMb: number;
+  currentTimeLimitMs: number;
+  currentMemoryLimitMb: number;
+}
 
 /** GET /problems — danh sách public / theo lớp. */
 export interface ProblemsListQuery {
@@ -305,6 +324,18 @@ export const problemsApi = {
       ...options,
       method: 'POST',
       body: dto,
+    });
+  },
+
+  async calibrateLimits(
+    id: string,
+    body?: { measureTimeLimitMs?: number },
+    options?: RequestInit,
+  ): Promise<CalibrateProblemLimitsResult> {
+    return apiFetch(`/problems/${encodeURIComponent(id)}/calibrate-limits`, {
+      ...options,
+      method: 'POST',
+      body: body ?? {},
     });
   },
 

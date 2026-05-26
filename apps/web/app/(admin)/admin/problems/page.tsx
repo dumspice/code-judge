@@ -24,7 +24,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Code2,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { reportsApi } from '@/services/reports.apis';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,6 +74,15 @@ export default function AdminProblemsPage() {
       loadProblems();
     } catch (error) {
       toast.error('Failed to update status');
+    }
+  };
+
+  const handleExport = async (id: string) => {
+    try {
+      await reportsApi.downloadAdminProblemReport(id);
+      toast.success('Đã tạo báo cáo bài tập');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
     }
   };
 
@@ -216,6 +227,13 @@ export default function AdminProblemsPage() {
                             <Edit className="w-4 h-4 mr-2" />
                             Edit
                           </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center cursor-pointer"
+                          onClick={() => handleExport(problem.id)}
+                        >
+                          <FileSpreadsheet className="w-4 h-4 mr-2" />
+                          Xuất báo cáo
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-rose-600 focus:text-rose-600 focus:bg-rose-50"

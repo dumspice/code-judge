@@ -10,6 +10,6 @@ import { ContestsCronService } from './contests.cron';
   imports: [PrismaModule, ProblemsModule],
   controllers: [ContestsController],
   providers: [ContestsService, ContestsCronService, ContestAccessService],
-  exports: [ContestAccessService],
+  exports: [ContestAccessService, ContestsService],
 })
 export class ContestsModule {}

@@ -23,8 +23,10 @@ import {
   Trophy,
   MoreVertical,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { reportsApi } from '@/services/reports.apis';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -76,6 +78,15 @@ export default function AdminContestsPage() {
       loadContests();
     } catch (error) {
       toast.error('Failed to update status');
+    }
+  };
+
+  const handleExport = async (id: string) => {
+    try {
+      await reportsApi.downloadAdminContestReport(id);
+      toast.success('Đã tạo báo cáo contest');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
     }
   };
 
@@ -206,6 +217,13 @@ export default function AdminContestsPage() {
                             <Edit className="w-4 h-4 mr-2" />
                             Edit
                           </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center cursor-pointer"
+                          onClick={() => handleExport(contest.id)}
+                        >
+                          <FileSpreadsheet className="w-4 h-4 mr-2" />
+                          Xuất báo cáo
                         </DropdownMenuItem>
                         <DropdownMenuItem className="text-rose-600 focus:text-rose-600 focus:bg-rose-50" onClick={() => handleDelete(contest.id)}>
                           <Trash2 className="w-4 h-4 mr-2" />

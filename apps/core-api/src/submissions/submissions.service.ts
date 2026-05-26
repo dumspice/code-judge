@@ -20,7 +20,7 @@ import { ProblemAccessService } from '../problems/problem-access.service';
 import { ProblemStorageAccessService } from '../storage/problem-storage-access.service';
 import { SUBMISSION_SOURCE_INLINE_MAX_BYTES } from '../storage/storage-resource.constants';
 import { StorageService } from '../storage/storage.service';
-import { Role } from '@prisma/client';
+import { Role, type SubmissionContext } from '@prisma/client';
 
 @Injectable()
 export class SubmissionsService {
@@ -48,21 +48,23 @@ export class SubmissionsService {
 
   /** JWT user reserves a row before presigned MinIO upload (large source). */
   async reserve(dto: ReserveSubmissionDto, user: RequestUser) {
-    const { contestId, context } = await this.resolveContestContext(
+    const scope = await this.resolveSubmissionScope(
       dto.problemId,
       user.userId,
       dto.contestId,
       dto.isDryRun ?? false,
     );
-    await this.assertCanSubmitToProblem(dto.problemId, user, contestId);
+    await this.assertCanSubmitToProblem(dto.problemId, user, scope.contestId);
 
     const submission = await this.prisma.submission.create({
       data: {
         userId: user.userId,
         problemId: dto.problemId,
         mode: dto.mode as any,
-        context,
-        contestId,
+        context: scope.context,
+        contestId: scope.contestId,
+        classRoomId: scope.classRoomId,
+        classAssignmentId: scope.classAssignmentId,
         language: dto.language ?? null,
         attemptNumber: 1,
         judgePriority: 0,
@@ -121,13 +123,13 @@ export class SubmissionsService {
     }
 
     const userId = user.userId;
-    const { contestId, context } = await this.resolveContestContext(
+    const scope = await this.resolveSubmissionScope(
       dto.problemId,
       userId,
       dto.contestId,
       dto.isDryRun ?? false,
     );
-    await this.assertCanSubmitToProblem(dto.problemId, user, contestId);
+    await this.assertCanSubmitToProblem(dto.problemId, user, scope.contestId);
 
     const sourceCode = dto.sourceCode ?? null;
     const shouldExternalizeCode =
@@ -138,8 +140,10 @@ export class SubmissionsService {
         userId,
         problemId: dto.problemId,
         mode: dto.mode as any,
-        context,
-        contestId,
+        context: scope.context,
+        contestId: scope.contestId,
+        classRoomId: scope.classRoomId,
+        classAssignmentId: scope.classAssignmentId,
         language: dto.language ?? null,
         attemptNumber: 1,
         judgePriority: 0,
@@ -166,7 +170,7 @@ export class SubmissionsService {
     }
 
     await this.enqueueJudge(submission, {
-      contestId,
+      contestId: scope.contestId,
       isDryRun: dto.isDryRun ?? false,
     });
 
@@ -203,14 +207,46 @@ export class SubmissionsService {
     }
   }
 
-  private async resolveContestContext(
+  private async resolveClassAssignmentForUser(problemId: string, userId: string) {
+    return this.prisma.classAssignment.findFirst({
+      where: {
+        problemId,
+        classRoom: {
+          enrollments: {
+            some: { userId, status: 'ACTIVE' },
+          },
+        },
+      },
+      orderBy: { publishedAt: 'desc' },
+      select: { id: true, classRoomId: true },
+    });
+  }
+
+  private async resolveSubmissionScope(
     problemId: string,
     userId: string,
     contestIdInput: string | undefined,
     isDryRun: boolean,
-  ): Promise<{ contestId?: string; context: 'PRACTICE' | 'CONTEST' }> {
+  ): Promise<{
+    contestId?: string;
+    context: SubmissionContext;
+    classRoomId: string | null;
+    classAssignmentId: string | null;
+  }> {
     if (!contestIdInput) {
-      return { context: 'PRACTICE' };
+      const assignment = await this.resolveClassAssignmentForUser(problemId, userId);
+      if (assignment) {
+        return {
+          context: 'CLASS_ASSIGNMENT',
+          classRoomId: assignment.classRoomId,
+          classAssignmentId: assignment.id,
+        };
+      }
+      return {
+        context: 'PRACTICE',
+        classRoomId: null,
+        classAssignmentId: null,
+      };
     }
 
     const contest = await this.prisma.contest.findUnique({
@@ -246,7 +282,17 @@ export class SubmissionsService {
       }
     }
 
-    return { contestId: contestIdInput, context: 'CONTEST' };
+    const contestAssignment = await this.prisma.classAssignment.findFirst({
+      where: { contestId: contestIdInput },
+      select: { id: true, classRoomId: true },
+    });
+
+    return {
+      contestId: contestIdInput,
+      context: 'CONTEST',
+      classRoomId: contestAssignment?.classRoomId ?? null,
+      classAssignmentId: contestAssignment?.id ?? null,
+    };
   }
 
   async findById(submissionId: string, user: RequestUser) {

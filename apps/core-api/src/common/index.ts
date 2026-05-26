@@ -22,5 +22,6 @@ export * from './validators/strong-password.validator';
 export * from './utils/cookie-access-token.util';
 export * from './utils/paged-list';
 export * from './utils/excel-report';
+export * from './utils/excel-professional-report';
 export * from './utils/resolve-ai-provider';
 export * from './utils/resolve-ai-llm-plans';

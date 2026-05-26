@@ -59,6 +59,7 @@ const COPY: Record<
     previewDesc: string;
     previewStatement: string;
     previewIo: string;
+    previewLimits: string;
     parseWarn: string;
     needTopic: string;
     notes: string;
@@ -89,6 +90,7 @@ const COPY: Record<
     previewDesc: 'Mô tả ngắn',
     previewStatement: 'Đề bài (markdown)',
     previewIo: 'ioSpec',
+    previewLimits: 'Gợi ý limit',
     parseWarn: 'AI trả về nhưng không parse được JSON.',
     needTopic: 'Nhập ý tưởng / chủ đề trước.',
     notes: 'Ghi chú AI',
@@ -118,6 +120,7 @@ const COPY: Record<
     previewDesc: 'Short description',
     previewStatement: 'Statement (markdown)',
     previewIo: 'ioSpec',
+    previewLimits: 'Suggested limits',
     parseWarn: 'AI responded but JSON parse failed.',
     needTopic: 'Enter a topic or idea first.',
     notes: 'AI notes',
@@ -201,8 +204,8 @@ export function AiGenerateProblemModal(props: {
       statementMd: parsed.statementMd,
       ioSpec: parsed.ioSpec,
       difficulty: parsed.suggestedDifficulty ?? defaultDifficulty,
-      timeLimitMs: parsed.suggestedTimeLimitMs,
-      memoryLimitMb: parsed.suggestedMemoryLimitMb,
+      timeLimitMs: parsed.suggestedTimeLimitMs ?? 1000,
+      memoryLimitMb: parsed.suggestedMemoryLimitMb ?? 256,
     });
     toast.success(locale === 'vi' ? 'Đã áp dụng đề vào form.' : 'Applied problem draft to form.', {
       position: 'top-center',
@@ -317,6 +320,15 @@ export function AiGenerateProblemModal(props: {
                   {parsed.ioSpec}
                 </pre>
               </div>
+              {parsed.suggestedTimeLimitMs ? (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">{t.previewLimits}</p>
+                  <p className="text-sm font-medium">
+                    {parsed.suggestedTimeLimitMs} ms · {parsed.suggestedMemoryLimitMb ?? 256} MB
+                    {parsed.suggestedDifficulty ? ` · ${parsed.suggestedDifficulty}` : ''}
+                  </p>
+                </div>
+              ) : null}
               <div>
                 <p className="text-xs font-medium text-muted-foreground">{t.previewStatement}</p>
                 <pre className="mt-1 max-h-[min(32vh,280px)] overflow-auto whitespace-pre-wrap font-mono text-[11px]">

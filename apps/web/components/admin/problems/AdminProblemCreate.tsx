@@ -54,6 +54,7 @@ import {
   defaultAiGenOptions,
   mapAiDraftToFormTestCases,
   buildGenerateTestCasesDraftDto,
+  extractSuggestedLimitsFromAiDraft,
   type AiGenOptionsState,
 } from '@/components/problems/ai-testcase-draft.shared';
 
@@ -281,6 +282,22 @@ export default function AdminProblemCreate() {
       const res = await problemsApi.generateTestCasesDraft(dto);
       setAiDraftResult(res);
       setAiSheetOpen(true);
+      const suggestedLimits = extractSuggestedLimitsFromAiDraft(res.parsed);
+      if (
+        suggestedLimits &&
+        formData.timeLimitMs === 1000 &&
+        formData.memoryLimitMb === 256
+      ) {
+        setFormData((prev) => ({
+          ...prev,
+          timeLimitMs: suggestedLimits.timeLimitMs,
+          memoryLimitMb: suggestedLimits.memoryLimitMb,
+        }));
+        toast.info(
+          `Applied AI limits: ${suggestedLimits.timeLimitMs}ms / ${suggestedLimits.memoryLimitMb}MB`,
+          { position: 'top-center' },
+        );
+      }
       const mapped = mapAiDraftToFormTestCases(res.parsed);
       if (mapped.length > 0 || res.raw) {
         saveSavedAiTestcaseDraft(aiDraftScope, {
@@ -837,6 +854,14 @@ export default function AdminProblemCreate() {
         previewCases={previewMappedCases}
         onApplyReplace={() => applyAiTestCases('replace')}
         onApplyAppend={() => applyAiTestCases('append')}
+        onApplySuggestedLimits={(limits) => {
+          setFormData((prev) => ({
+            ...prev,
+            timeLimitMs: limits.timeLimitMs,
+            memoryLimitMb: limits.memoryLimitMb,
+          }));
+          toast.success('Limits applied to form', { position: 'top-center' });
+        }}
         problemId={editId ?? undefined}
         problemTitle={formData.title}
         problemStatement={formData.statementMd}

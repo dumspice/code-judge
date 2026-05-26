@@ -11,6 +11,8 @@ import { CreateAdminProblemDto } from './dto/create-admin-problem.dto';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
 import { AdminProblemsService } from './admin-problems.service';
+import { CalibrateProblemLimitsDto } from './dto/calibrate-problem-limits.dto';
+import { ProblemLimitsService } from './problem-limits.service';
 import { ProblemsService } from './problems.service';
 
 /**
@@ -24,6 +26,7 @@ export class ProblemsController {
     private readonly problemsService: ProblemsService,
     private readonly adminProblemsService: AdminProblemsService,
     private readonly aiTestcaseService: AiTestcaseService,
+    private readonly problemLimitsService: ProblemLimitsService,
   ) {}
 
   @Public()
@@ -113,6 +116,20 @@ export class ProblemsController {
   @Post('generate-project-test-cases-draft')
   async generateProjectTestCasesDraft(@Body() dto: GenerateAiProjectTestcaseDto) {
     return this.aiTestcaseService.generateProjectDraft(dto);
+  }
+
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary:
+      'Đo time/memory limit từ golden solution (Judge0) — gợi ý limit; áp dụng qua PATCH problem',
+  })
+  @Post(':id/calibrate-limits')
+  async calibrateLimits(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: CalibrateProblemLimitsDto,
+  ) {
+    return this.problemLimitsService.calibrate(id, dto, user);
   }
 
   @Public()

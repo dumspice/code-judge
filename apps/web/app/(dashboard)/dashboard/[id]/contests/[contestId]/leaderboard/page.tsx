@@ -13,8 +13,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Trophy, Clock, Medal, CheckCircle2, XCircle } from 'lucide-react';
+import { useClassDetail } from '@/components/dashboard/class-detail/class-detail-context';
+import { ExportReportButton } from '@/components/dashboard/class-detail/export-report-button';
 
 export default function LeaderboardPage({ params }: { params: Promise<{ contestId: string }> }) {
+  const { canExportReports } = useClassDetail();
   const { contestId } = use(params);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -106,6 +109,14 @@ export default function LeaderboardPage({ params }: { params: Promise<{ contestI
               <Medal className="w-5 h-5 text-amber-400" />
               Rankings Updated Real-time
             </span>
+            {canExportReports && (
+              <ExportReportButton
+                kind="contest"
+                contestId={contestId}
+                variant="secondary"
+                label="Xuất XLSX"
+              />
+            )}
           </div>
         </div>
       </div>

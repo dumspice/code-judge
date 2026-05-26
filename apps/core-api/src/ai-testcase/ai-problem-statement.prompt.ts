@@ -45,7 +45,10 @@ Rules:
 - ioSpec: one paragraph describing exact format for automated test generation.
 - Vietnamese for title/description/statementMd unless user asks for English.
 - Do not include solution code or hidden test answers in statementMd.
-- suggestedTimeLimitMs: typical 1000-3000 for EASY, up to 10000 for HARD.`;
+- suggestedTimeLimitMs / suggestedMemoryLimitMb: MUST match ## Constraints in statementMd (n, m, value ranges).
+  - Choose limits so a correct intended algorithm passes with ~2x margin; brute O(n^2) on large n should TLE.
+  - EASY: ~500-2000ms, 128-256MB; MEDIUM: ~1000-5000ms, 256-512MB; HARD: ~2000-15000ms, 512-1024MB.
+  - If n≤10^5 and solution is O(n log n), C++ reference ~1s → suggest ~2000ms; Python students get 2x at judge via language multiplier.`;
 
 const SYSTEM_PROMPT_EN = `You are an expert competitive programming problem author for an online judge (stdin/stdout, ALGO mode).
 Return ONLY one valid JSON object (no markdown fences).
@@ -64,7 +67,8 @@ Schema:
 
 statementMd MUST include: Problem, Input, Output, at least one Example, Constraints.
 ioSpec: exact format for automated testcase generation.
-No solution code in statementMd.`;
+No solution code in statementMd.
+Set suggestedTimeLimitMs and suggestedMemoryLimitMb from constraints (same rules as Vietnamese prompt).`;
 
 export function buildAiProblemStatementMessages(input: GenerateAiProblemStatementDto) {
   const locale = input.locale === 'en' ? 'en' : 'vi';

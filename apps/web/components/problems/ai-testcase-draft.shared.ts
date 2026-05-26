@@ -9,6 +9,16 @@ export const DIFFICULTY_AI_LABEL: Record<'EASY' | 'MEDIUM' | 'HARD', string> = {
   HARD: 'Hard',
 };
 
+export function extractSuggestedLimitsFromAiDraft(
+  parsed: GenerateTestCasesDraftResult['parsed'],
+): { timeLimitMs: number; memoryLimitMb: number } | null {
+  if (!parsed?.suggestedTimeLimitMs) return null;
+  return {
+    timeLimitMs: parsed.suggestedTimeLimitMs,
+    memoryLimitMb: parsed.suggestedMemoryLimitMb ?? 256,
+  };
+}
+
 export function mapAiDraftToFormTestCases(
   parsed: GenerateTestCasesDraftResult['parsed'],
 ): Array<{ input: string; expectedOutput: string; isHidden: boolean; weight: number }> {

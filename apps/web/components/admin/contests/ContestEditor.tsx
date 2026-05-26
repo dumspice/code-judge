@@ -31,6 +31,7 @@ import { contestsApi, CreateContestDto, UpdateContestDto } from '@/services/cont
 import { problemsApi, Problem } from '@/services/problem.apis';
 import { dateTimeLocalToUtcIso, utcIsoToDateTimeLocal } from '@/lib/utils';
 import { toast } from 'sonner';
+import { AdminExportReportButton } from '@/components/admin/admin-export-report-button';
 
 export default function AdminContestEditor({ contestId }: { contestId?: string }) {
   const router = useRouter();
@@ -210,11 +211,13 @@ export default function AdminContestEditor({ contestId }: { contestId?: string }
             <p className="text-slate-500">Configure your programming competition</p>
           </div>
         </div>
-        <Button
-          onClick={handleSave}
-          disabled={loading}
-          className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 min-w-[140px]"
-        >
+        <div className="flex items-center gap-3">
+          {contestId && <AdminExportReportButton kind="contest" contestId={contestId} />}
+          <Button
+            onClick={handleSave}
+            disabled={loading}
+            className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 min-w-[140px]"
+          >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
           ) : (
@@ -223,7 +226,8 @@ export default function AdminContestEditor({ contestId }: { contestId?: string }
               {contestId ? 'Update' : 'Create'}
             </>
           )}
-        </Button>
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

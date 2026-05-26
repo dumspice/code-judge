@@ -25,6 +25,10 @@ import {
   GeneratedTestcaseOutput,
 } from './ai-testcase.prompt';
 import {
+  enrichProblemStatementWithSuggestedLimits,
+  enrichTestcaseDraftWithSuggestedLimits,
+} from './ai-suggested-limits.util';
+import {
   buildTestgenBriefMessages,
   testgenBriefSchema,
   type TestgenBrief,
@@ -195,6 +199,14 @@ export class AiTestcaseService {
     let parseError: string | undefined;
     try {
       parsed = this.parseProblemStatementOutput(text);
+      if (parsed) {
+        const limits = enrichProblemStatementWithSuggestedLimits(parsed);
+        parsed = {
+          ...parsed,
+          suggestedTimeLimitMs: limits.suggestedTimeLimitMs,
+          suggestedMemoryLimitMb: limits.suggestedMemoryLimitMb,
+        };
+      }
     } catch (error) {
       parseError = error instanceof Error ? error.message : 'Unknown parse error';
     }
@@ -323,12 +335,16 @@ export class AiTestcaseService {
       }
     }
 
+    const enrichedParsed = parseOutcome.parsed
+      ? enrichTestcaseDraftWithSuggestedLimits(input, parseOutcome.parsed)
+      : null;
+
     return {
       provider: genResult.provider,
       model: genResult.model,
       promptVersion,
       raw: parseOutcome.text,
-      parsed: parseOutcome.parsed,
+      parsed: enrichedParsed,
       parseError: parseOutcome.parseError,
       statementCharCount,
       generationMode,

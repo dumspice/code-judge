@@ -184,6 +184,9 @@ const COPY: Record<
     close: string;
     append: string;
     replace: string;
+    limitsTitle: string;
+    limitsHint: string;
+    applyLimits: string;
   }
 > = {
   vi: {
@@ -217,6 +220,10 @@ const COPY: Record<
     close: 'Đóng',
     append: 'Thêm vào cuối',
     replace: 'Thay thế toàn bộ',
+    limitsTitle: 'Gợi ý time / memory (AI)',
+    limitsHint:
+      'Dựa trên ràng buộc đề và testcase. Sau khi có golden, dùng «Measure limits (golden)» trên form để đo chính xác hơn.',
+    applyLimits: 'Áp dụng limit vào form',
   },
   en: {
     title: 'AI test cases (draft)',
@@ -248,6 +255,10 @@ const COPY: Record<
     close: 'Close',
     append: 'Append to end',
     replace: 'Replace all',
+    limitsTitle: 'Suggested time / memory (AI)',
+    limitsHint:
+      'Based on constraints and test cases. After golden exists, use «Measure limits (golden)» on the form for precise values.',
+    applyLimits: 'Apply limits to form',
   },
 };
 
@@ -315,6 +326,7 @@ export function AiTestCaseDraftSheet(props: {
   previewCases: PreviewCase[];
   onApplyReplace: () => void;
   onApplyAppend: () => void;
+  onApplySuggestedLimits?: (limits: { timeLimitMs: number; memoryLimitMb: number }) => void;
   /** Khi đã lưu problem — cho upload golden và quyền verify inline (creator). */
   problemId?: string;
   problemTitle?: string;
@@ -329,6 +341,7 @@ export function AiTestCaseDraftSheet(props: {
     previewCases,
     onApplyReplace,
     onApplyAppend,
+    onApplySuggestedLimits,
     problemId,
     problemTitle,
     problemStatement,
@@ -737,6 +750,32 @@ export function AiTestCaseDraftSheet(props: {
                   <p className="whitespace-pre-wrap break-words text-muted-foreground">
                     {draftResult.parsed.revisionNotes}
                   </p>
+                </div>
+              ) : null}
+
+              {draftResult.parsed?.suggestedTimeLimitMs &&
+              onApplySuggestedLimits ? (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm space-y-2">
+                  <p className="font-medium">{t.limitsTitle}</p>
+                  <p className="text-xs text-muted-foreground">
+                    <strong>{draftResult.parsed.suggestedTimeLimitMs} ms</strong>
+                    {' · '}
+                    <strong>{draftResult.parsed.suggestedMemoryLimitMb ?? 256} MB</strong>
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">{t.limitsHint}</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      onApplySuggestedLimits({
+                        timeLimitMs: draftResult.parsed!.suggestedTimeLimitMs!,
+                        memoryLimitMb: draftResult.parsed!.suggestedMemoryLimitMb ?? 256,
+                      })
+                    }
+                  >
+                    {t.applyLimits}
+                  </Button>
                 </div>
               ) : null}
 

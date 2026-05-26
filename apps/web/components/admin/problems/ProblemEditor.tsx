@@ -28,9 +28,15 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { CreateProblemDto, problemsApi, UpdateProblemDto } from '@/services/problem.apis';
+import {
+  CalibrateProblemLimitsResult,
+  CreateProblemDto,
+  problemsApi,
+  UpdateProblemDto,
+} from '@/services/problem.apis';
 import { toast } from 'sonner';
 import { ProblemTagPicker } from '@/components/problems/ProblemTagPicker';
+import { AdminExportReportButton } from '@/components/admin/admin-export-report-button';
 
 const SUPPORTED_LANGUAGES = ['PYTHON', 'JAVASCRIPT', 'CPP', 'JAVA', 'GO', 'RUST'] as const;
 
@@ -38,6 +44,10 @@ export default function AdminProblemEditor({ problemId }: { problemId?: string }
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(!!problemId);
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibrateResult, setCalibrateResult] = useState<CalibrateProblemLimitsResult | null>(
+    null,
+  );
 
   const [formData, setFormData] = useState<Partial<CreateProblemDto>>({
     title: '',
@@ -113,6 +123,35 @@ export default function AdminProblemEditor({ problemId }: { problemId?: string }
     });
   };
 
+  const handleCalibrateLimits = async () => {
+    if (!problemId) {
+      toast.error('Save the problem first before calibrating limits');
+      return;
+    }
+    setCalibrating(true);
+    setCalibrateResult(null);
+    try {
+      const result = await problemsApi.calibrateLimits(problemId);
+      setCalibrateResult(result);
+      toast.success('Measured limits from golden solution');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Calibration failed';
+      toast.error(msg);
+    } finally {
+      setCalibrating(false);
+    }
+  };
+
+  const handleApplyCalibratedLimits = () => {
+    if (!calibrateResult) return;
+    setFormData({
+      ...formData,
+      timeLimitMs: calibrateResult.suggestedTimeLimitMs,
+      memoryLimitMb: calibrateResult.suggestedMemoryLimitMb,
+    });
+    toast.success('Applied suggested limits to form — save to persist');
+  };
+
   const handleSave = async () => {
     if (!formData.title) {
       toast.error('Please enter a title');
@@ -169,6 +208,7 @@ export default function AdminProblemEditor({ problemId }: { problemId?: string }
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {problemId && <AdminExportReportButton kind="problem" problemId={problemId} />}
           <Button
             onClick={handleSave}
             disabled={loading}
@@ -383,6 +423,56 @@ export default function AdminProblemEditor({ problemId }: { problemId?: string }
                     />
                   </div>
                 </div>
+
+                {problemId && formData.mode === 'ALGO' && (
+                  <div className="space-y-3 pt-2 border-t border-dashed border-slate-200">
+                    <p className="text-xs text-slate-500">
+                      Run the primary golden on all test cases via Judge0 to suggest time/memory
+                      limits.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full rounded-lg"
+                      disabled={calibrating}
+                      onClick={handleCalibrateLimits}
+                    >
+                      <Beaker className="w-4 h-4 mr-2" />
+                      {calibrating ? 'Measuring…' : 'Measure limits (golden)'}
+                    </Button>
+                    {calibrateResult && (
+                      <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3 space-y-2 text-xs">
+                        <p>
+                          Golden: <strong>{calibrateResult.goldenLanguage}</strong> — suggested{' '}
+                          <strong>{calibrateResult.suggestedTimeLimitMs}ms</strong> /{' '}
+                          <strong>{calibrateResult.suggestedMemoryLimitMb}MB</strong>
+                        </p>
+                        {!calibrateResult.memoryEnforced && (
+                          <p className="text-amber-700">
+                            Memory limit is informational until VPS uses cgroup v1 + isolate (see
+                            docs/JUDGE0-CGROUP-V1-MIGRATION.md).
+                          </p>
+                        )}
+                        <div className="max-h-28 overflow-y-auto space-y-1 font-mono text-[10px]">
+                          {calibrateResult.cases.map((c) => (
+                            <div key={c.testCaseId}>
+                              #{c.orderIndex + 1}: {c.runtimeMs}ms, {c.memoryMb}MB ({c.verdict})
+                            </div>
+                          ))}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="w-full"
+                          onClick={handleApplyCalibratedLimits}
+                        >
+                          Apply suggested limits
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
                   <div className="space-y-0.5">
