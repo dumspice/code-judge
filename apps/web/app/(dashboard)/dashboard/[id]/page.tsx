@@ -5,10 +5,10 @@ import { Classroom, getClassroomDetail } from '@/services/classroom.apis';
 import { Calendar, ArrowRight, ImageIcon, Paperclip } from 'lucide-react';
 import { AssignmentPost } from '@/components/dashboard/class-detail/assignment-post';
 import Link from 'next/link';
-import Image from 'next/image';
 import { Contest, contestsApi } from '@/services/contest.apis';
 import { authApi } from '@/services/auth.apis';
 import { CopyButton } from '@/components/shared/copy-button';
+import { UserAvatar } from '@/components/shared/user-avatar';
 
 export const metadata: Metadata = {
   title: 'Class Stream | CodeJudge',
@@ -122,12 +122,10 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
             >
               <div className="flex items-center gap-4 flex-1">
                 <div className="w-9 h-9 rounded-full overflow-hidden border border-border/60">
-                  <Image
-                    src={classroom.owner.image || '/default-avatar.png'}
-                    alt={classroom.owner.name}
-                    width={36}
-                    height={36}
-                    className="rounded-full object-cover"
+                  <UserAvatar
+                    name={classroom.owner?.name ?? 'Instructor'}
+                    imageUrl={classroom.owner?.image}
+                    fallbackClassName="text-xs bg-muted text-foreground"
                   />
                 </div>
                 <p className="text-muted-foreground text-sm font-medium">Share an update or post a question...</p>

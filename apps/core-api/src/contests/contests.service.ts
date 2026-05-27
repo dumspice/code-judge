@@ -53,11 +53,12 @@ export class ContestsService {
     const passwordHash = dto.password ? await hashPassword(dto.password) : null;
 
     return this.prisma.$transaction(async (tx) => {
+      const slug = await buildUniqueContestSlug(tx.contest, dto.title);
       const contest = await tx.contest.create({
         data: {
           title: dto.title,
           description: dto.description ?? null,
-          slug: buildContestSlug(dto.title),
+          slug,
           passwordHash,
           startAt,
           endAt,
@@ -511,4 +512,20 @@ function buildContestSlug(value: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return raw.length > 0 ? raw : `contest-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function buildUniqueContestSlug(
+  prisma: { findUnique: (args: { where: { slug: string } }) => Promise<unknown> },
+  title: string,
+): Promise<string> {
+  const baseSlug = buildContestSlug(title);
+  let slug = baseSlug;
+  let counter = 1;
+
+  while (await prisma.findUnique({ where: { slug } })) {
+    counter += 1;
+    slug = `${baseSlug}-${counter}`;
+  }
+
+  return slug;
 }
