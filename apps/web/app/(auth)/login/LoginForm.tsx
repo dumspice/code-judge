@@ -47,7 +47,7 @@ export function LoginForm() {
       if (callbackUrl) {
         router.push(callbackUrl);
       } else if (user.role === 'ADMIN') {
-        router.push('/admin/users');
+        router.push('/admin/dashboard');
       } else {
         router.push('/dashboard');
       }

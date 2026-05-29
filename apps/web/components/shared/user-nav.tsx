@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { UserAvatar } from '@/components/shared/user-avatar';
 import { useAuthStore } from '@/store/auth-store';
-import { LogOut, User, LayoutDashboard } from 'lucide-react';
+import { LogOut, User, LayoutDashboard, Shield } from 'lucide-react';
 import Link from 'next/link';
 
 export function UserNav() {
@@ -49,6 +49,14 @@ export function UserNav() {
               <span>Dashboard</span>
             </Link>
           </DropdownMenuItem>
+          {user.role === 'ADMIN' && (
+            <DropdownMenuItem asChild>
+              <Link href="/admin/dashboard" className="cursor-pointer">
+                <Shield className="mr-2 h-4 w-4" />
+                <span>Admin dashboard</span>
+              </Link>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem asChild>
             <Link href="/dashboard/profile" className="cursor-pointer">
               <User className="mr-2 h-4 w-4" />
