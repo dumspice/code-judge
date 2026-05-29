@@ -9,11 +9,37 @@ export const DIFFICULTY_AI_LABEL: Record<'EASY' | 'MEDIUM' | 'HARD', string> = {
   HARD: 'Hard',
 };
 
-export function mapAiDraftToFormTestCases(
+export function extractSuggestedLimitsFromAiDraft(
   parsed: GenerateTestCasesDraftResult['parsed'],
+): { timeLimitMs: number; memoryLimitMb: number } | null {
+  if (!parsed?.suggestedTimeLimitMs) return null;
+  return {
+    timeLimitMs: parsed.suggestedTimeLimitMs,
+    memoryLimitMb: parsed.suggestedMemoryLimitMb ?? 256,
+  };
+}
+
+/** Test case trong sheet nháp AI (có thể đã chỉnh tay / golden verify). */
+export type AiDraftSheetCase = {
+  input: string;
+  expectedOutput: string;
+  isHidden: boolean;
+  weight: number;
+};
+
+/** Ưu tiên bản đã chỉnh trong sheet / session; fallback parse gốc từ AI. */
+export function resolveAiDraftPreviewCases(
+  editedCases: AiDraftSheetCase[] | null,
+  draftResult: GenerateTestCasesDraftResult | null,
+): AiDraftSheetCase[] {
+  if (editedCases != null) return editedCases;
+  return draftResult ? mapAiDraftToFormTestCases(draftResult.parsed) : [];
+}
+
+export function normalizeAiDraftSheetCases(
+  cases: AiDraftSheetCase[],
 ): Array<{ input: string; expectedOutput: string; isHidden: boolean; weight: number }> {
-  if (!parsed?.testCases?.length) return [];
-  return parsed.testCases
+  return cases
     .map((tc) => ({
       input: (tc.input ?? '').trim(),
       expectedOutput: (tc.expectedOutput ?? '').trim(),
@@ -21,6 +47,20 @@ export function mapAiDraftToFormTestCases(
       weight: typeof tc.weight === 'number' && tc.weight > 0 ? tc.weight : 1,
     }))
     .filter((tc) => tc.input.length > 0 || tc.expectedOutput.length > 0);
+}
+
+export function mapAiDraftToFormTestCases(
+  parsed: GenerateTestCasesDraftResult['parsed'],
+): Array<{ input: string; expectedOutput: string; isHidden: boolean; weight: number }> {
+  if (!parsed?.testCases?.length) return [];
+  return normalizeAiDraftSheetCases(
+    parsed.testCases.map((tc) => ({
+      input: tc.input ?? '',
+      expectedOutput: tc.expectedOutput ?? '',
+      isHidden: Boolean(tc.isHidden),
+      weight: typeof tc.weight === 'number' && tc.weight > 0 ? tc.weight : 1,
+    })),
+  );
 }
 
 export function buildStatementPayloadForAi(form: {

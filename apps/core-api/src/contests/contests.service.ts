@@ -9,11 +9,16 @@ import { ContestStatus, ContestTestFeedbackPolicy, Prisma, Contest } from '@pris
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateContestDto } from './dto/create-contest.dto';
 import { UpdateContestDto } from './dto/update-contest.dto';
+import { StorageService } from '../storage/storage.service';
+import { ContestAccessService } from './contest-access.service';
+import type { ProblemViewer } from '../problems/problem-access.service';
 
 @Injectable()
 export class ContestsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+    private readonly contestAccess: ContestAccessService,
   ) {}
 
   async create(dto: CreateContestDto, creatorId: string, isAdmin = false) {
@@ -48,11 +53,12 @@ export class ContestsService {
     const passwordHash = dto.password ? await hashPassword(dto.password) : null;
 
     return this.prisma.$transaction(async (tx) => {
+      const slug = await buildUniqueContestSlug(tx.contest, dto.title);
       const contest = await tx.contest.create({
         data: {
           title: dto.title,
           description: dto.description ?? null,
-          slug: buildContestSlug(dto.title),
+          slug,
           passwordHash,
           startAt,
           endAt,
@@ -89,15 +95,23 @@ export class ContestsService {
     });
   }
 
-  async findAll(query: { search?: string; page?: number; limit?: number; classRoomId?: string }) {
+  async findAll(
+    query: { search?: string; page?: number; limit?: number; classRoomId?: string },
+    viewer?: ProblemViewer | null,
+  ) {
+    const classRoomId = query.classRoomId?.trim();
+    if (classRoomId) {
+      await this.contestAccess.assertCanListClassContests(classRoomId, viewer ?? null);
+    }
+
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const skip = (page - 1) * limit;
     const search = query.search?.trim();
-    const where: Prisma.ContestWhereInput = query.classRoomId
+    const where: Prisma.ContestWhereInput = classRoomId
       ? {
           assignments: {
-            some: { classRoomId: query.classRoomId },
+            some: { classRoomId },
           },
         }
       : {
@@ -159,7 +173,7 @@ export class ContestsService {
     return { items, total, page, limit };
   }
 
-  async findById(contestId: string) {
+  async findById(contestId: string, viewer?: ProblemViewer | null) {
     const contest = await this.prisma.contest.findUnique({
       where: { id: contestId },
       include: {
@@ -170,6 +184,17 @@ export class ContestsService {
     if (!contest) {
       throw new NotFoundException('Contest không tồn tại');
     }
+
+    await this.contestAccess.assertCanViewContest(
+      {
+        id: contest.id,
+        status: contest.status,
+        createdById: contest.createdById,
+        assignments: contest.assignments.map((a) => ({ classRoomId: a.classRoomId })),
+      },
+      viewer ?? null,
+    );
+
     const { passwordHash, ...result } = contest;
     return result;
   }
@@ -303,7 +328,29 @@ export class ContestsService {
     });
   }
 
-  async getLeaderboard(contestId: string) {
+  async getLeaderboard(contestId: string, viewer?: ProblemViewer | null) {
+    const contestMeta = await this.prisma.contest.findUnique({
+      where: { id: contestId },
+      select: {
+        id: true,
+        status: true,
+        createdById: true,
+        assignments: { select: { classRoomId: true } },
+      },
+    });
+    if (!contestMeta) {
+      throw new NotFoundException('Contest không tồn tại');
+    }
+    await this.contestAccess.assertCanViewContest(
+      {
+        id: contestMeta.id,
+        status: contestMeta.status,
+        createdById: contestMeta.createdById,
+        assignments: contestMeta.assignments.map((a) => ({ classRoomId: a.classRoomId })),
+      },
+      viewer ?? null,
+    );
+
     const contest = await this.prisma.contest.findUnique({
       where: { id: contestId },
       include: {
@@ -340,15 +387,23 @@ export class ContestsService {
       missingUserIds.length > 0
         ? await this.prisma.user.findMany({
             where: { id: { in: missingUserIds } },
-            select: { id: true, name: true, image: true },
+            select: { id: true, name: true, image: true, imageObjectKey: true },
           })
         : [];
 
     const userMap = new Map<string, { name: string; image: string | null }>();
-    contest.participants.forEach((p) =>
-      userMap.set(p.userId, { name: p.user.name, image: p.user.image }),
-    );
-    missingUsers.forEach((u) => userMap.set(u.id, { name: u.name || 'Unknown', image: u.image }));
+    for (const p of contest.participants) {
+      userMap.set(p.userId, {
+        name: p.user.name,
+        image: await this.storage.resolveAvatarImageUrl(p.user.imageObjectKey, p.user.image),
+      });
+    }
+    for (const u of missingUsers) {
+      userMap.set(u.id, {
+        name: u.name || 'Unknown',
+        image: await this.storage.resolveAvatarImageUrl(u.imageObjectKey, u.image),
+      });
+    }
 
     const leaderboard = allUserIds.map((userId) => {
       const user = userMap.get(userId)!;
@@ -457,4 +512,20 @@ function buildContestSlug(value: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return raw.length > 0 ? raw : `contest-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function buildUniqueContestSlug(
+  prisma: { findUnique: (args: { where: { slug: string } }) => Promise<unknown> },
+  title: string,
+): Promise<string> {
+  const baseSlug = buildContestSlug(title);
+  let slug = baseSlug;
+  let counter = 1;
+
+  while (await prisma.findUnique({ where: { slug } })) {
+    counter += 1;
+    slug = `${baseSlug}-${counter}`;
+  }
+
+  return slug;
 }

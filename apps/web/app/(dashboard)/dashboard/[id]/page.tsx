@@ -1,15 +1,14 @@
 import { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 import { Classroom, getClassroomDetail } from '@/services/classroom.apis';
-import { Copy, Calendar, ArrowRight, ImageIcon, Paperclip } from 'lucide-react';
+import { Calendar, ArrowRight, ImageIcon, Paperclip } from 'lucide-react';
 import { AssignmentPost } from '@/components/dashboard/class-detail/assignment-post';
 import Link from 'next/link';
-import Image from 'next/image';
-import { getClassroomBannerColor } from '@/lib/classroom-banner';
 import { Contest, contestsApi } from '@/services/contest.apis';
 import { authApi } from '@/services/auth.apis';
+import { CopyButton } from '@/components/shared/copy-button';
+import { UserAvatar } from '@/components/shared/user-avatar';
 
 export const metadata: Metadata = {
   title: 'Class Stream | CodeJudge',
@@ -78,13 +77,12 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
             <h2 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Class Access</h2>
             <div className="flex items-center justify-between bg-muted/30 border border-border/80 rounded-lg px-3.5 py-2.5">
               <p className="font-mono text-sm font-bold text-primary tracking-wider">{classroom.classCode}</p>
-              <Button
+              <CopyButton
+                value={classroom.classCode}
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-primary transition-colors cursor-pointer"
-              >
-                <Copy className="w-4 h-4" />
-              </Button>
+              />
             </div>
           </div>
 
@@ -123,13 +121,11 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
               className="cursor-pointer bg-card border border-border rounded-xl p-4 shadow-md flex items-center justify-between hover:bg-muted/15 transition-all group"
             >
               <div className="flex items-center gap-4 flex-1">
-                <div className="w-9 h-9 rounded-full overflow-hidden border border-border/60">
-                  <Image
-                    src={classroom.owner.image || '/default-avatar.png'}
-                    alt={classroom.owner.name}
-                    width={36}
-                    height={36}
-                    className="rounded-full object-cover"
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border/60">
+                  <UserAvatar
+                    name={classroom.owner?.name ?? 'Instructor'}
+                    imageUrl={classroom.owner?.image}
+                    fallbackClassName="bg-primary/10 text-xs font-bold text-primary"
                   />
                 </div>
                 <p className="text-muted-foreground text-sm font-medium">Share an update or post a question...</p>
@@ -149,7 +145,12 @@ export default async function ClassStreamPage({ params }: { params: Promise<{ id
           <div className="space-y-4">
             {sortedAssignments.length > 0 ? (
               sortedAssignments.map((assignment) => (
-                <AssignmentPost key={assignment.id} assignment={assignment} classId={id} />
+                <AssignmentPost
+                  key={assignment.id}
+                  assignment={assignment}
+                  classId={id}
+                  author={classroom.owner}
+                />
               ))
             ) : (
               <div className="bg-card border border-border rounded-xl p-10 text-center space-y-3 shadow-md">

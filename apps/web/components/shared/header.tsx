@@ -53,7 +53,10 @@ export default function Header() {
               asChild
               className="rounded-full px-6 shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
             >
-              <Link href="/dashboard" className="flex items-center gap-2">
+              <Link
+                href={user.role === 'ADMIN' ? '/admin/dashboard' : '/dashboard'}
+                className="flex items-center gap-2"
+              >
                 <LayoutDashboard className="w-4 h-4" />
                 Go to Dashboard
               </Link>

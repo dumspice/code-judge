@@ -164,6 +164,8 @@ export interface GenerateTestCasesDraftResult {
       weight?: number;
       explanation?: string;
     }>;
+    suggestedTimeLimitMs?: number;
+    suggestedMemoryLimitMb?: number;
     notes?: string;
     revisionNotes?: string;
   } | null;
@@ -204,6 +206,23 @@ export type PaginatedProblems = {
   page: number;
   limit: number;
 };
+
+export interface CalibrateProblemLimitsResult {
+  problemId: string;
+  goldenLanguage: string;
+  memoryEnforced: boolean;
+  cases: Array<{
+    testCaseId: string;
+    orderIndex: number;
+    runtimeMs: number;
+    memoryMb: number;
+    verdict: string;
+  }>;
+  suggestedTimeLimitMs: number;
+  suggestedMemoryLimitMb: number;
+  currentTimeLimitMs: number;
+  currentMemoryLimitMb: number;
+}
 
 export interface ProblemBankProgress {
   total: number;
@@ -274,8 +293,15 @@ export const problemsApi = {
     return apiFetch(`/problems/admin/all${queryString ? `?${queryString}` : ''}`, options);
   },
 
-  async findById(id: string, options?: RequestInit): Promise<Problem> {
-    return apiFetch(`/problems/${id}`, options);
+  async findById(
+    id: string,
+    query?: { contestId?: string },
+    options?: RequestInit,
+  ): Promise<Problem> {
+    const params = new URLSearchParams();
+    if (query?.contestId) params.set('contestId', query.contestId);
+    const qs = params.toString();
+    return apiFetch(`/problems/${encodeURIComponent(id)}${qs ? `?${qs}` : ''}`, options);
   },
 
   async create(dto: CreateProblemDto, options?: RequestInit): Promise<Problem> {
@@ -313,6 +339,18 @@ export const problemsApi = {
       ...options,
       method: 'POST',
       body: dto,
+    });
+  },
+
+  async calibrateLimits(
+    id: string,
+    body?: { measureTimeLimitMs?: number },
+    options?: RequestInit,
+  ): Promise<CalibrateProblemLimitsResult> {
+    return apiFetch(`/problems/${encodeURIComponent(id)}/calibrate-limits`, {
+      ...options,
+      method: 'POST',
+      body: body ?? {},
     });
   },
 

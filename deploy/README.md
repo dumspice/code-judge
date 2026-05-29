@@ -171,7 +171,11 @@ docker compose -f docker-compose.production.yml --env-file .env.production exec 
 
 ### Cgroup v1 + isolate thật (tuỳ chọn, sau khi stack ổn)
 
-Xem mục **Judge0: Internal Error, cgroup** bên dưới — reboot VPS + `JUDGE0_USE_CGROUP=true`. Không bắt buộc cho web/login/API.
+Hướng dẫn chi tiết từng bước (GRUB, compose, smoke test, rollback): **[docs/JUDGE0-CGROUP-V1-MIGRATION.md](../docs/JUDGE0-CGROUP-V1-MIGRATION.md)**.
+
+Tóm tắt: reboot VPS với `systemd.unified_cgroup_hierarchy=0` → `JUDGE0_USE_CGROUP=true` trong `.env.production` → `./deploy/judge0-isolate-up.sh` (hoặc `./deploy/redeploy-vps.sh`).
+
+Xem thêm mục **Judge0: Internal Error, cgroup** bên dưới. Không bắt buộc cho web/login/API.
 
 ---
 
@@ -263,7 +267,7 @@ docker compose -f docker-compose.production.yml --env-file .env.production up -d
 docker exec cj-prod-judge0-worker ls -la /usr/local/bin/isolate /usr/bin/isolate /usr/bin/sudo
 ```
 
-**Cách B (isolate thật, sandbox mạnh hơn):** Trên VPS host bật cgroup v1 rồi reboot ([Judge0 #543](https://github.com/judge0/judge0/issues/543)):
+**Cách B (isolate thật, sandbox mạnh hơn):** Xem **[docs/JUDGE0-CGROUP-V1-MIGRATION.md](../docs/JUDGE0-CGROUP-V1-MIGRATION.md)**. Tóm tắt — trên VPS host bật cgroup v1 rồi reboot ([Judge0 #543](https://github.com/judge0/judge0/issues/543)):
 
 ```bash
 # /etc/default/grub — thêm vào GRUB_CMDLINE_LINUX_DEFAULT:

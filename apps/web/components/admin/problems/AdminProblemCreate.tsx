@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -21,8 +21,6 @@ import {
   Beaker,
   Clock,
   Database,
-  Globe,
-  Lock,
   Save,
   Trash2,
   Languages,
@@ -37,8 +35,7 @@ import {
   UpdateProblemDto,
   type GenerateTestCasesDraftResult,
 } from '@/services/problem.apis';
-import { ApiRequestError } from '@/services/api-client';
-import { toast } from 'sonner';
+import { adminToast } from '@/lib/admin-toast';
 import { AiGenerateProblemModal } from '@/components/problems/AiGenerateProblemModal';
 import { AiTestCaseAdvancedOptions } from '@/components/problems/AiTestCaseAdvancedOptions';
 import { AiTestCaseDraftSheet } from '@/components/problems/AiTestCaseDraftSheet';
@@ -51,9 +48,18 @@ import {
 } from '@/lib/ai-testcase-draft-storage';
 import { ProblemTagPicker } from '@/components/problems/ProblemTagPicker';
 import {
+  ProblemFormPageShell,
+  ProblemFormTestCasesScroll,
+} from '@/components/problems/ProblemFormPageShell';
+import { ProblemFormTestCaseList } from '@/components/problems/ProblemFormTestCaseList';
+import {
   defaultAiGenOptions,
   mapAiDraftToFormTestCases,
+  normalizeAiDraftSheetCases,
+  resolveAiDraftPreviewCases,
+  type AiDraftSheetCase,
   buildGenerateTestCasesDraftDto,
+  extractSuggestedLimitsFromAiDraft,
   type AiGenOptionsState,
 } from '@/components/problems/ai-testcase-draft.shared';
 
@@ -91,6 +97,7 @@ export default function AdminProblemCreate() {
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
   const [aiDraftLoading, setAiDraftLoading] = useState(false);
   const [aiDraftResult, setAiDraftResult] = useState<GenerateTestCasesDraftResult | null>(null);
+  const [aiDraftPreviewCases, setAiDraftPreviewCases] = useState<AiDraftSheetCase[] | null>(null);
   const [aiGenOptions, setAiGenOptions] = useState<AiGenOptionsState>(defaultAiGenOptions);
   const [aiDraftStorageKey, setAiDraftStorageKey] = useState(0);
 
@@ -125,9 +132,7 @@ export default function AdminProblemCreate() {
         tagIds: (data.tags ?? []).map((t: any) => t.tag.id),
       });
     } catch (error) {
-      console.error('Failed to load problem:', error);
-      const msg = error instanceof ApiRequestError ? error.body.message : 'Failed to load problem.';
-      toast.error(msg, { position: 'top-center' });
+      adminToast.errorFrom(error, 'Failed to load problem.');
     } finally {
       setInitialLoading(false);
     }
@@ -174,7 +179,7 @@ export default function AdminProblemCreate() {
 
   const handleSave = async () => {
     if (!validate()) {
-      toast.error('Please fix the errors in the form.', { position: 'top-center' });
+      adminToast.error('Please fix the errors in the form.');
       return;
     }
 
@@ -196,21 +201,38 @@ export default function AdminProblemCreate() {
         const { dueAt: _due, ...forAdmin } = payload;
         await problemsApi.createAdmin(forAdmin as CreateAdminProblemDto);
       }
-      toast.success(editId ? 'Problem updated successfully.' : 'Problem created successfully.', {
-        position: 'top-center',
-      });
+      adminToast.success(
+        editId ? 'Problem updated successfully.' : 'Problem created successfully.',
+      );
       router.push('/admin/problems');
     } catch (error) {
-      console.error('Failed to save problem:', error);
-      const msg =
-        error instanceof ApiRequestError
-          ? error.body.message
-          : 'Failed to save problem. Please check your data or try again later.';
-      toast.error(msg, { position: 'top-center' });
+      adminToast.errorFrom(error, 'Failed to save problem. Please check your data or try again later.');
     } finally {
       setLoading(false);
     }
   };
+
+  const previewMappedCases = useMemo(
+    () => resolveAiDraftPreviewCases(aiDraftPreviewCases, aiDraftResult),
+    [aiDraftPreviewCases, aiDraftResult],
+  );
+
+  const persistAiDraftFromSheet = useCallback(
+    (cases: AiDraftSheetCase[]) => {
+      setAiDraftPreviewCases(cases);
+      if (!aiDraftResult) return;
+      const forStorage = normalizeAiDraftSheetCases(cases);
+      const fallback = mapAiDraftToFormTestCases(aiDraftResult.parsed);
+      saveSavedAiTestcaseDraft(aiDraftScope, {
+        savedAt: new Date().toISOString(),
+        problemTitle: formData.title.trim(),
+        draftResult: aiDraftResult,
+        previewCases: forStorage.length > 0 ? forStorage : fallback,
+      });
+      setAiDraftStorageKey((k) => k + 1);
+    },
+    [aiDraftResult, aiDraftScope, formData.title],
+  );
 
   if (initialLoading) {
     return (
@@ -221,7 +243,7 @@ export default function AdminProblemCreate() {
         aria-label="Loading problem data"
       >
         <div className="w-10 h-10 border-4 border-black border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-500 font-medium">Loading problem data...</p>
+        <p className="text-muted-foreground font-medium">Loading problem data...</p>
       </div>
     );
   }
@@ -247,24 +269,19 @@ export default function AdminProblemCreate() {
     });
   };
 
-  const previewMappedCases = aiDraftResult ? mapAiDraftToFormTestCases(aiDraftResult.parsed) : [];
-
   const handleGenerateAiDraft = async () => {
     if (!formData.title.trim()) {
-      toast.error('Please enter a title for the problem before calling AI.', {
-        position: 'top-center',
-      });
+      adminToast.error('Please enter a title for the problem before calling AI.');
       return;
     }
     if (!formData.statementMd?.trim()) {
-      toast.error('Please enter the problem statement (markdown) before calling AI.', {
-        position: 'top-center',
-      });
+      adminToast.error('Please enter the problem statement (markdown) before calling AI.');
       return;
     }
     const previousDraft = aiDraftResult;
     setAiDraftLoading(true);
     setAiDraftResult(null);
+    setAiDraftPreviewCases(null);
     try {
       const dto = buildGenerateTestCasesDraftDto({
         title: formData.title.trim(),
@@ -281,7 +298,23 @@ export default function AdminProblemCreate() {
       const res = await problemsApi.generateTestCasesDraft(dto);
       setAiDraftResult(res);
       setAiSheetOpen(true);
+      const suggestedLimits = extractSuggestedLimitsFromAiDraft(res.parsed);
+      if (
+        suggestedLimits &&
+        formData.timeLimitMs === 1000 &&
+        formData.memoryLimitMb === 256
+      ) {
+        setFormData((prev) => ({
+          ...prev,
+          timeLimitMs: suggestedLimits.timeLimitMs,
+          memoryLimitMb: suggestedLimits.memoryLimitMb,
+        }));
+        adminToast.info(
+          `Applied AI limits: ${suggestedLimits.timeLimitMs}ms / ${suggestedLimits.memoryLimitMb}MB`,
+        );
+      }
       const mapped = mapAiDraftToFormTestCases(res.parsed);
+      setAiDraftPreviewCases(mapped);
       if (mapped.length > 0 || res.raw) {
         saveSavedAiTestcaseDraft(aiDraftScope, {
           savedAt: new Date().toISOString(),
@@ -292,40 +325,29 @@ export default function AdminProblemCreate() {
         setAiDraftStorageKey((k) => k + 1);
       }
       if (res.generationMode === 'summarized') {
-        toast.info('Long statement — server summarized it before generating test cases.', {
-          position: 'top-center',
-        });
+        adminToast.info('Long statement — server summarized it before generating test cases.');
       }
       if (res.parseError && mapped.length === 0) {
-        toast.warning(
+        adminToast.warning(
           res.truncationSuspected
             ? 'AI output was truncated. Try fewer suggested cases or fill ioSpec.'
             : 'AI returned a response but failed to parse the test cases. See the panel for details.',
-          {
-            position: 'top-center',
-            description: res.parseError,
-          },
+          { description: res.parseError },
         );
       } else if (mapped.length === 0) {
-        toast.warning('No valid test cases found in the AI response.', { position: 'top-center' });
+        adminToast.warning('No valid test cases found in the AI response.');
       }
     } catch (error) {
-      console.error(error);
-      const msg =
-        error instanceof ApiRequestError
-          ? error.body.message
-          : 'Failed to call AI. Please check your login and server configuration.';
-      toast.error(msg, { position: 'top-center' });
+      adminToast.errorFrom(error, 'Failed to call AI. Please check your login and server configuration.');
     } finally {
       setAiDraftLoading(false);
     }
   };
 
-  const applyAiTestCases = (mode: 'replace' | 'append') => {
-    if (!aiDraftResult) return;
-    const mapped = mapAiDraftToFormTestCases(aiDraftResult.parsed);
+  const applyAiTestCases = (mode: 'replace' | 'append', sheetCases: AiDraftSheetCase[]) => {
+    const mapped = normalizeAiDraftSheetCases(sheetCases);
     if (mapped.length === 0) {
-      toast.error('No test cases available to apply.', { position: 'top-center' });
+      adminToast.error('No test cases available to apply.');
       return;
     }
     clearTestCaseFieldErrors();
@@ -334,32 +356,35 @@ export default function AdminProblemCreate() {
       testCases: mode === 'replace' ? mapped : [...(prev.testCases ?? []), ...mapped],
     }));
     setAiSheetOpen(false);
+    setAiDraftPreviewCases(null);
     clearSavedAiTestcaseDraft(aiDraftScope);
     setAiDraftStorageKey((k) => k + 1);
-    toast.success(
+    adminToast.success(
       mode === 'replace'
         ? `Successfully replaced with ${mapped.length} test cases from AI.`
         : `Successfully added ${mapped.length} test cases from AI.`,
-      { position: 'top-center' },
+      {},
     );
   };
 
   const restoreSavedAiDraft = (saved: SavedAiTestcaseDraft) => {
     setAiDraftResult(saved.draftResult);
+    setAiDraftPreviewCases(saved.previewCases ?? []);
     setAiSheetOpen(true);
     if (
       saved.problemTitle &&
       formData.title.trim() &&
       saved.problemTitle !== formData.title.trim()
     ) {
-      toast.info('Bản AI được lưu cho tiêu đề khác — vẫn xem được, hãy kiểm tra lại trước khi áp dụng.', {
-        position: 'top-center',
-      });
+      adminToast.info(
+        'Bản AI được lưu cho tiêu đề khác — vẫn xem được, hãy kiểm tra lại trước khi áp dụng.',
+      );
     }
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+    <ProblemFormPageShell variant="admin">
+      <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-3">
           <Button variant="outline" size="sm" className="w-fit cursor-pointer" asChild>
@@ -368,7 +393,7 @@ export default function AdminProblemCreate() {
               Back to List
             </Link>
           </Button>
-            <div>
+          <div>
             <h1 className="text-3xl font-bold tracking-tight">
               {editId ? 'Admin — Edit Problem' : 'Admin — Create Problem'}
             </h1>
@@ -408,7 +433,7 @@ export default function AdminProblemCreate() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column - Main Details */}
         <div className="lg:col-span-2 space-y-8">
-          <Card className="border-none shadow-xl backdrop-blur-sm overflow-hidden">
+          <Card className="border border-border shadow-sm bg-card overflow-clip">
             <CardHeader className="border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-xl">Basic Information</CardTitle>
               <Button
@@ -435,7 +460,7 @@ export default function AdminProblemCreate() {
                     if (errors.title) setErrors({ ...errors, title: '' });
                   }}
                   placeholder="e.g. Find the Maximum Sum Subarray"
-                  className={`text-lg font-medium h-12 rounded-xl border-gray-200 focus:border-black transition-all ${errors.title ? 'border-red-500 bg-red-50' : ''}`}
+                  className={`text-lg font-medium h-12 rounded-xl border-border bg-background focus-visible:ring-ring transition-all ${errors.title ? 'border-destructive bg-destructive/10' : ''}`}
                 />
                 {errors.title && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.title}</p>
@@ -454,7 +479,7 @@ export default function AdminProblemCreate() {
                     if (errors.description) setErrors({ ...errors, description: '' });
                   }}
                   placeholder="A short summary of what the problem is about..."
-                  className={`min-h-[80px] rounded-xl border-gray-200 focus:border-black transition-all resize-none ${errors.description ? 'border-red-500 bg-red-50' : ''}`}
+                  className={`min-h-[80px] rounded-xl border-border bg-background focus-visible:ring-ring transition-all resize-none ${errors.description ? 'border-destructive bg-destructive/10' : ''}`}
                 />
                 {errors.description && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.description}</p>
@@ -473,7 +498,7 @@ export default function AdminProblemCreate() {
                     if (errors.statementMd) setErrors({ ...errors, statementMd: '' });
                   }}
                   placeholder="Describe the problem, input format, output format, and constraints in detail..."
-                  className={`min-h-[300px] rounded-xl border-gray-200 focus:border-black transition-all font-mono text-sm leading-relaxed ${errors.statementMd ? 'border-red-500 bg-red-50' : ''}`}
+                  className={`min-h-[300px] rounded-xl border-border bg-background focus-visible:ring-ring transition-all font-mono text-sm leading-relaxed ${errors.statementMd ? 'border-destructive bg-destructive/10' : ''}`}
                 />
                 {errors.statementMd && (
                   <p className="text-xs text-red-500 mt-1 font-medium">{errors.statementMd}</p>
@@ -482,13 +507,13 @@ export default function AdminProblemCreate() {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-xl backdrop-blur-sm overflow-hidden">
+          <Card className="border border-border shadow-sm bg-card overflow-clip">
             <CardHeader className="border-b flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <CardTitle className="text-xl">Test Cases</CardTitle>
                 <CardDescription>
-                  Add manually or use AI to generate draft test cases from the title and problem
-                  statement (always preview before applying).
+                  Thêm tay hoặc dùng AI từ tiêu đề và đề bài. Chỉnh trong panel nháp rồi mới áp
+                  dụng — chưa lưu DB cho đến khi bấm Lưu.
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
@@ -510,7 +535,7 @@ export default function AdminProblemCreate() {
                 </Button>
                 <AiTestcaseDraftReopenButton
                   scope={aiDraftScope}
-                  locale="vi"
+                  locale="en"
                   disabled={aiDraftLoading || loading}
                   refreshKey={aiDraftStorageKey}
                   onRestore={restoreSavedAiDraft}
@@ -532,139 +557,37 @@ export default function AdminProblemCreate() {
                 aiGenOptions={aiGenOptions}
                 setAiGenOptions={setAiGenOptions}
                 maxTestCasesForProblem={formData.maxTestCases ?? 100}
-                locale="vi"
+                locale="en"
                 idPrefix="admin-"
                 problemDescription={formData.description}
                 problemStatementMd={formData.statementMd}
               />
 
-              <div className="space-y-4">
-                {errors.testCases && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm font-medium flex items-center gap-2">
-                    <Trash2 className="w-4 h-4" /> {errors.testCases}
-                  </div>
-                )}
-                {formData.testCases?.length === 0 ? (
-                  <div
-                    className={`flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-2xl text-gray-400 ${errors.testCases ? 'border-red-300' : ''}`}
-                  >
-                    <Beaker className="w-12 h-12 mb-3 opacity-20" />
-                    <p className="font-medium">No test cases added yet.</p>
-                    <p className="text-sm">Click "Add Case" to begin defining tests.</p>
-                  </div>
-                ) : (
-                  formData.testCases?.map((tc, index) => (
-                    <div
-                      key={index}
-                      className="group relative border border-gray-100 rounded-2xl p-5 bg-gray-50/30 hover:bg-white hover:shadow-lg hover:border-black/5 transition-all duration-300"
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                            Input
-                          </Label>
-                          <Textarea
-                            value={tc.input}
-                            onChange={(e) => {
-                              updateTestCase(index, 'input', e.target.value);
-                              if (errors[`testCase_${index}_input`]) {
-                                const next = { ...errors };
-                                delete next[`testCase_${index}_input`];
-                                setErrors(next);
-                              }
-                            }}
-                            placeholder="Input for this case"
-                            className={`min-h-[100px] rounded-xl border-gray-200 focus:border-black bg-white font-mono text-xs ${errors[`testCase_${index}_input`] ? 'border-red-500 bg-red-50' : ''}`}
-                          />
-                          {errors[`testCase_${index}_input`] && (
-                            <p className="text-[10px] text-red-500 font-medium">
-                              {errors[`testCase_${index}_input`]}
-                            </p>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                            Expected Output
-                          </Label>
-                          <Textarea
-                            value={tc.expectedOutput}
-                            onChange={(e) => {
-                              updateTestCase(index, 'expectedOutput', e.target.value);
-                              if (errors[`testCase_${index}_output`]) {
-                                const next = { ...errors };
-                                delete next[`testCase_${index}_output`];
-                                setErrors(next);
-                              }
-                            }}
-                            placeholder="Expected output"
-                            className={`min-h-[100px] rounded-xl border-gray-200 focus:border-black bg-white font-mono text-xs ${errors[`testCase_${index}_output`] ? 'border-red-500 bg-red-50' : ''}`}
-                          />
-                          {errors[`testCase_${index}_output`] && (
-                            <p className="text-[10px] text-red-500 font-medium">
-                              {errors[`testCase_${index}_output`]}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                        <div className="flex items-center gap-6">
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              id={`hidden-${index}`}
-                              checked={tc.isHidden}
-                              onCheckedChange={(checked) =>
-                                updateTestCase(index, 'isHidden', checked)
-                              }
-                              className="cursor-pointer"
-                            />
-                            <Label
-                              htmlFor={`hidden-${index}`}
-                              className="text-sm font-medium cursor-pointer flex items-center gap-1.5"
-                            >
-                              {tc.isHidden ? (
-                                <Lock className="w-3.5 h-3.5 text-amber-500" />
-                              ) : (
-                                <Globe className="w-3.5 h-3.5 text-blue-500" />
-                              )}
-                              {tc.isHidden ? 'Hidden Case' : 'Public Case'}
-                            </Label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Label className="text-sm font-medium text-gray-500">Weight:</Label>
-                            <Input
-                              type="number"
-                              value={tc.weight}
-                              onChange={(e) =>
-                                updateTestCase(index, 'weight', Number(e.target.value))
-                              }
-                              className="w-16 h-8 rounded-lg border-gray-200 text-center font-bold"
-                              min="1"
-                            />
-                          </div>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeTestCase(index)}
-                          className="text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg h-8 px-2 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4 mr-1.5" />
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+              <ProblemFormTestCasesScroll>
+                <ProblemFormTestCaseList
+                  variant="admin"
+                  locale="en"
+                  testCases={formData.testCases ?? []}
+                  errors={errors}
+                  onUpdate={updateTestCase}
+                  onRemove={removeTestCase}
+                  onClearError={(key) => {
+                    setErrors((prev) => {
+                      if (!prev[key]) return prev;
+                      const next = { ...prev };
+                      delete next[key];
+                      return next;
+                    });
+                  }}
+                />
+              </ProblemFormTestCasesScroll>
             </CardContent>
           </Card>
         </div>
 
         {/* Right Column - Configuration */}
         <div className="space-y-8">
-          <Card className="border-none shadow-xl backdrop-blur-sm overflow-hidden sticky top-24">
+          <Card className="border border-border shadow-sm bg-card overflow-clip lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:custom-scrollbar">
             <CardHeader className="border-b">
               <CardTitle className="text-xl">Configuration</CardTitle>
               <CardDescription className="text-xs text-muted-foreground pt-1">
@@ -684,7 +607,7 @@ export default function AdminProblemCreate() {
                         setFormData({ ...formData, difficulty: value })
                       }
                     >
-                      <SelectTrigger className="rounded-xl border-gray-200 h-10">
+                      <SelectTrigger className="rounded-xl border-border h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -715,7 +638,7 @@ export default function AdminProblemCreate() {
                       value={formData.mode}
                       onValueChange={(value: any) => setFormData({ ...formData, mode: value })}
                     >
-                      <SelectTrigger className="rounded-xl border-gray-200 h-10">
+                      <SelectTrigger className="rounded-xl border-border h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -728,7 +651,7 @@ export default function AdminProblemCreate() {
 
                 <div className="grid grid-cols-2 gap-4 pt-2">
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold text-gray-500 flex items-center gap-1.5">
+                    <Label className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
                       <Clock className="w-3 h-3" /> TIME LIMIT (ms)
                     </Label>
                     <Input
@@ -737,11 +660,11 @@ export default function AdminProblemCreate() {
                       onChange={(e) =>
                         setFormData({ ...formData, timeLimitMs: Number(e.target.value) })
                       }
-                      className="rounded-xl border-gray-200 h-10 font-bold"
+                      className="rounded-xl border-border h-10 font-bold"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold text-gray-500 flex items-center gap-1.5">
+                    <Label className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
                       <Database className="w-3 h-3" /> MEMORY (MB)
                     </Label>
                     <Input
@@ -750,7 +673,7 @@ export default function AdminProblemCreate() {
                       onChange={(e) =>
                         setFormData({ ...formData, memoryLimitMb: Number(e.target.value) })
                       }
-                      className="rounded-xl border-gray-200 h-10 font-bold"
+                      className="rounded-xl border-border h-10 font-bold"
                     />
                   </div>
                 </div>
@@ -777,13 +700,13 @@ export default function AdminProblemCreate() {
                     onChange={(ids) => setFormData({ ...formData, tagIds: ids })}
                     label="Từ khóa (Tags)"
                     hint="Choose relevant tags for this problem."
-                    locale="vi"
+                    locale="en"
                   />
                 </div>
 
                 <div className="space-y-3 pt-4 border-t">
                   <Label className="text-sm font-semibold flex items-center gap-2">
-                    <Languages className="w-4 h-4 text-gray-400" /> Supported Languages
+                    <Languages className="w-4 h-4 text-muted-foreground" /> Supported Languages
                   </Label>
                   <div className="flex flex-wrap gap-1.5">
                     {SUPPORTED_LANGUAGES.map((lang) => (
@@ -824,9 +747,9 @@ export default function AdminProblemCreate() {
             delete next.statementMd;
             return next;
           });
-          toast.info('Problem draft applied. Use AI Suggestions below to generate test cases.', {
-            position: 'top-center',
-          });
+          adminToast.info(
+            'Problem draft applied. Use AI Suggestions below to generate test cases.',
+          );
         }}
       />
 
@@ -835,14 +758,24 @@ export default function AdminProblemCreate() {
         onOpenChange={setAiSheetOpen}
         draftResult={aiDraftResult}
         previewCases={previewMappedCases}
-        onApplyReplace={() => applyAiTestCases('replace')}
-        onApplyAppend={() => applyAiTestCases('append')}
+        onApplyReplace={(cases) => applyAiTestCases('replace', cases)}
+        onApplyAppend={(cases) => applyAiTestCases('append', cases)}
+        onPersistEditableCases={persistAiDraftFromSheet}
+        onApplySuggestedLimits={(limits) => {
+          setFormData((prev) => ({
+            ...prev,
+            timeLimitMs: limits.timeLimitMs,
+            memoryLimitMb: limits.memoryLimitMb,
+          }));
+          adminToast.success('Limits applied to form');
+        }}
         problemId={editId ?? undefined}
         problemTitle={formData.title}
         problemStatement={formData.statementMd}
         ioSpec={aiGenOptions.ioSpec}
-        locale="vi"
+        locale="en"
       />
-    </div>
+      </div>
+    </ProblemFormPageShell>
   );
 }

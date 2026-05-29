@@ -24,14 +24,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Code2,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { reportsApi } from '@/services/reports.apis';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
+import { adminToast } from '@/lib/admin-toast';
 import { Switch } from '@/components/ui/switch';
 import Link from 'next/link';
 
@@ -42,36 +44,48 @@ export default function AdminProblemsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  const loadProblems = async () => {
+  const loadProblems = async (pageOverride?: number) => {
+    const effectivePage = pageOverride ?? page;
     setLoading(true);
     try {
-      const data = await problemsApi.findAllAdmin({ search, page, limit: 10 });
+      const data = await problemsApi.findAllAdmin({ search, page: effectivePage, limit: 10 });
       setProblems(data.items);
       setTotal(data.total);
     } catch (error) {
-      toast.error('Failed to load problems');
+      adminToast.errorFrom(error, 'Failed to load problems.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadProblems();
+    void loadProblems();
   }, [page]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    loadProblems();
+    void loadProblems(1);
   };
 
   const togglePublished = async (problemId: string, currentStatus: boolean) => {
     try {
       await problemsApi.update(problemId, { isPublished: !currentStatus });
-      toast.success(`Problem ${!currentStatus ? 'published' : 'unpublished'}`);
+      adminToast.success(`Problem ${!currentStatus ? 'published' : 'unpublished'}.`);
       loadProblems();
     } catch (error) {
-      toast.error('Failed to update status');
+      adminToast.errorFrom(error, 'Failed to update publish status.');
+    }
+  };
+
+  const handleExport = async (id: string) => {
+    try {
+      await reportsApi.downloadAdminProblemReport(id);
+      adminToast.success('Problem report ready', {
+        description: 'Your XLSX file is downloading.',
+      });
+    } catch (err: unknown) {
+      adminToast.errorFrom(err, 'Failed to export problem report.');
     }
   };
 
@@ -79,10 +93,10 @@ export default function AdminProblemsPage() {
     if (!confirm('Are you sure you want to delete this problem?')) return;
     try {
       await problemsApi.delete(id);
-      toast.success('Problem deleted');
+      adminToast.success('Problem deleted.');
       loadProblems();
     } catch (error) {
-      toast.error('Failed to delete problem');
+      adminToast.errorFrom(error, 'Failed to delete problem.');
     }
   };
 
@@ -154,9 +168,9 @@ export default function AdminProblemsPage() {
               ))
             ) : problems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-40 text-center text-slate-500">
+                <TableCell colSpan={6} className="h-40 text-center text-muted-foreground">
                   <div className="flex flex-col items-center gap-2">
-                    <Code2 className="w-8 h-8 text-slate-300" />
+                    <Code2 className="w-8 h-8 text-muted-foreground" />
                     <p>No problems found</p>
                   </div>
                 </TableCell>
@@ -203,7 +217,7 @@ export default function AdminProblemsPage() {
                   <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
                           <MoreVertical className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -216,6 +230,13 @@ export default function AdminProblemsPage() {
                             <Edit className="w-4 h-4 mr-2" />
                             Edit
                           </Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center cursor-pointer"
+                          onClick={() => handleExport(problem.id)}
+                        >
+                          <FileSpreadsheet className="w-4 h-4 mr-2" />
+                          Export report
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-rose-600 focus:text-rose-600 focus:bg-rose-50"

@@ -23,15 +23,17 @@ import {
   Trophy,
   MoreVertical,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  FileSpreadsheet,
 } from 'lucide-react';
+import { reportsApi } from '@/services/reports.apis';
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
+import { adminToast } from '@/lib/admin-toast';
 import { format } from 'date-fns';
 import Link from 'next/link';
 
@@ -42,27 +44,28 @@ export default function AdminContestsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  const loadContests = async () => {
+  const loadContests = async (pageOverride?: number) => {
+    const effectivePage = pageOverride ?? page;
     setLoading(true);
     try {
-      const data = await contestsApi.findAllAdmin({ search, page, limit: 10 });
+      const data = await contestsApi.findAllAdmin({ search, page: effectivePage, limit: 10 });
       setContests(data.items);
       setTotal(data.total);
     } catch (error) {
-      toast.error('Failed to load contests');
+      adminToast.errorFrom(error, 'Failed to load contests.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadContests();
+    void loadContests();
   }, [page]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    loadContests();
+    void loadContests(1);
   };
 
   const toggleStatus = async (contestId: string, currentStatus: string) => {
@@ -72,10 +75,21 @@ export default function AdminContestsPage() {
       await contestsApi.update(contestId, { 
         // We might need to handle specific status logic if backend doesn't auto-flip
       } as any);
-      toast.success(`Contest status updated`);
+      adminToast.success('Contest status updated.');
       loadContests();
     } catch (error) {
-      toast.error('Failed to update status');
+      adminToast.errorFrom(error, 'Failed to update contest status.');
+    }
+  };
+
+  const handleExport = async (id: string) => {
+    try {
+      await reportsApi.downloadAdminContestReport(id);
+      adminToast.success('Contest report ready', {
+        description: 'Your XLSX file is downloading.',
+      });
+    } catch (err: unknown) {
+      adminToast.errorFrom(err, 'Failed to export contest report.');
     }
   };
 
@@ -83,10 +97,10 @@ export default function AdminContestsPage() {
     if (!confirm('Are you sure you want to delete this contest?')) return;
     try {
       await contestsApi.delete(id);
-      toast.success('Contest deleted');
+      adminToast.success('Contest deleted.');
       loadContests();
     } catch (error) {
-      toast.error('Failed to delete contest');
+      adminToast.errorFrom(error, 'Failed to delete contest.');
     }
   };
 
@@ -99,7 +113,7 @@ export default function AdminContestsPage() {
       case 'PUBLISHED':
         return <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50">Upcoming</Badge>;
       case 'DRAFT':
-        return <Badge variant="outline" className="border-slate-200 text-slate-500 bg-slate-50">Draft</Badge>;
+        return <Badge variant="outline" className="border-slate-200 text-muted-foreground bg-slate-50">Draft</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -207,6 +221,13 @@ export default function AdminContestsPage() {
                             Edit
                           </Link>
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="flex items-center cursor-pointer"
+                          onClick={() => handleExport(contest.id)}
+                        >
+                          <FileSpreadsheet className="w-4 h-4 mr-2" />
+                          Export report
+                        </DropdownMenuItem>
                         <DropdownMenuItem className="text-rose-600 focus:text-rose-600 focus:bg-rose-50" onClick={() => handleDelete(contest.id)}>
                           <Trash2 className="w-4 h-4 mr-2" />
                           Delete
@@ -221,7 +242,7 @@ export default function AdminContestsPage() {
         </Table>
 
         <div className="p-4 border-t border-slate-100 flex items-center justify-between">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted-foreground">
             Showing {contests.length} of {total} contests
           </p>
           <div className="flex gap-2">

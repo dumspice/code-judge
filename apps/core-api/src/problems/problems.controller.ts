@@ -11,6 +11,8 @@ import { CreateAdminProblemDto } from './dto/create-admin-problem.dto';
 import { CreateProblemDto } from './dto/create-problem.dto';
 import { UpdateProblemDto } from './dto/update-problem.dto';
 import { AdminProblemsService } from './admin-problems.service';
+import { CalibrateProblemLimitsDto } from './dto/calibrate-problem-limits.dto';
+import { ProblemLimitsService } from './problem-limits.service';
 import { ProblemsService } from './problems.service';
 
 /**
@@ -24,12 +26,17 @@ export class ProblemsController {
     private readonly problemsService: ProblemsService,
     private readonly adminProblemsService: AdminProblemsService,
     private readonly aiTestcaseService: AiTestcaseService,
+    private readonly problemLimitsService: ProblemLimitsService,
   ) {}
 
   @Public()
-  @ApiOperation({ summary: 'Danh sách problem public' })
+  @ApiOperation({
+    summary:
+      'Danh sách problem (kho PUBLIC hoặc theo lớp — classRoomId yêu cầu JWT + enrollment)',
+  })
   @Get()
   async findAll(
+    @Req() req: any,
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -39,16 +46,19 @@ export class ProblemsController {
     @Query('tagId') tagId?: string,
     @Query('tagSlug') tagSlug?: string,
   ) {
-    return this.problemsService.findAll({
-      search,
-      page: page ? Number(page) : undefined,
-      limit: limit ? Number(limit) : undefined,
-      classRoomId,
-      difficulty,
-      mode,
-      tagId,
-      tagSlug,
-    });
+    return this.problemsService.findAll(
+      {
+        search,
+        page: page ? Number(page) : undefined,
+        limit: limit ? Number(limit) : undefined,
+        classRoomId,
+        difficulty,
+        mode,
+        tagId,
+        tagSlug,
+      },
+      req,
+    );
   }
 
   @ApiBearerAuth('JWT')
@@ -118,11 +128,32 @@ export class ProblemsController {
     return this.aiTestcaseService.generateProjectDraft(dto);
   }
 
+  @ApiBearerAuth('JWT')
+  @ApiOperation({
+    summary:
+      'Đo time/memory limit từ golden solution (Judge0) — gợi ý limit; áp dụng qua PATCH problem',
+  })
+  @Post(':id/calibrate-limits')
+  async calibrateLimits(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: CalibrateProblemLimitsDto,
+  ) {
+    return this.problemLimitsService.calibrate(id, dto, user);
+  }
+
   @Public()
-  @ApiOperation({ summary: 'Lấy chi tiết problem theo id' })
+  @ApiOperation({
+    summary:
+      'Lấy chi tiết problem theo id (PUBLIC guest OK; lớp/CONTEST_ONLY cần JWT; CONTEST_ONLY cần contestId)',
+  })
   @Get(':id')
-  async findOne(@Param('id') id: string, @Req() req: any) {
-    return this.problemsService.findById(id, req);
+  async findOne(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Query('contestId') contestId?: string,
+  ) {
+    return this.problemsService.findById(id, req, { contestId });
   }
 
   @ApiBearerAuth('JWT')

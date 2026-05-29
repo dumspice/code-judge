@@ -59,6 +59,7 @@ const COPY: Record<
     previewDesc: string;
     previewStatement: string;
     previewIo: string;
+    previewLimits: string;
     parseWarn: string;
     needTopic: string;
     notes: string;
@@ -89,6 +90,7 @@ const COPY: Record<
     previewDesc: 'Mô tả ngắn',
     previewStatement: 'Đề bài (markdown)',
     previewIo: 'ioSpec',
+    previewLimits: 'Gợi ý limit',
     parseWarn: 'AI trả về nhưng không parse được JSON.',
     needTopic: 'Nhập ý tưởng / chủ đề trước.',
     notes: 'Ghi chú AI',
@@ -118,6 +120,7 @@ const COPY: Record<
     previewDesc: 'Short description',
     previewStatement: 'Statement (markdown)',
     previewIo: 'ioSpec',
+    previewLimits: 'Suggested limits',
     parseWarn: 'AI responded but JSON parse failed.',
     needTopic: 'Enter a topic or idea first.',
     notes: 'AI notes',
@@ -138,7 +141,7 @@ export function AiGenerateProblemModal(props: {
   const {
     open,
     onOpenChange,
-    locale = 'vi',
+    locale = 'en',
     existingTitle,
     existingStatement,
     defaultDifficulty,
@@ -201,8 +204,8 @@ export function AiGenerateProblemModal(props: {
       statementMd: parsed.statementMd,
       ioSpec: parsed.ioSpec,
       difficulty: parsed.suggestedDifficulty ?? defaultDifficulty,
-      timeLimitMs: parsed.suggestedTimeLimitMs,
-      memoryLimitMb: parsed.suggestedMemoryLimitMb,
+      timeLimitMs: parsed.suggestedTimeLimitMs ?? 1000,
+      memoryLimitMb: parsed.suggestedMemoryLimitMb ?? 256,
     });
     toast.success(locale === 'vi' ? 'Đã áp dụng đề vào form.' : 'Applied problem draft to form.', {
       position: 'top-center',
@@ -216,7 +219,7 @@ export function AiGenerateProblemModal(props: {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
-        className="flex h-[min(92vh,820px)] w-[min(96vw,720px)] max-w-none flex-col gap-0 p-4 sm:max-w-none bg-slate-900"
+        className="flex h-[min(92vh,820px)] w-[min(96vw,720px)] max-w-none flex-col gap-0 border-border bg-card p-4 sm:max-w-none"
       >
         <DialogHeader className="shrink-0 border-b px-5 py-4 text-left">
           <DialogTitle className="flex items-center gap-2 text-primary">
@@ -301,6 +304,15 @@ export function AiGenerateProblemModal(props: {
                   {parsed.ioSpec}
                 </pre>
               </div>
+              {parsed.suggestedTimeLimitMs ? (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">{t.previewLimits}</p>
+                  <p className="text-sm font-medium">
+                    {parsed.suggestedTimeLimitMs} ms · {parsed.suggestedMemoryLimitMb ?? 256} MB
+                    {parsed.suggestedDifficulty ? ` · ${parsed.suggestedDifficulty}` : ''}
+                  </p>
+                </div>
+              ) : null}
               <div>
                 <p className="text-xs font-medium text-muted-foreground">{t.previewStatement}</p>
                 <pre className="mt-1 max-h-[min(32vh,280px)] overflow-auto whitespace-pre-wrap font-mono text-[11px]">
@@ -321,7 +333,7 @@ export function AiGenerateProblemModal(props: {
           ) : null}
         </div>
 
-        <DialogFooter className="shrink-0 flex-col gap-2 sm:flex-row sm:justify-between border-t px-5 py-4 bg-slate-900">
+        <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border bg-card px-5 py-4 sm:flex-row sm:justify-between">
           <p className="text-xs text-muted-foreground sm:max-w-[55%]">{t.applyHint}</p>
           <div className="flex flex-wrap gap-2 justify-end">
             <Button

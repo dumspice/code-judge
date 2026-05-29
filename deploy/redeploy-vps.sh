@@ -16,8 +16,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 ENV_FILE="${ENV_FILE:-.env.production}"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.production.yml}"
-COMPOSE=(docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE")
 
 if [[ ! -f "$ENV_FILE" ]]; then
   echo "Missing $ENV_FILE — tạo từ .env.production.example và sửa secret."
@@ -27,10 +25,18 @@ fi
 # shellcheck disable=SC1090
 set -a && source "$ENV_FILE" && set +a
 
-echo "==> [1/7] Chuẩn hoá script Judge0 (CRLF + quyền thực thi)"
-if [[ -f scripts/isolate_stub.sh ]]; then
-  sed -i 's/\r$//' scripts/isolate_stub.sh scripts/sudo_stub.sh 2>/dev/null || true
-  chmod +x scripts/isolate_stub.sh scripts/sudo_stub.sh
+# shellcheck source=compose-production-args.sh
+source "$ROOT_DIR/deploy/compose-production-args.sh"
+COMPOSE=(docker compose "${COMPOSE_PROD_ARGS[@]}" --env-file "$ENV_FILE")
+
+if [[ "${JUDGE0_USE_CGROUP:-false}" == "true" ]]; then
+  echo "==> Judge0 mode: isolate thật (không dùng isolate_stub mount)"
+else
+  echo "==> [1/7] Chuẩn hoá script Judge0 stub (CRLF + quyền thực thi)"
+  if [[ -f scripts/isolate_stub.sh ]]; then
+    sed -i 's/\r$//' scripts/isolate_stub.sh scripts/sudo_stub.sh 2>/dev/null || true
+    chmod +x scripts/isolate_stub.sh scripts/sudo_stub.sh
+  fi
 fi
 chmod +x deploy/*.sh 2>/dev/null || true
 
@@ -82,6 +88,11 @@ fi
 
 echo "==> [7/7] Trạng thái service"
 "${COMPOSE[@]}" ps
+
+if [[ "${JUDGE0_USE_CGROUP:-false}" == "true" ]]; then
+  echo "==> Judge0 isolate --init"
+  "${COMPOSE[@]}" exec -T judge0-worker /usr/local/bin/isolate --init 2>/dev/null || true
+fi
 
 echo ""
 echo "Done. Kiểm tra:"
