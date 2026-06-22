@@ -57,8 +57,9 @@ export class ApiRequestError extends Error {
   }
 }
 
-interface FetchOptions extends Omit<RequestInit, 'body'> {
+export interface FetchOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
+  ignoreAuthRedirect?: boolean;
 }
 
 /**
@@ -122,7 +123,8 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
       typeof window !== 'undefined' &&
       res.status === 401 &&
       sessionRefreshFailed &&
-      !window.location.pathname.startsWith('/login')
+      !window.location.pathname.startsWith('/login') &&
+      !options.ignoreAuthRedirect
     ) {
       clearLocalAppStorage();
       const loginUrl = new URL('/login', window.location.origin);

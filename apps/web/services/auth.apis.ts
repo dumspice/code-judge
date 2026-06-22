@@ -2,7 +2,7 @@
  * Auth API helpers. Các domain khác: `problem.apis`, `contest.apis`, …
  */
 
-import { apiFetch, getApiBaseUrl, tryRefresh } from './api-client';
+import { apiFetch, getApiBaseUrl, tryRefresh, type FetchOptions } from './api-client';
 
 export { apiFetch, ApiRequestError, getApiBaseUrl, tryRefresh, type ApiError } from './api-client';
 
@@ -41,8 +41,8 @@ export const authApi = {
     });
   },
 
-  async me(options?: RequestInit): Promise<UserProfile> {
-    return apiFetch<UserProfile>('/auth/me', options);
+  async me(options?: FetchOptions): Promise<UserProfile> {
+    return apiFetch<UserProfile>('/auth/me', { ...options, ignoreAuthRedirect: true });
   },
 
   async logout() {
